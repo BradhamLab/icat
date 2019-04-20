@@ -1,3 +1,11 @@
+"""
+Functions to create single-cell datasets.
+
+Combines data from Kang et al. 2018.
+
+author: Dakota Y. Hawkins
+contact: dyh0110@bu.edu
+"""
 import pandas as pd
 from scanpy import api as sc
 from glob import glob
@@ -5,7 +13,28 @@ import os
 import pickle as pkl
 
 def match_matrix_and_barcode_files(data_dir):
-
+    """
+    Match cell expression data files with associated cell barcode files.
+    
+    Parameters
+    ----------
+    data_dir : str
+        Directory containing cell expression data and barcode files. Expression
+        data should have *.mtx extensions, while barcode files are expected to
+        have *.tsv extensions.
+    
+    Returns
+    -------
+    list, tuple
+        List of tuples where each entry is a matched pair of expression and
+        barcode files. Each element is ordered with the expression file first, 
+        and barcode file second.
+    
+    Raises
+    ------
+    IOError
+        Raised if a matrix file cannot be matched with a barcode file.
+    """
     matrix_files = glob(os.path.join(data_dir, '*.mtx'))
     ids = [os.path.basename(x.split('_')[0]) for x in matrix_files]
     barcodes = [data_dir + x + '_barcodes.tsv' for x in ids]
@@ -17,6 +46,28 @@ def match_matrix_and_barcode_files(data_dir):
 
 
 def create_count_matrix(matrix_file, barcode_file, genes):
+    """
+    Create a count matrix from necessary files.
+    
+    Parameters
+    ----------
+    matrix_file : str
+        A sparse matrix file with 3 columns separated by spaces. In order, the
+        expected columns are gene number, cell number, and umi count.
+    barcode_file : str
+        A single-column file containing all cell barcodes. Expected to be in
+        order, such that "cell 1" listed in the matrix file will be the first
+        entry.
+    genes : pd.DataFrame
+        A pandas dataframe containing gene annotations. Order is expected, such
+        that 'gene 1' in the matrix file will be the first indexed gene.
+    
+    Returns
+    -------
+    pd.DataFrame
+        An (n x p) data frame where n is the number of cells and p is the
+        number of genes with at least one non-zero read.
+    """
     # read in cell barcodes
     barcodes = pd.read_csv(barcode_file, names=['cell.barcode'])
     # match index numbers to names, indices started with 1
@@ -32,6 +83,16 @@ def create_count_matrix(matrix_file, barcode_file, genes):
 
 
 def main(data_dir, outfile):
+    """
+    Create an annotated dataframe object from the Kang 2018 dataset.
+    
+    Parameters
+    ----------
+    data_dir : str
+        Directory containing downloaded data.
+    outfile : str
+        File to write pickled AnnData object to.
+    """
     if data_dir[-1] != '/':
         data_dir += '/'
     files = match_matrix_and_barcode_files(data_dir)
