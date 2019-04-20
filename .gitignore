@@ -2,3 +2,4 @@
 *.tsv
 *.mat
 *.mtx
+data/*
