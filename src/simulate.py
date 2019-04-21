@@ -2,6 +2,74 @@ import numpy as np
 from scipy import stats
 
 
+# Don't include batches in initial dataset creation
+# create a "pertubation" method that will generate perturbed
+# dataset from original.
+class SingleCellDataset():
+    
+    def __init__(self, samples=200, genes=1000, batches=2, 
+                 batch_sizes=None, populations=None, pop_sizes=None):
+        self.samples = samples
+        self.genes = genes
+        self.batches = batches
+        self.batch_sizes = batch_sizes
+        self.populations = populations
+        self.pop_sizes = pop_sizes
+
+    @property
+    def samples(self):
+        return self.samples
+
+    @samples.setter
+    def samples(self, value):
+        if value < 0 and int(value) != value:
+            raise ValueError("Expected positive integer for sample size.")
+        self.samples = value
+
+    @property
+    def genes(self):
+        return self.genes
+
+    @genes.setter
+    def genes(self, value):
+        if value < 0 and int(value) != value:
+            raise ValueError("Expected positive integer for number of genes.")
+        self.genes = value
+
+    @property
+    def batches(self):
+        return self.batches
+    
+    @batches.setter
+    def batches(self, value):
+        if value < 0 and int(value) != value:
+            raise ValueError("Expected positive integer for number of batches.")
+
+    @property
+    def batch_sizes(self):
+        return self.batch_sizes
+    
+    @batch_sizes.setter
+    def batch_sizes(self, value):
+        if value is None:
+            value = np.array([self.samples // self.batches\
+                                    for each in range(self.batches)])
+            remainder = self.samples % self.batches
+            if remainder != 0:
+                value[:remainder] += 1
+        try:
+            value = np.array(value, dtype=int)
+        except TypeError:
+            raise ValueError('Expected numpy.array castable when setting batch '
+                             'sizes.')
+        except ValueError:
+            raise ValueError('Expected numpy.array castable when setting batch '
+                             'sizes.')
+        if value.sum() != self.samples:
+            raise ValueError("Expected batch sizes to total to number of "
+                             "samples. Got {}".format(value.sum()))
+        self.batch_sizes = value
+
 def average_exp(beta, scale_factor, n=1):
     return beta.rvs(n) * scale_factor
 
