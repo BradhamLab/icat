@@ -1,5 +1,7 @@
 import numpy as np
 from scipy import stats
+import pandas as pd
+from scanpy import api as sc
 
 
 # Don't include batches in initial dataset creation
@@ -84,7 +86,7 @@ class SingleCellDataset():
     @p_marker.setter
     def p_marker(self, value):
         if value is None:
-            value = 7 / self.genes
+            value = 10 / self.genes
         elif value < 0 or value > 1:
             raise ValueError("Expected value for p_marker between 0 and 1. "
                              "Got {}.".format(value))
@@ -104,24 +106,43 @@ class SingleCellDataset():
         return out_dict
 
     def simulate(self):
-        self.X_ = np.zeros((self.samples, self.genes), dtype=int)
-        self.markers_ = [[]] * self.populations
-        self.marker_mus_ = self.markers_.copy()
-        self.mus_ = average_exp(100, n=self.genes)
+        X_ = np.zeros((self.samples, self.genes), dtype=int)
+        mus_ = average_exp(100, n=self.genes)
+        disp_ = np.ones(mus_.size)*2
+        percentiles = np.percentile(mus_, [45, 55])
+        obs = pd.DataFrame(index=range(self.samples), columns=["Population"])
+        var = pd.DataFrame(index=range(self.genes),
+                           columns=['Pop.{}.Marker'.format(i + 1) for i in\
+                                                       range(self.populations)])
+        var.fillna(False, inplace=True)
         for i in range(self.populations):
             n_markers = stats.binom(self.genes, self.p_marker).rvs()
-            self.markers_[i] = np.random.choice(np.arange(self.genes),
+            markers = np.random.choice(np.arange(self.genes),
                                                 n_markers)
-            self.marker_mus_[i] = shift_expression(self.mus_[self.markers_[i]])
-            pop_avgs = self.mus_.copy()
-            pop_avgs[self.markers_[i]] = self.marker_mus_[i]
+            shifts = np.zeros(shape=n_markers)
+            for k, j in enumerate(markers):
+                # gene is near medial expression values, up or down regulate
+                if percentiles[0] <= mus_[j] <= percentiles[1]:
+                    shifts[k] = np.random.choice([1, 4], size=1)
+                # gene is below medial expression values, up regulate
+                elif mus_[j] < percentiles[0]:
+                    shifts[k] = 4
+                # gene is above medial expression values, down regulate
+                else:
+                    shifts[k] = 1
+            # shift marker gene expression values away from baseline averages.
+            pop_disp_ = disp_.copy()
+            pop_disp_[markers] = shifts
             if i == 0:
                 start = 0
             else:
                 start = self.pop_sizes[:i].sum()
-            print(start, self.pop_sizes[i])
-            self.X_[start:start + self.pop_sizes[i], :] = \
-                simulate_counts(self.pop_sizes[i], pop_avgs)
+            X_[start:start + self.pop_sizes[i], :] = simulate_counts(
+                                                              self.pop_sizes[i],
+                                                              mus_, r=pop_disp_)
+            obs.loc[start:start + self.pop_sizes[i], 'Population'] = i + 1
+            var.loc[markers, 'Pop.{}.Marker'.format(i + 1)] = True
+        return sc.AnnData(X=X_, obs=obs, var=var)
             
 
 def average_exp(scale_factor, n=1):
@@ -134,18 +155,23 @@ def dropout_probability(mu, median_avg, beta_0=-1.5):
     x = beta_0 + 1 / median_avg * mu
     return sigmoid(-x)
 
-def sample_count(mu, p, n=200):
+def sample_count(mu, p, n=200, r=2):
     dropout = stats.bernoulli(p).rvs(n)
-    counts = stats.nbinom(1, 1 - mu / (mu + 1)).rvs(n)
+    counts = stats.nbinom(r, 1 - mu / (mu + 1)).rvs(n)
     # if dropout == 0, gene dropped out, multiplying goes to zero
     return counts * dropout
 
-def simulate_counts(n_samples, mus, beta_0=-1.5):
+def simulate_counts(n_samples, mus, r=2, beta_0=-1.5):
     exp_matrix = np.zeros((n_samples, mus.size))
     median = np.median(mus)
     p_dropout = dropout_probability(mus, median, beta_0=beta_0)
-    for i in range(mus.size):
-        exp_matrix[:, i] = sample_count(mus[i], p_dropout[i], n_samples)
+    if isinstance(r, int):
+        for i in range(mus.size):
+            exp_matrix[:, i] = sample_count(mus[i], p_dropout[i], n_samples, r)
+    elif isinstance(r, np.ndarray) and len(r) == len(mus):
+        for i in range(mus.size):
+            exp_matrix[:, i] = sample_count(mus[i], p_dropout[i], n_samples,
+                                            r[i])
     return exp_matrix
 
 
