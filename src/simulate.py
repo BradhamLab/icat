@@ -9,13 +9,16 @@ from scanpy import api as sc
 # dataset from original.
 class SingleCellDataset():
     
-    def __init__(self, samples=200, genes=1000, populations=1,
-                 pop_sizes=None, p_marker=None):
+    def __init__(self, samples=200, genes=1000, populations=2,
+                 pop_sizes=None, p_marker=None, dispersion=2, fc=2, scalar=100):
         self.samples = samples
         self.genes = genes
         self.populations = populations
         self.pop_sizes = pop_sizes
         self.p_marker = p_marker
+        self.dispersion = dispersion
+        self.fc = fc
+        self.scalar = scalar
 
     @property
     def samples(self):
@@ -91,7 +94,51 @@ class SingleCellDataset():
             raise ValueError("Expected value for p_marker between 0 and 1. "
                              "Got {}.".format(value))
         self._p_marker = value
+
+    @property
+    def dispersion(self):
+        return self._dispersion
+
+    @dispersion.setter
+    def dispersion(self, value):
+        if not isinstance(value, (int, np.integer)):
+            raise ValueError("Expected integer value for dispersion parameter "
+                             "Received: {} - {}".format(value, type(value)))
+        self._dispersion = value
+
+    @property
+    def fc(self):
+        return self._fc
     
+    @fc.setter
+    def fc(self, value):
+        if not isinstance(value, (float, int, np.float, np.integer)):
+            raise ValueError("Expected numerical value for `fc` parameter."
+                             "Received: {}".format(type(value)))
+        if self.dispersion / value != self.dispersion // value:
+            print("Warning: `dispersion` parameter value not cleanly divisible "
+                  "by `fc`. Downregulated genes will have dispersions forced to"
+                  " nearest integer value.")
+        if self.dispersion * value != int(self.dispersion * value):
+            print("Warning: float `fc` parameter will result in float "
+                  "dispersion value for upregulated genes: upregulated value "
+                  "will be set to nearest integer.")
+        self._fc = value
+
+    @property
+    def scalar(self):
+        return self._scalar
+
+    @scalar.setter
+    def scalar(self, value):
+        if not isinstance(value, (float, int, np.float, np.integer)):
+            raise ValueError("Expected numerical value for `scalar` parameter."
+                             "Received: {}".format(type(value)))
+        if value < 1:
+            raise ValueError("Expected `scalar` value > 1: values less than one"
+                             " will result in average gene expressions < 1.")
+        self._scalar = value
+
     def __repr__(self):
         header = "Simulated Single-Cell Dataset\n"
         out = ["{}: {}".format(k, v) for k, v in self.get_params().items()]
@@ -107,9 +154,11 @@ class SingleCellDataset():
 
     def simulate(self):
         X_ = np.zeros((self.samples, self.genes), dtype=int)
-        mus_ = average_exp(100, n=self.genes)
+        mus_ = average_exp(scale_factor=self.scalar, n=self.genes)
         disp_ = np.ones(mus_.size)*2
         percentiles = np.percentile(mus_, [45, 55])
+        down_r = self.dispersion // self.fc
+        up_r = int(self.dispersion * self.fc)
         obs = pd.DataFrame(index=range(self.samples), columns=["Population"])
         var = pd.DataFrame(index=range(self.genes),
                            columns=['Pop.{}.Marker'.format(i + 1) for i in\
@@ -117,19 +166,18 @@ class SingleCellDataset():
         var.fillna(False, inplace=True)
         for i in range(self.populations):
             n_markers = stats.binom(self.genes, self.p_marker).rvs()
-            markers = np.random.choice(np.arange(self.genes),
-                                                n_markers)
+            markers = np.random.choice(np.arange(self.genes), n_markers)
             shifts = np.zeros(shape=n_markers)
             for k, j in enumerate(markers):
                 # gene is near medial expression values, up or down regulate
                 if percentiles[0] <= mus_[j] <= percentiles[1]:
-                    shifts[k] = np.random.choice([1, 4], size=1)
+                    shifts[k] = np.random.choice([down_r, up_r], size=1)
                 # gene is below medial expression values, up regulate
                 elif mus_[j] < percentiles[0]:
-                    shifts[k] = 4
+                    shifts[k] = up_r
                 # gene is above medial expression values, down regulate
                 else:
-                    shifts[k] = 1
+                    shifts[k] = down_r
             # shift marker gene expression values away from baseline averages.
             pop_disp_ = disp_.copy()
             pop_disp_[markers] = shifts
