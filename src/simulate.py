@@ -10,7 +10,7 @@ from scanpy import api as sc
 class SingleCellDataset():
     
     def __init__(self, samples=200, genes=1000, populations=2,
-                 pop_sizes=None, p_marker=None, dispersion=2, fc=2, scalar=100):
+                 pop_sizes=None, p_marker=None, dispersion=4, fc=2, scalar=100):
         self.samples = samples
         self.genes = genes
         self.populations = populations
@@ -156,7 +156,7 @@ class SingleCellDataset():
         X_ = np.zeros((self.samples, self.genes), dtype=int)
         mus_ = average_exp(scale_factor=self.scalar, n=self.genes)
         disp_ = np.ones(mus_.size)*2
-        percentiles = np.percentile(mus_, [45, 55])
+        percentiles = np.percentile(mus_, [25, 75])
         down_r = self.dispersion // self.fc
         up_r = int(self.dispersion * self.fc)
         obs = pd.DataFrame(index=range(self.samples), columns=["Population"])
