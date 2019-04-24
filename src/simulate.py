@@ -165,6 +165,10 @@ class SingleCellDataset():
                                                        range(self.populations)])
         var.fillna(False, inplace=True)
         for i in range(self.populations):
+            var['Pop.{}.Dispersion'.format(i + 1)] = self.dispersion
+        var['Base.Mu'] = mus_
+
+        for i in range(self.populations):
             n_markers = stats.binom(self.genes, self.p_marker).rvs()
             markers = np.random.choice(np.arange(self.genes), n_markers)
             shifts = np.zeros(shape=n_markers)
@@ -190,6 +194,7 @@ class SingleCellDataset():
                                                               mus_, r=pop_disp_)
             obs.loc[start:start + self.pop_sizes[i], 'Population'] = i + 1
             var.loc[markers, 'Pop.{}.Marker'.format(i + 1)] = True
+            var.loc[:, 'Pop.{}.Dispersion'.format(i + 1)] = pop_disp_
         return sc.AnnData(X=X_, obs=obs, var=var)
             
 
