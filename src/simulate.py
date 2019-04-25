@@ -196,7 +196,44 @@ class SingleCellDataset():
             var.loc[markers, 'Pop.{}.Marker'.format(i + 1)] = True
             var.loc[:, 'Pop.{}.Dispersion'.format(i + 1)] = pop_disp_
         return sc.AnnData(X=X_, obs=obs, var=var)
-            
+
+def perturb(andata, samples=200, genes=1000, pop_targets=None,
+            gene_targets=None, pop_sizes=None):
+    # check population sizes, if none, match with ratio in andata
+    if pop_sizes is None:
+        ratios = andata.obs['Population'].value_counts() / andata.shape[0]
+        pop_sizes = (ratios.values * samples).astype(int)
+        if samples % pop_sizes.sum() != 0:
+            remainder = samples % pop_sizes.sum()
+            iters = 0
+            while remainder != 0:
+                pop_sizes[iters % len(pop_sizes)] += 1
+                remainder = samples % pop_sizes.sum()
+    else:
+        pop_sizes = __check_np_castable(pop_sizes, 'pop_sizes')
+        if pop_sizes.sum() != samples:
+            raise ValueError('Population sizes do not sum to number of samples.')
+    # check pop_targets in andata
+    if pop_targets is None:
+        pop_targets = andata.obs['Populations'].unique().values
+    else:
+        pop_targets = __check_np_castable(pop_targets, 'pop_targets')
+        if set(pop_targets).intersection(andata.obs['Population'])\
+        != set(pop_targets):
+            diff = set(pop_targets).difference(andata.obs['Population'])
+            raise ValueError("Undefined populations: {}".format(diff))
+
+    
+    return andata
+
+def __check_np_castable(obj, name):
+    if not isinstance(obj, np.ndarray):
+        try:
+            obj = np.array(obj)
+        except:
+            raise ValueError("Expected numpy.ndarray castable object for "
+                            "`{}`. Got {}.".format(obj, type(obj)))
+    return obj
 
 def average_exp(scale_factor, n=1):
     return stats.beta(a=2, b=5).rvs(n) * scale_factor
