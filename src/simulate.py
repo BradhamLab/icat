@@ -197,8 +197,8 @@ class SingleCellDataset():
             var.loc[:, 'Pop.{}.Dispersion'.format(i + 1)] = pop_disp_
         return sc.AnnData(X=X_, obs=obs, var=var)
 
-def perturb(andata, samples=200, genes=1000, pop_targets=None,
-            gene_targets=None, pop_sizes=None):
+def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
+            percent_perturb=None, pop_sizes=None):
     # check population sizes, if none, match with ratio in andata
     if pop_sizes is None:
         ratios = andata.obs['Population'].value_counts() / andata.shape[0]
@@ -218,10 +218,50 @@ def perturb(andata, samples=200, genes=1000, pop_targets=None,
         pop_targets = andata.obs['Populations'].unique().values
     else:
         pop_targets = __check_np_castable(pop_targets, 'pop_targets')
-        if set(pop_targets).intersection(andata.obs['Population'])\
-        != set(pop_targets):
+        if not set(pop_targets).issubset(andata.obs['Population']):
             diff = set(pop_targets).difference(andata.obs['Population'])
             raise ValueError("Undefined populations: {}".format(diff))
+    # determine which genes to perturb
+    if gene_targets is not None:
+        if not set(gene_targets).issubset(range(andata.shape[1])):
+            raise ValueError("Unrecognized gene targets: {}".format(
+                          set(gene_targets).difference(range(andata.shape[1]))))
+        gene_targets = __check_np_castable(gene_targets, 'gene_targets')
+            
+    if percent_perturb is not None and gene_targets is not None:
+        n_genes = int(percent_perturb * andata.shape[1])
+        if len(gene_targets) < n_genes:
+            n_genes -= len(gene_targets)
+            p_genes = set(range(andata.shape[1])).difference(gene_targets)
+            targets = np.random.choice(p_genes, n_genes)
+            gene_targets = np.hstack((targets, gene_targets))
+    elif gene_targets is None:
+        gene_targets = np.random.choice(int(andata.shape[1] * percent_perturb),
+                                        andata.shape[1])
+    X_ = np.zeros((samples, andata.shape[1]))
+    mus_ = andata.var['Base.Mu'].values
+    exp_shifts = stats.gamma(a=1, scale=1).rvs(size=gene_targets.size)
+    populations = []
+    obs_ = pd.DataFrame(populations, columns='Population')
+    var_ = andata.var.copy()
+    var_['Perturbation.Shift'] = exp_shifts
+    for i, each in enumerate(pop_targets):
+        populations.append([each] * pop_sizes[i])
+    for i, each in enumerate(pop_targets):
+        pop_disp = andata.var['Pop.{}.Dispersion'.format(each)].values
+        pop_mus = mus_ * exp_shifts
+        if i == 0:
+            start = 0
+        else:
+            start = pop_sizes[i - 1]
+        X_[start:start + pop_sizes[i]] = simulate_counts(pop_sizes[i],
+                                                         pop_mus, r=pop_disp)
+    return sc.AnnData(X=X_, obs=obs_, var=var_)
+
+    
+
+
+
 
     
     return andata
