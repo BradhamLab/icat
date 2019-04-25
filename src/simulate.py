@@ -215,7 +215,7 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
             raise ValueError('Population sizes do not sum to number of samples.')
     # check pop_targets in andata
     if pop_targets is None:
-        pop_targets = andata.obs['Populations'].unique().values
+        pop_targets = andata.obs['Population'].unique()
     else:
         pop_targets = __check_np_castable(pop_targets, 'pop_targets')
         if not set(pop_targets).issubset(andata.obs['Population']):
@@ -235,18 +235,22 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
             p_genes = set(range(andata.shape[1])).difference(gene_targets)
             targets = np.random.choice(p_genes, n_genes)
             gene_targets = np.hstack((targets, gene_targets))
-    elif gene_targets is None:
+    else:
+        if percent_perturb is None:
+            percent_perturb = 0.2
         gene_targets = np.random.choice(int(andata.shape[1] * percent_perturb),
                                         andata.shape[1])
+
     X_ = np.zeros((samples, andata.shape[1]))
     mus_ = andata.var['Base.Mu'].values
     exp_shifts = stats.gamma(a=1, scale=1).rvs(size=gene_targets.size)
     populations = []
-    obs_ = pd.DataFrame(populations, columns='Population')
-    var_ = andata.var.copy()
-    var_['Perturbation.Shift'] = exp_shifts
     for i, each in enumerate(pop_targets):
-        populations.append([each] * pop_sizes[i])
+        populations += [each] * pop_sizes[i]
+    obs_ = pd.DataFrame(populations, columns=['Population'])
+    var_ = andata.var.copy()
+    var_['Perturbation.Shift'] = None
+    var_.loc[gene_targets, 'Perturbation.Shift'] = exp_shifts
     for i, each in enumerate(pop_targets):
         pop_disp = andata.var['Pop.{}.Dispersion'.format(each)].values
         pop_mus = mus_ * exp_shifts
@@ -258,13 +262,6 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
                                                          pop_mus, r=pop_disp)
     return sc.AnnData(X=X_, obs=obs_, var=var_)
 
-    
-
-
-
-
-    
-    return andata
 
 def __check_np_castable(obj, name):
     if not isinstance(obj, np.ndarray):
@@ -275,15 +272,19 @@ def __check_np_castable(obj, name):
                             "`{}`. Got {}.".format(obj, type(obj)))
     return obj
 
+
 def average_exp(scale_factor, n=1):
     return stats.beta(a=2, b=5).rvs(n) * scale_factor
+
 
 def sigmoid(x):
     return 1 / (1 + np.e ** -x)
 
+
 def dropout_probability(mu, median_avg, beta_0=-1.5):
     x = beta_0 + 1 / median_avg * mu
-    return sigmoid(-x)
+    return sigmoid(x)
+
 
 def sample_count(mu, p, n=200, r=2):
     dropout = stats.bernoulli(p).rvs(n)
@@ -291,16 +292,18 @@ def sample_count(mu, p, n=200, r=2):
     # if dropout == 0, gene dropped out, multiplying goes to zero
     return counts * dropout
 
+
 def simulate_counts(n_samples, mus, r=2, beta_0=-1.5):
     exp_matrix = np.zeros((n_samples, mus.size))
-    median = np.median(mus)
-    p_dropout = dropout_probability(mus, median, beta_0=beta_0)
+    means = r * mus
+    median = np.median(means)
+    p_dropout = dropout_probability(means, median, beta_0=beta_0)
     if isinstance(r, int):
-        for i in range(mus.size):
-            exp_matrix[:, i] = sample_count(mus[i], p_dropout[i], n_samples, r)
-    elif isinstance(r, np.ndarray) and len(r) == len(mus):
-        for i in range(mus.size):
-            exp_matrix[:, i] = sample_count(mus[i], p_dropout[i], n_samples,
+        for i in range(means.size):
+            exp_matrix[:, i] = sample_count(means[i], p_dropout[i], n_samples, r)
+    elif isinstance(r, np.ndarray) and len(r) == len(means):
+        for i in range(means.size):
+            exp_matrix[:, i] = sample_count(means[i], p_dropout[i], n_samples,
                                             r[i])
     return exp_matrix
 
@@ -310,9 +313,11 @@ def simulate_reference_batch(n_samples=200, n_genes=1000, beta_0=-1.5):
     exp_matrix = simulate_counts(n_samples, mus, beta_0=beta_0)
     return exp_matrix, mus
 
+
 def shift_expression(expression_avgs):
     shifts = stats.gamma(a=1, scale=1).rvs(size=expression_avgs.size)
     return expression_avgs * shifts
+
 
 def simulate_new_batch(n_samples, reference_mus, percentage, beta_0=-1.5):
     effected_genes = np.random.choice(np.arange(reference_mus.size),
@@ -320,7 +325,3 @@ def simulate_new_batch(n_samples, reference_mus, percentage, beta_0=-1.5):
     exp_shifts = stats.gamma(a=1, scale=1).rvs(size=effected_genes.size)
     reference_mus[effected_genes] *= exp_shifts
     return simulate_counts(n_samples, reference_mus, beta_0)
-
-
-
-
