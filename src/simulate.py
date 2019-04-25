@@ -199,10 +199,22 @@ class SingleCellDataset():
 
 def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
             percent_perturb=None, pop_sizes=None):
+    # check pop_targets in andata
+    if pop_targets is None:
+        pop_targets = andata.obs['Population'].unique()
+        pop_ratios =  andata.obs['Population'].value_counts()
+    else:
+        pop_targets = __check_np_castable(pop_targets, 'pop_targets')
+        if not set(pop_targets).issubset(andata.obs['Population']):
+            diff = set(pop_targets).difference(andata.obs['Population'])
+            raise ValueError("Undefined populations: {}".format(diff))
     # check population sizes, if none, match with ratio in andata
     if pop_sizes is None:
-        ratios = andata.obs['Population'].value_counts() / andata.shape[0]
-        pop_sizes = (ratios.values * samples).astype(int)
+        try:
+            pop_ratios
+        except NameError:
+            pop_ratios = np.ones(pop_targets.size) * 1 / len(pop_targets)
+        pop_sizes = (pop_ratios * samples).astype(int)
         if samples % pop_sizes.sum() != 0:
             remainder = samples % pop_sizes.sum()
             iters = 0
@@ -213,14 +225,6 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
         pop_sizes = __check_np_castable(pop_sizes, 'pop_sizes')
         if pop_sizes.sum() != samples:
             raise ValueError('Population sizes do not sum to number of samples.')
-    # check pop_targets in andata
-    if pop_targets is None:
-        pop_targets = andata.obs['Population'].unique()
-    else:
-        pop_targets = __check_np_castable(pop_targets, 'pop_targets')
-        if not set(pop_targets).issubset(andata.obs['Population']):
-            diff = set(pop_targets).difference(andata.obs['Population'])
-            raise ValueError("Undefined populations: {}".format(diff))
     # determine which genes to perturb
     if gene_targets is not None:
         if not set(gene_targets).issubset(range(andata.shape[1])):
