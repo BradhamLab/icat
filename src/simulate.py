@@ -197,12 +197,15 @@ class SingleCellDataset():
             var.loc[:, 'Pop.{}.Dispersion'.format(i + 1)] = pop_disp_
         return sc.AnnData(X=X_, obs=obs, var=var)
 
+# TODO: add option to simulate untargetted populations/ add treatment
+# specific populations
 def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
             percent_perturb=None, pop_sizes=None):
     # check pop_targets in andata
     if pop_targets is None:
         pop_targets = andata.obs['Population'].unique()
-        pop_ratios =  andata.obs['Population'].value_counts()
+        pop_ratios = andata.obs['Population'].value_counts().values
+        pop_ratios = pop_ratios / pop_ratios.sum()
     else:
         pop_targets = __check_np_castable(pop_targets, 'pop_targets')
         if not set(pop_targets).issubset(andata.obs['Population']):
@@ -215,6 +218,7 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
         except NameError:
             pop_ratios = np.ones(pop_targets.size) * 1 / len(pop_targets)
         pop_sizes = (pop_ratios * samples).astype(int)
+        print(pop_sizes)
         if samples % pop_sizes.sum() != 0:
             remainder = samples % pop_sizes.sum()
             iters = 0
