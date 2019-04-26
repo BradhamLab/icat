@@ -251,14 +251,15 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
 
     X_ = np.zeros((samples, andata.shape[1]))
     mus_ = andata.var['Base.Mu'].values
-    exp_shifts = stats.gamma(a=1, scale=1).rvs(size=gene_targets.size)
+    exp_shifts = np.ones(mus_.size)
+    exp_shifts[gene_targets] = stats.gamma(a=2, scale=2).\
+                                     rvs(size=gene_targets.size)
     populations = []
     for i, each in enumerate(pop_targets):
         populations += [each] * pop_sizes[i]
     obs_ = pd.DataFrame(populations, columns=['Population'])
     var_ = andata.var.copy()
-    var_['Perturbation.Shift'] = None
-    var_.loc[gene_targets, 'Perturbation.Shift'] = exp_shifts
+    var_['Perturbation.Shift'] = exp_shifts
     for i, each in enumerate(pop_targets):
         pop_disp = andata.var['Pop.{}.Dispersion'.format(each)].values
         pop_mus = mus_ * exp_shifts
