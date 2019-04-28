@@ -10,14 +10,13 @@ from scanpy import api as sc
 class SingleCellDataset():
     
     def __init__(self, samples=200, genes=1000, populations=2,
-                 pop_sizes=None, p_marker=None, dispersion=4, fc=2, scalar=100):
+                 pop_sizes=None, p_marker=None, dispersion=1, scalar=100):
         self.samples = samples
         self.genes = genes
         self.populations = populations
         self.pop_sizes = pop_sizes
         self.p_marker = p_marker
         self.dispersion = dispersion
-        self.fc = fc
         self.scalar = scalar
 
     @property
@@ -107,25 +106,6 @@ class SingleCellDataset():
         self._dispersion = value
 
     @property
-    def fc(self):
-        return self._fc
-    
-    @fc.setter
-    def fc(self, value):
-        if not isinstance(value, (float, int, np.float, np.integer)):
-            raise ValueError("Expected numerical value for `fc` parameter."
-                             "Received: {}".format(type(value)))
-        if self.dispersion / value != self.dispersion // value:
-            print("Warning: `dispersion` parameter value not cleanly divisible "
-                  "by `fc`. Downregulated genes will have dispersions forced to"
-                  " nearest integer value.")
-        if self.dispersion * value != int(self.dispersion * value):
-            print("Warning: float `fc` parameter will result in float "
-                  "dispersion value for upregulated genes: upregulated value "
-                  "will be set to nearest integer.")
-        self._fc = value
-
-    @property
     def scalar(self):
         return self._scalar
 
@@ -149,52 +129,42 @@ class SingleCellDataset():
                     'genes': self.genes,
                     'populations': self.populations,
                     'pop_sizes': self.pop_sizes,
-                    'p_marker': self.p_marker}
+                    'p_marker': self.p_marker,
+                    'dispersion': self.dispersion,
+                    'scalar': self.scalar}
         return out_dict
 
     def simulate(self):
         X_ = np.zeros((self.samples, self.genes), dtype=int)
         mus_ = average_exp(scale_factor=self.scalar, n=self.genes)
-        disp_ = np.ones(mus_.size)*2
-        percentiles = np.percentile(mus_, [25, 75])
-        down_r = self.dispersion // self.fc
-        up_r = int(self.dispersion * self.fc)
         obs = pd.DataFrame(index=range(self.samples), columns=["Population"])
         var = pd.DataFrame(index=range(self.genes),
                            columns=['Pop.{}.Marker'.format(i + 1) for i in\
                                                        range(self.populations)])
         var.fillna(False, inplace=True)
         for i in range(self.populations):
-            var['Pop.{}.Dispersion'.format(i + 1)] = self.dispersion
+            var['Pop.{}.Mu'.format(i + 1)] = mus_
+        var['Base.Dispersion'] = self.dispersion
         var['Base.Mu'] = mus_
-
+        gamma = stats.gamma(a=2, scale=2)
         for i in range(self.populations):
             n_markers = stats.binom(self.genes, self.p_marker).rvs()
             markers = np.random.choice(np.arange(self.genes), n_markers)
-            shifts = np.zeros(shape=n_markers)
-            for k, j in enumerate(markers):
-                # gene is near medial expression values, up or down regulate
-                if percentiles[0] <= mus_[j] <= percentiles[1]:
-                    shifts[k] = np.random.choice([down_r, up_r], size=1)
-                # gene is below medial expression values, up regulate
-                elif mus_[j] < percentiles[0]:
-                    shifts[k] = up_r
-                # gene is above medial expression values, down regulate
-                else:
-                    shifts[k] = down_r
+            shifts = gamma.rvs(n_markers)
             # shift marker gene expression values away from baseline averages.
-            pop_disp_ = disp_.copy()
-            pop_disp_[markers] = shifts
+            pop_mus_ = mus_.copy()
+            pop_mus_[markers] *= shifts
             if i == 0:
                 start = 0
             else:
                 start = self.pop_sizes[:i].sum()
             X_[start:start + self.pop_sizes[i], :] = simulate_counts(
                                                               self.pop_sizes[i],
-                                                              mus_, r=pop_disp_)
+                                                              pop_mus_,
+                                                              r=self.dispersion)
             obs.loc[start:start + self.pop_sizes[i], 'Population'] = i + 1
             var.loc[markers, 'Pop.{}.Marker'.format(i + 1)] = True
-            var.loc[:, 'Pop.{}.Dispersion'.format(i + 1)] = pop_disp_
+            var.loc[:, 'Pop.{}.Mu'.format(i + 1)] = pop_mus_
         return sc.AnnData(X=X_, obs=obs, var=var)
 
 # TODO: add option to simulate untargetted populations/ add treatment
@@ -266,7 +236,7 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
         if i == 0:
             start = 0
         else:
-            start = pop_sizes[i - 1]
+            start = pop_sizes[:i].sum()
         X_[start:start + pop_sizes[i]] = simulate_counts(pop_sizes[i],
                                                          pop_mus, r=pop_disp)
     return sc.AnnData(X=X_, obs=obs_, var=var_)
