@@ -65,11 +65,11 @@ class SingleCellDataset():
         try:
             value = np.array(value, dtype=int)
         except TypeError:
-            raise ValueError('Expected numpy.array castable when setting batch '
-                             'sizes.')
+            raise ValueError('Expected numpy.array castable when setting '
+                             'population sizes.')
         except ValueError:
-            raise ValueError('Expected numpy.array castable when setting batch '
-                             'sizes.')
+            raise ValueError('Expected numpy.array castable when setting '
+                             'population sizes.')
         if len(value) != self.populations:
             raise ValueError("Number of populations does not match number of "
                              "populations passed. "
@@ -77,7 +77,7 @@ class SingleCellDataset():
                              ", but received "
                              "{} population sizes.".format(self.pop_sizes))
         if value.sum() != self.samples:
-            raise ValueError("Expected batch sizes to total to number of "
+            raise ValueError("Expected population sizes to total to number of "
                              "samples. Got {}".format(value.sum()))
         self._pop_sizes = value
 
@@ -100,9 +100,22 @@ class SingleCellDataset():
 
     @dispersion.setter
     def dispersion(self, value):
-        if not isinstance(value, (int, np.integer)):
+        if isinstance(value, (list, np.ndarray)):
+            if not len(value) == self.genes:
+                raise ValueError("Number of dispersions passed does not match "
+                                 "the number of genes passed. Dispersion should"
+                                 " either be a list-like of length `genes` or "
+                                 "a single integer value.")
+            value = np.array(value, dtype=int)
+            if not np.all(value > 0):
+                raise ValueError("Expected non-negative positive integer for "
+                                 "all dispersion parameters.")
+        elif not isinstance(value, (int, np.integer)):
             raise ValueError("Expected integer value for dispersion parameter "
                              "Received: {} - {}".format(value, type(value)))
+            if value < 1:
+                raise ValueError("Dispersion must be a non-negative integer. "
+                                 "Received: {}".format(value))
         self._dispersion = value
 
     @property
@@ -188,7 +201,6 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
         except NameError:
             pop_ratios = np.ones(pop_targets.size) * 1 / len(pop_targets)
         pop_sizes = (pop_ratios * samples).astype(int)
-        print(pop_sizes)
         if samples % pop_sizes.sum() != 0:
             remainder = samples % pop_sizes.sum()
             iters = 0
@@ -220,8 +232,8 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
                                         andata.shape[1])
 
     X_ = np.zeros((samples, andata.shape[1]))
-    mus_ = andata.var['Base.Mu'].values
-    exp_shifts = np.ones(mus_.size)
+    disp_ = andata.var['Base.Dispersion'].values
+    exp_shifts = np.ones(andata.shape[1])
     exp_shifts[gene_targets] = stats.gamma(a=2, scale=2).\
                                      rvs(size=gene_targets.size)
     populations = []
@@ -231,14 +243,13 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
     var_ = andata.var.copy()
     var_['Perturbation.Shift'] = exp_shifts
     for i, each in enumerate(pop_targets):
-        pop_disp = andata.var['Pop.{}.Dispersion'.format(each)].values
-        pop_mus = mus_ * exp_shifts
+        pop_mus = andata.var['Pop.{}.Mu'.format(each)].values * exp_shifts
         if i == 0:
             start = 0
         else:
             start = pop_sizes[:i].sum()
         X_[start:start + pop_sizes[i]] = simulate_counts(pop_sizes[i],
-                                                         pop_mus, r=pop_disp)
+                                                         pop_mus, r=disp_)
     return sc.AnnData(X=X_, obs=obs_, var=var_)
 
 
