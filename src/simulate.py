@@ -180,6 +180,13 @@ class SingleCellDataset():
             var.loc[:, 'Pop.{}.Mu'.format(i + 1)] = pop_mus_
         return sc.AnnData(X=X_, obs=obs, var=var)
 
+
+def population_markers(andata):
+    marker_cols = [x for x in andata.var.columns if 'Marker' in x]
+    markers = {i + 1: andata.var[andata.var[x]].index.values\
+               for i, x in enumerate(marker_cols)}
+    return markers
+
 # TODO: add option to simulate untargetted populations/ add treatment
 # specific populations
 def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
@@ -225,12 +232,12 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
             p_genes = set(range(andata.shape[1])).difference(gene_targets)
             targets = np.random.choice(p_genes, n_genes)
             gene_targets = np.hstack((targets, gene_targets))
-    else:
+    elif gene_targets is None:
         if percent_perturb is None:
             percent_perturb = 0.2
-        gene_targets = np.random.choice(int(andata.shape[1] * percent_perturb),
-                                        andata.shape[1])
-
+        gene_targets = np.random.choice(andata.shape[1],
+                                        int(andata.shape[1] * percent_perturb))
+    markers = population_markers(andata)
     X_ = np.zeros((samples, andata.shape[1]))
     disp_ = andata.var['Base.Dispersion'].values
     exp_shifts = np.ones(andata.shape[1])
@@ -238,7 +245,13 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
                                      rvs(size=gene_targets.size)
     populations = []
     for i, each in enumerate(pop_targets):
-        populations += [each] * pop_sizes[i]
+        markers_i = markers[each]
+        print(gene_targets)
+        if len(set(markers_i).intersection(gene_targets)) != 0:
+            name = 'Perturbed.{}'.format(each)
+        else:
+            name = str(each)
+        populations += [name] * pop_sizes[i]
     obs_ = pd.DataFrame(populations, columns=['Population'])
     var_ = andata.var.copy()
     var_['Perturbation.Shift'] = exp_shifts
