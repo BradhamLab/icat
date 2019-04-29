@@ -75,9 +75,7 @@ class SingleCellDataset():
         self.p_marker = p_marker
         self.dispersion = dispersion
         self.scalar = scalar
-"""
-012345678_012345678_012345678_012345678_012345678_012345678_012345678_012345678_
-"""
+        
     @property
     def samples(self):
         """Get samples attribute."""
