@@ -179,12 +179,16 @@ class SingleCellDataset():
             if not np.all(value > 0):
                 raise ValueError("Expected non-negative positive integer for "
                                  "all dispersion parameters.")
-        elif not isinstance(value, (int, np.integer)):
-            raise ValueError("Expected integer value for dispersion parameter "
-                             "Received: {} - {}".format(value, type(value)))
+        elif isinstance(value, (int, np.integer)):
             if value < 1:
                 raise ValueError("Dispersion must be a non-negative integer. "
                                  "Received: {}".format(value))
+            # cast to array of length `genes`
+            value = np.array([value]*self.genes) 
+        else:
+            raise ValueError("Expected integer value for dispersion parameter "
+                             "Received: {} - {}".format(value, type(value)))
+
         self._dispersion = value
 
     @property
@@ -281,42 +285,63 @@ class SingleCellDataset():
             p_ij = sigmoid(x) \\
             sigmoid(x) = \dfrac{1}{1 + e^{-x}} \\
             x_ij = \beta_0 + \dfrac{mu_ij}{median(\vec \mu)} \\
-            \vec \mu = \{\mu_11, \mu_12, \ldots , \mu_n{p - 1}, \mu_np}
+            \vec \mu = \{\mu_1, \mu_1, \ldots , \mu_{p - 1}, \mu_p}
         
         Here, :math:`beta_0 = -1.5` and :math:`median(\vec \mu)` is the median
-        average expression value across all genes over all cells.
+        average baseline expression value across all genes. That is, shifts
+        for marker genes are not taken into consideration.
         """
-        X_ = np.zeros((self.samples, self.genes), dtype=int)
-        mus_ = average_exp(scale_factor=self.scalar, n=self.genes)
+        # data frame to track cell annotations
         obs = pd.DataFrame(index=range(self.samples), columns=["Population"])
+        # data frame to track gene annotations
         var = pd.DataFrame(index=range(self.genes),
                            columns=['Pop.{}.Marker'.format(i + 1) for i in\
                                                        range(self.populations)])
         var.fillna(False, inplace=True)
-        for i in range(self.populations):
-            var['Pop.{}.Mu'.format(i + 1)] = mus_
         var['Base.Dispersion'] = self.dispersion
+        # will be count matrix
+        X_ = np.zeros((self.samples, self.genes), dtype=int)
+        # get baseline expression averages
+        mus_ = average_exp(scale_factor=self.scalar, n=self.genes)
         var['Base.Mu'] = mus_
+        # create gene x pop matrix to hold pop-specific expression averages
+        mus = np.ones((mus_.size, self.populations)) * mus_.reshape(-1, 1)
+        # get number of marker genes for each population
+        n_markers = stats.binom(self.genes, self.p_marker).rvs(self.populations)
+        # must have at least 1 marker gene
+        n_markers[n_markers == 0] = 1
+        # distribution to sample expression shifts from 
         gamma = stats.gamma(a=2, scale=2)
+        for i, n in enumerate(n_markers):
+            # pick marker genes and shift their expression in population i
+            markers = np.random.choice(np.arange(self.genes), n)
+            mus[markers, i] = mus[markers, i] * gamma.rvs(n)
+            # log marker genes in var data frame
+            var.loc[markers, 'Pop.{}.Marker'.format(i + 1)] = True
+        
+        # calculate expression averages across populations
+        # a |gene| x |populations| size matrix
+        means_ = mus * np.ones_like(mus) * self.dispersion.reshape(-1, 1)
+        # calculate dataset-wide median of means
+        median_ = np.median(means_)
+        # calculate dropout probabilites for each gene in each population
+        # a |gene| x |populations| size matrix
+        p_dropout = dropout_probability(means_, median_)
+        
         for i in range(self.populations):
-            # randomly select number of marker genes, must have at least 1
-            n_markers = max(stats.binom(self.genes, self.p_marker).rvs(), 1) 
-            markers = np.random.choice(np.arange(self.genes), n_markers)
-            shifts = gamma.rvs(n_markers)
-            # shift marker gene expression values away from baseline averages.
-            pop_mus_ = mus_.copy()
-            pop_mus_[markers] *= shifts
             if i == 0:
                 start = 0
             else:
                 start = self.pop_sizes[:i].sum()
-            X_[start:start + self.pop_sizes[i], :] = simulate_counts(
-                                                              self.pop_sizes[i],
-                                                              pop_mus_,
-                                                              r=self.dispersion)
+            for j in range(self.genes):
+                dist = stats.nbinom(self.dispersion[j],
+                                    1 - mus[j, i] / (mus[j, i] + 1))
+                drop = stats.bernoulli(p=p_dropout[j, i]).rvs(self.pop_sizes[i])
+                X_[start:start + self.pop_sizes[i], j] = dist.rvs(
+                                                              self.pop_sizes[i])\
+                                                       * drop
             obs.loc[start:start + self.pop_sizes[i], 'Population'] = i + 1
-            var.loc[markers, 'Pop.{}.Marker'.format(i + 1)] = True
-            var.loc[:, 'Pop.{}.Mu'.format(i + 1)] = pop_mus_
+            var.loc[:, 'Pop.{}.Mu'.format(i + 1)] = mus[:, i]
         return sc.AnnData(X=X_, obs=obs, var=var)
 
 # TODO: add option to simulate untargetted populations/ add treatment
