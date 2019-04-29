@@ -1,16 +1,73 @@
+"""
+Module to simulate single-cell RNA sequencing data
+
+@author: Dakota Y. Hawkins
+@contact: dyh0110@bu.edu 
+"""
 import numpy as np
 from scipy import stats
 import pandas as pd
 from scanpy import api as sc
 
-
-# Don't include batches in initial dataset creation
-# create a "pertubation" method that will generate perturbed
-# dataset from original.
 class SingleCellDataset():
+    """
+    Class to simulate a single-cell RNA sequencing dataset.
     
+    Attributes
+    ----------
+    samples : int
+        Number of cells to simulate.
+    genes : int
+        Number of genes to simulate.
+    populations : int
+        Number of populations to simulate in the dataset.
+    pop_sizes : list-like
+        Number of cells in each population.
+    p_marker : float
+        Probability of selecting a gene as a marker gene for a given population.
+    dispersion : int, list-like
+        Dispersion parameter used to simulate counts in a negative binomial
+        model. Either a single, integer value shared across all genes, or an
+        array of gene-specific values.
+    scalar : float
+        Scalar value multiplied to a beta-distributed random variable to
+        estimate average gene expression for a simualted gene.
+    Methods
+    -------
+    
+    get_params():
+        Get model parameters used to simulate dataset.
+    simulate():
+        Simulate a single-cell RNA sequencing dataset with the set parameters.
+    """
     def __init__(self, samples=200, genes=1000, populations=2,
                  pop_sizes=None, p_marker=None, dispersion=1, scalar=100):
+        """
+        Parameters
+        ----------
+        samples : int, optional
+            Number of cells to simulate. Default is 200.
+        genes : int, optional
+            Number of genes to simulate. Default is 1000.
+        populations : int, optional
+            Number of populations to simulate in the dataset. Default is 2.
+        pop_sizes : list-like, optional
+            Number of cells in each population. Default is None, and the number
+            of cells will be split uniformly between populations.
+        p_marker : float, optional
+            Probability of selecting a gene as a marker gene for a given
+            population. Default is None, and will be set so that each
+            population will have an average of 10 marker genes.
+        dispersion : int, list-like, optional
+            Dispersion parameter used to simulate counts in a negative binomial
+            model. Either a single, integer value shared across all genes, or an
+            array of gene-specific values. Default is 1, and will be shared
+            across all genes.
+        scalar : float, optional
+            Scalar value multiplied to a beta-distributed random variable to
+            estimate average gene expression for a simualted gene. Default is
+            100.
+        """
         self.samples = samples
         self.genes = genes
         self.populations = populations
@@ -18,33 +75,41 @@ class SingleCellDataset():
         self.p_marker = p_marker
         self.dispersion = dispersion
         self.scalar = scalar
-
+"""
+012345678_012345678_012345678_012345678_012345678_012345678_012345678_012345678_
+"""
     @property
     def samples(self):
+        """Get samples attribute."""
         return self._samples
 
     @samples.setter
     def samples(self, value):
+        """Set samples attribute."""
         if value < 0 and int(value) != value:
             raise ValueError("Expected positive integer for sample size.")
         self._samples = value
 
     @property
     def genes(self):
+        """Get genes attribute."""
         return self._genes
 
     @genes.setter
     def genes(self, value):
+        """Set genes attribute."""
         if value < 0 and int(value) != value:
             raise ValueError("Expected positive integer for number of genes.")
         self._genes = value
 
     @property
     def populations(self):
+        """Get populations attribute."""
         return self._populations
     
     @populations.setter
     def populations(self, value):
+        """Set populations attribute."""
         if value < 0 and int(value) != value:
             raise ValueError("Expected positive integer for number of "
                              "populations.")
@@ -52,10 +117,12 @@ class SingleCellDataset():
 
     @property
     def pop_sizes(self):
+        """Get pop_sizes attribute."""
         return self._pop_sizes
     
     @pop_sizes.setter
     def pop_sizes(self, value):
+        """Set pop_sizes attribute."""
         if value is None:
             value = np.array([self.samples // self.populations\
                                     for each in range(self.populations)])
@@ -83,10 +150,12 @@ class SingleCellDataset():
 
     @property
     def p_marker(self):
+        """Get p_marker attribute."""
         return self._p_marker
 
     @p_marker.setter
     def p_marker(self, value):
+        """Set p_marker attribute."""
         if value is None:
             value = 10 / self.genes
         elif value < 0 or value > 1:
@@ -96,10 +165,12 @@ class SingleCellDataset():
 
     @property
     def dispersion(self):
+        """Get dispersion parameter."""
         return self._dispersion
 
     @dispersion.setter
     def dispersion(self, value):
+        """Set dispersion parameter."""
         if isinstance(value, (list, np.ndarray)):
             if not len(value) == self.genes:
                 raise ValueError("Number of dispersions passed does not match "
@@ -120,10 +191,12 @@ class SingleCellDataset():
 
     @property
     def scalar(self):
+        """Get scalar parameter."""
         return self._scalar
 
     @scalar.setter
     def scalar(self, value):
+        """Set scalar parameter."""
         if not isinstance(value, (float, int, np.float, np.integer)):
             raise ValueError("Expected numerical value for `scalar` parameter."
                              "Received: {}".format(type(value)))
@@ -133,11 +206,13 @@ class SingleCellDataset():
         self._scalar = value
 
     def __repr__(self):
+        """Return string representation of SingleCellDataset object."""
         header = "Simulated Single-Cell Dataset\n"
         out = ["{}: {}".format(k, v) for k, v in self.get_params().items()]
         return header + '\n'.join(out)
 
     def get_params(self):
+        """Get parameter set used to simulate dataset."""
         out_dict = {'samples': self.samples,
                     'genes': self.genes,
                     'populations': self.populations,
@@ -148,6 +223,18 @@ class SingleCellDataset():
         return out_dict
 
     def simulate(self):
+        """
+        Simulate dataset.
+        
+        Parameters
+        ----------
+        None
+        
+        Returns
+        -------
+        sc.AnnData
+            Annotated dataframe of simulated data.
+        """
         X_ = np.zeros((self.samples, self.genes), dtype=int)
         mus_ = average_exp(scale_factor=self.scalar, n=self.genes)
         obs = pd.DataFrame(index=range(self.samples), columns=["Population"])
