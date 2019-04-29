@@ -222,7 +222,7 @@ class SingleCellDataset():
 
     def simulate(self):
         """
-        Simulate dataset.
+        Simulate read counts across genes and populations.           
         
         Parameters
         ----------
@@ -232,6 +232,59 @@ class SingleCellDataset():
         -------
         sc.AnnData
             Annotated dataframe of simulated data.
+
+        Notes
+        -----
+        Counts are simulated from a negative binomial distribution with dropout.
+
+        ..math::
+             c_{ij} ~ NV(r_ij, 1 - \dfrac{\mu_{ij}}{\mu + 1} | Bernoulli(p_ij))
+
+        Where :math:`c_ij` is the read counts for gene :math:`j` in cell
+        :math:`i`, :math:`r_ij` is the dispersion parameter for gene `j` when
+        expressed in cell `i`, :math:`\mu_{ij}` is the average expression value
+        for gene :math:`j` in cell :math:`i`, and :math:`p_ij` is the dropout
+        probability of gene :math:`j` in cell :math:`i`. As :math:`c_{ij}` is
+        conditioned on :math:`p_{ij}`, if :math:`\not p_{ij}, c_{ij} = 0`. 
+
+        The baseline average expression value for gene `j`, :math:`\mu_{j}`, is
+        modelled using a scaled Beta distribution with parameters :math:`a = 2`
+        and :math:`b = 5`. Each Beta random variable is scaled by a constant
+        :math:`c = 100` to calculate the final average.
+        
+        ..math::
+            \mu_j \sim Beta(a, b) \cdot c
+
+        If gene :math:`j` was selected as a marker gene for population
+        :math:`K`, this average is scaled again to represent up or down
+        regulation in population :math:`K` compared to baseline. The marker gene
+        scalar is drawn from a Gamma-distributed random variable, where:
+
+        ..math::
+            \gamma \sim Gamma(\alpha, \beta) \\
+            \mu_{j}^K = \gamma \mu_j \\
+            
+        and :math:`\alpha = 2`, `\beta = 2`. Thus, letting :math:`M` represent
+        the set of all marker genes.
+            
+        ..math::
+            \mu_ij = 
+            \begin{cases}
+                \mu_{j}^K & \forall i \in K \and j \in M`, \\
+                \mu_j & otherwise
+            \end{cases}
+
+        The probability for a dropout event for gene :math:`j` in cell `i` is
+        modelled by passing an affine transformation through a sigmoid function:
+
+        ..math::
+            p_ij = sigmoid(x) \\
+            sigmoid(x) = \dfrac{1}{1 + e^{-x}} \\
+            x_ij = \beta_0 + \dfrac{mu_ij}{median(\vec \mu)} \\
+            \vec \mu = \{\mu_11, \mu_12, \ldots , \mu_n{p - 1}, \mu_np}
+        
+        Here, :math:`beta_0 = -1.5` and :math:`median(\vec \mu)` is the median
+        average expression value across all genes over all cells.
         """
         X_ = np.zeros((self.samples, self.genes), dtype=int)
         mus_ = average_exp(scale_factor=self.scalar, n=self.genes)
@@ -269,6 +322,63 @@ class SingleCellDataset():
 # specific populations
 def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
             percent_perturb=None, pop_sizes=None):
+    """
+    Perturb a simulated single-cell dataset.
+
+    Perturbs a simulated single-cell dataset by applying a Gamma-distributed
+    scalar shift to the average expression value to a set number of genes.
+
+    That is, for a specific simulated gene following a negative binomial 
+    distribution :math:`gene_i \sim NB(r_i, \mu_i)`, the perturbation is
+    modelled using the following equations: 
+
+    .. math::
+        \gamma_i \sim Gamma(2, 2) \\
+        gene_{i} \sim NB(r_i, \gamma_i \cdot \mu_i)
+
+    Where :math:`mu_i` is taken from the reference dataset.
+
+    Parameters
+    ----------
+    andata : sc.AnnData
+        Simulated annotated dataframe to be perturbed. Output from
+        SingleCellDataset.simulate().
+    samples : int, optional
+        Number of perturbed cells to simulate, by default 200.
+    pop_targets : list-like, optional
+        Populations to simulate, by default None, and all populations present in
+        `andata` will be simulated.
+    gene_targets : list-like, optional
+        Genes to perturb, by default None, and targets will be randomly chosen.
+    percent_perturb : float, optional
+        Percentage of genes to perturb. By default None, and if no argument is
+        provided for `gene_targets`, will be set to 20%. If *both* arguments
+        for `gene_targets` and `percent_perturb` are provided, the remainder of
+        genes between `gene_targets` and the number of genes dictated by
+        `percent_purturbed`, will be randomly selected.
+    pop_sizes : list-like, optional
+        Desired population sizes for each perturbed population. By default None,
+        and the number of cells will be evenly distributed between populations.
+    
+    Returns
+    -------
+    sc.AnnData
+        Perturbed single-cell dataset.
+    
+    Raises
+    ------
+    ValueError
+        Raised if a list-like argument is not castable to a numpy.ndarray.
+    ValueError
+        Raised target populations are not contained in provied annotated
+        dataframe
+    ValueError
+        Raised if provided population sizes do not sum to number of samples
+        passed.
+    ValueError
+        Raised if provided gene targets are not contained in the provided
+        annotated dataframe.
+    """
     # check pop_targets in andata
     if pop_targets is None:
         pop_targets = andata.obs['Population'].unique()
@@ -339,6 +449,7 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
 
 
 def __check_np_castable(obj, name):
+    """Check whether an object is castable to a numpy.ndarray."""
     if not isinstance(obj, np.ndarray):
         try:
             obj = np.array(obj)
@@ -349,19 +460,112 @@ def __check_np_castable(obj, name):
 
 
 def average_exp(scale_factor, n=1):
+    """
+    Simulate average expression parameters for simulated genes.
+
+    Simulate average expression parameters for simulated genes. Average values
+    are modelled using a scaled beta distribution.
+
+    ..math:
+        \mu_i \sim Beta(a, b) \cdot c
+
+    Where :math:`a = 2`, :math:`b = 5`, and :math:`c` is a user provided scale
+    factor. 
+    
+    Parameters
+    ----------
+    scale_factor : float
+        Scalar to multiply beta-distributed random variable to calculate
+        expression averages. 
+    n : int, optional
+        Number of genes to model, by default 1. 
+    
+    Returns
+    -------
+    np.ndarray
+        Average gene expression values. 
+    """
     return stats.beta(a=2, b=5).rvs(n) * scale_factor
 
 
 def sigmoid(x):
+    """
+    Sigmoid function used to estimate probability of dropout.
+    
+    Parameters
+    ----------
+    x : float
+        Value to pass to sigmoid function.
+    
+    Returns
+    -------
+    float
+        Value of `x` passed through sigmoid function.        
+    """
     return 1 / (1 + np.e ** -x)
 
 
 def dropout_probability(mu, median_avg, beta_0=-1.5):
+    """
+    Estimate the probability of dropout for a given gene.
+
+    Estimate the probability of a dropout even using a sigmoid function, and
+    the following models. 
+
+    ..math::
+        p_i = sigmoid(x) \\
+        sigmoid(x) = \dfrac{1}{1 + e^{-x}} \\
+        x_i = \beta_0 + \dfrac{mu_i}{median(\vec \mu)} \\
+        \vec \mu = \{\mu_1, \mu_2, \ldots , \mu_{p - 1}, \mu_p}
+    
+    Parameters
+    ----------
+    mu : float, numpy.ndarray
+        Either the average expression value for a single gene, or an array of
+        average expression values for a set of genes.
+    median_avg : float
+        Median average expression value over all genes.
+    beta_0 : float, optional
+        Affine term to add to scalar multiple of `mu`. By default -1.5.
+    
+    Returns
+    -------
+    float
+        Probability of gene(s) to experience a dropout event.
+    """
     x = beta_0 + 1 / median_avg * mu
     return sigmoid(x)
 
-
+# TODO: change mu + 1 to mu + r
 def sample_count(mu, p, n=200, r=2):
+    """
+    Sample gene counts from a negative binomial distribution with dropout. 
+
+    Sample gene counts from a negative binomial distribution with dropout. Let
+    :math:`c_{ij}` represent the counts for cell :math:`i` over gene :math:`j`.
+    Then,
+
+    ..math::
+        c_{ij} ~ NV(r_ij, 1 - \dfrac{\mu_ij}{mu + 1} | Bernoulli(p_ij))
+
+    If :math:`\not Bernoulli(p_ij)`, `c_ij = 0`. 
+
+    Parameters
+    ----------
+    mu : float
+        Gene expression average for specific cell-gene combo.
+    p : float
+        Probability of expression dropout for specific cell-gene combo.
+    n : int, optional
+        Number of cells to simulate, by default 200.
+    r : int, optional
+        Dispersion paramter for negative binomial model, by default 2.
+    
+    Returns
+    -------
+    np.ndarray
+        Array of gene counts for each cell.
+    """
     dropout = stats.bernoulli(p).rvs(n)
     counts = stats.nbinom(r, 1 - mu / (mu + 1)).rvs(n)
     # if dropout == 0, gene dropped out, multiplying goes to zero
@@ -369,34 +573,53 @@ def sample_count(mu, p, n=200, r=2):
 
 
 def simulate_counts(n_samples, mus, r=2, beta_0=-1.5):
+    """
+    Simulate counts across genes for a set number of samples.
+    
+    Parameters
+    ----------
+    n_samples : int
+        Number of samples to simulate.
+    mus : np.ndarray
+        Expression averages for each gene. 
+    r : int, numpy.ndarray, optional
+        Dispersion parameter in negative binomial model. Can either be a single
+        integer value shared between all genes, or a numpy array containing
+        gene-specific values. By default 2.
+    beta_0 : float, optional
+        Affine constant used in estimating dropout, by default -1.5.
+    
+    Returns
+    -------
+    numpy.ndarray
+        An :math:`n \times p` count matrix, where :math:`n` is number of
+        samples, defined by `n_samples`, and :math:`p` is the number of genes,
+        defined by the size of `mus`. 
+    
+    Raises
+    ------
+    ValueError
+        Raised if a numpy array is passed for `r` and the lengths of `r` and
+        `mus` do not align.
+    ValueError
+        Raised if `r` is neither a numpy array or an integer value.
+    """
     exp_matrix = np.zeros((n_samples, mus.size))
     means = r * mus
     median = np.median(means)
     p_dropout = dropout_probability(means, median, beta_0=beta_0)
-    if isinstance(r, int):
+    if isinstance(r, (int, np.integer)):
         for i in range(means.size):
-            exp_matrix[:, i] = sample_count(means[i], p_dropout[i], n_samples, r)
+            exp_matrix[:, i] = sample_count(means[i], p_dropout[i], n_samples,
+                                            r)
     elif isinstance(r, np.ndarray) and len(r) == len(means):
         for i in range(means.size):
             exp_matrix[:, i] = sample_count(means[i], p_dropout[i], n_samples,
                                             r[i])
+    else:
+        if isinstance(r, np.ndarray):
+            raise ValueError("Length of `r` and `mu` do not match.")
+        else:
+            raise ValueError("Expected integer or numpy array for `r`. "
+                             "Received: {}.".format(type(r)))
     return exp_matrix
-
-
-def simulate_reference_batch(n_samples=200, n_genes=1000, beta_0=-1.5):
-    mus = average_exp(100, n_genes)
-    exp_matrix = simulate_counts(n_samples, mus, beta_0=beta_0)
-    return exp_matrix, mus
-
-
-def shift_expression(expression_avgs):
-    shifts = stats.gamma(a=1, scale=1).rvs(size=expression_avgs.size)
-    return expression_avgs * shifts
-
-
-def simulate_new_batch(n_samples, reference_mus, percentage, beta_0=-1.5):
-    effected_genes = np.random.choice(np.arange(reference_mus.size),
-                                      size=int(reference_mus.size*percentage))
-    exp_shifts = stats.gamma(a=1, scale=1).rvs(size=effected_genes.size)
-    reference_mus[effected_genes] *= exp_shifts
-    return simulate_counts(n_samples, reference_mus, beta_0)
