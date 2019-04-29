@@ -299,7 +299,8 @@ class SingleCellDataset():
         var['Base.Mu'] = mus_
         gamma = stats.gamma(a=2, scale=2)
         for i in range(self.populations):
-            n_markers = stats.binom(self.genes, self.p_marker).rvs()
+            # randomly select number of marker genes, must have at least 1
+            n_markers = max(stats.binom(self.genes, self.p_marker).rvs(), 1) 
             markers = np.random.choice(np.arange(self.genes), n_markers)
             shifts = gamma.rvs(n_markers)
             # shift marker gene expression values away from baseline averages.
