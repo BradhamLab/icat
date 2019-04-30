@@ -628,7 +628,8 @@ def simulate_counts_old(n_samples, mus, r=2, beta_0=-1.5):
     p_dropout = dropout_probability(means, median, beta_0=beta_0)
     if isinstance(r, int):
         for i in range(means.size):
-            exp_matrix[:, i] = sample_count(means[i], p_dropout[i], n_samples, r)
+            exp_matrix[:, i] = sample_count(means[i], p_dropout[i], n_samples,
+                                            r)
     elif isinstance(r, np.ndarray) and len(r) == len(means):
         for i in range(means.size):
             exp_matrix[:, i] = sample_count(means[i], p_dropout[i], n_samples,
