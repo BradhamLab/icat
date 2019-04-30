@@ -299,8 +299,6 @@ class SingleCellDataset():
                                                        range(self.populations)])
         var.fillna(False, inplace=True)
         var['Base.Dispersion'] = self.dispersion
-        # will be count matrix
-        X_ = np.zeros((self.samples, self.genes), dtype=int)
         # get baseline expression averages
         mus_ = average_exp(scale_factor=self.scalar, n=self.genes)
         var['Base.Mu'] = mus_
@@ -318,31 +316,14 @@ class SingleCellDataset():
             mus[markers, i] = mus[markers, i] * gamma.rvs(n)
             # log marker genes in var data frame
             var.loc[markers, 'Pop.{}.Marker'.format(i + 1)] = True
-        
-        # calculate expression averages across populations
-        # a |gene| x |populations| size matrix
-        means_ = mus * np.ones_like(mus) * self.dispersion.reshape(-1, 1)
-        # calculate dataset-wide median of means
-        median_ = np.median(means_)
-        # calculate dropout probabilites for each gene in each population
-        # a |gene| x |populations| size matrix
-        p_dropout = dropout_probability(means_, median_)
-        
+        # log population averages
         for i in range(self.populations):
-            if i == 0:
-                start = 0
-            else:
-                start = self.pop_sizes[:i].sum()
-            for j in range(self.genes):
-                dist = stats.nbinom(self.dispersion[j],
-                                    1 - mus[j, i] / (mus[j, i] + 1))
-                drop = stats.bernoulli(p=p_dropout[j, i]).rvs(self.pop_sizes[i])
-                X_[start:start + self.pop_sizes[i], j] = dist.rvs(
-                                                              self.pop_sizes[i])\
-                                                       * drop
-            obs.loc[start:start + self.pop_sizes[i], 'Population'] = i + 1
-            var.loc[:, 'Pop.{}.Mu'.format(i + 1)] = mus[:, i]
-        return sc.AnnData(X=X_, obs=obs, var=var)
+            var['Pop.{}.Mu'.format(i + 1)] = mus[:, i]
+        
+        X, labels = simulate_counts(self.samples, mus, self.dispersion,
+                                    self.populations, self.pop_sizes)
+        obs['Population'] = labels
+        return sc.AnnData(X=X, obs=obs, var=var)
 
 
 def population_markers(andata):
@@ -459,7 +440,6 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
         gene_targets = np.random.choice(andata.shape[1],
                                         int(andata.shape[1] * percent_perturb))
     markers = population_markers(andata)
-    X_ = np.zeros((samples, andata.shape[1]))
     disp_ = andata.var['Base.Dispersion'].values
     exp_shifts = np.ones(andata.shape[1])
     exp_shifts[gene_targets] = stats.gamma(a=2, scale=2).\
@@ -467,7 +447,6 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
     populations = []
     for i, each in enumerate(pop_targets):
         markers_i = markers[each]
-        print(gene_targets)
         if len(set(markers_i).intersection(gene_targets)) != 0:
             name = 'Perturbed.{}'.format(each)
         else:
@@ -476,14 +455,11 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
     obs_ = pd.DataFrame(populations, columns=['Population'])
     var_ = andata.var.copy()
     var_['Perturbation.Shift'] = exp_shifts
-    for i, each in enumerate(pop_targets):
-        pop_mus = andata.var['Pop.{}.Mu'.format(each)].values * exp_shifts
-        if i == 0:
-            start = 0
-        else:
-            start = pop_sizes[:i].sum()
-        X_[start:start + pop_sizes[i]] = simulate_counts(pop_sizes[i],
-                                                         pop_mus, r=disp_)
+    pop_columns = ['Pop.{}.Mu'.format(x) for x in pop_targets]
+    mus = andata.var[pop_columns].values \
+        * np.ones((andata.shape[1], len(pop_columns))) \
+        * exp_shifts.reshape(-1, 1)
+    X_, __ = simulate_counts(samples, mus, disp_, len(pop_targets), pop_sizes)
     return sc.AnnData(X=X_, obs=obs_, var=var_)
 
 
@@ -575,43 +551,7 @@ def dropout_probability(mu, median_avg, beta_0=-1.5):
     x = beta_0 + 1 / median_avg * mu
     return sigmoid(x)
 
-# TODO: change mu + 1 to mu + r
-def sample_count(mu, p, n=200, r=2):
-    """
-    Sample gene counts from a negative binomial distribution with dropout. 
-
-    Sample gene counts from a negative binomial distribution with dropout. Let
-    :math:`c_{ij}` represent the counts for cell :math:`i` over gene :math:`j`.
-    Then,
-
-    ..math::
-        c_{ij} ~ NV(r_ij, 1 - \dfrac{\mu_ij}{mu + 1} | Bernoulli(p_ij))
-
-    If :math:`\not Bernoulli(p_ij)`, `c_ij = 0`. 
-
-    Parameters
-    ----------
-    mu : float
-        Gene expression average for specific cell-gene combo.
-    p : float
-        Probability of expression dropout for specific cell-gene combo.
-    n : int, optional
-        Number of cells to simulate, by default 200.
-    r : int, optional
-        Dispersion paramter for negative binomial model, by default 2.
-    
-    Returns
-    -------
-    np.ndarray
-        Array of gene counts for each cell.
-    """
-    dropout = stats.bernoulli(p).rvs(n)
-    counts = stats.nbinom(r, 1 - mu / (mu + 1)).rvs(n)
-    # if dropout == 0, gene dropped out, multiplying goes to zero
-    return counts * dropout
-
-
-def simulate_counts(n_samples, mus, r=2, beta_0=-1.5):
+def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes):
     """
     Simulate counts across genes for a set number of samples.
     
@@ -620,45 +560,69 @@ def simulate_counts(n_samples, mus, r=2, beta_0=-1.5):
     n_samples : int
         Number of samples to simulate.
     mus : np.ndarray
-        Expression averages for each gene. 
-    r : int, numpy.ndarray, optional
-        Dispersion parameter in negative binomial model. Can either be a single
-        integer value shared between all genes, or a numpy array containing
-        gene-specific values. By default 2.
-    beta_0 : float, optional
-        Affine constant used in estimating dropout, by default -1.5.
+        A gene by population matrix, where each element represents the average
+        expression value in the given population. 
+    dispersion : numpy.ndarray
+        A gene length vector with dispersion paramtersfor modelling counts
+        using a negative binomial distribution for each gene.
+    populations: int
+        Number of populations to sample.
+    pop_sizes : numpy.ndarray
+        list of samples per population.
     
     Returns
     -------
-    numpy.ndarray
+    (numpy.ndarray, numpy.ndarray)
         An :math:`n \times p` count matrix, where :math:`n` is number of
         samples, defined by `n_samples`, and :math:`p` is the number of genes,
-        defined by the size of `mus`. 
-    
-    Raises
-    ------
-    ValueError
-        Raised if a numpy array is passed for `r` and the lengths of `r` and
-        `mus` do not align.
-    ValueError
-        Raised if `r` is neither a numpy array or an integer value.
+        defined by the size of `mus`.
+
+        A :math:`p` length vector of population labels for each row in returned
+        count matrix.
     """
+    # sample by gene expression matrix
+    X_ = np.zeros((n_samples, mus.shape[0]))
+    # vector labelling which population each sample belongs to
+    labels_ = np.hstack([np.array([i + 1] * pop_sizes[i])\
+                    for i in range(populations)])
+    # calculate expression averages across populations
+    # a |gene| x |populations| size matrix
+    means_ = mus * np.ones_like(mus) * dispersion.reshape(-1, 1)
+    # calculate dataset-wide median of means
+    median_ = np.median(means_)
+    # calculate dropout probabilites for each gene in each population
+    # a |gene| x |populations| size matrix
+    p_dropout = dropout_probability(means_, median_)
+    # simulate counts across populations
+    for i in range(populations):
+        if i == 0:
+            start = 0
+        else:
+            start = pop_sizes[:i].sum()
+        for j in range(mus.shape[0]):
+            dist = stats.nbinom(dispersion[j],
+                                1 - mus[j, i] / (mus[j, i] + dispersion[j]))
+            drop = stats.bernoulli(p=p_dropout[j, i]).rvs(pop_sizes[i])
+            X_[start:start + pop_sizes[i], j] = dist.rvs(pop_sizes[i]) * drop
+    return X_, labels_
+
+
+def sample_count(mu, p, n=200, r=2):
+    dropout = stats.bernoulli(p).rvs(n)
+    counts = stats.nbinom(r, 1 - mu / (mu + 1)).rvs(n)
+    # if dropout == 0, gene dropped out, multiplying goes to zero
+    return counts * dropout
+
+def simulate_counts_old(n_samples, mus, r=2, beta_0=-1.5):
     exp_matrix = np.zeros((n_samples, mus.size))
     means = r * mus
     median = np.median(means)
     p_dropout = dropout_probability(means, median, beta_0=beta_0)
-    if isinstance(r, (int, np.integer)):
+    if isinstance(r, int):
         for i in range(means.size):
-            exp_matrix[:, i] = sample_count(means[i], p_dropout[i], n_samples,
-                                            r)
+            exp_matrix[:, i] = sample_count(means[i], p_dropout[i], n_samples, r)
     elif isinstance(r, np.ndarray) and len(r) == len(means):
         for i in range(means.size):
             exp_matrix[:, i] = sample_count(means[i], p_dropout[i], n_samples,
                                             r[i])
-    else:
-        if isinstance(r, np.ndarray):
-            raise ValueError("Length of `r` and `mu` do not match.")
-        else:
-            raise ValueError("Expected integer or numpy array for `r`. "
-                             "Received: {}.".format(type(r)))
     return exp_matrix
