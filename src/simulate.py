@@ -613,25 +613,3 @@ def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes):
             dropped = stats.bernoulli(p=1 - p_dropout[j, i]).rvs(pop_sizes[i])
             X_[start:start + pop_sizes[i], j] = dist.rvs(pop_sizes[i]) * dropped
     return X_, labels_
-
-
-def sample_count(mu, p, n=200, r=2):
-    dropout = stats.bernoulli(p).rvs(n)
-    counts = stats.nbinom(r, 1 - mu / (mu + 1)).rvs(n)
-    # if dropout == 0, gene dropped out, multiplying goes to zero
-    return counts * dropout
-
-def simulate_counts_old(n_samples, mus, r=2, beta_0=-1.5):
-    exp_matrix = np.zeros((n_samples, mus.size))
-    means = r * mus
-    median = np.median(means)
-    p_dropout = dropout_probability(means, median, beta_0=beta_0)
-    if isinstance(r, int):
-        for i in range(means.size):
-            exp_matrix[:, i] = sample_count(means[i], p_dropout[i], n_samples,
-                                            r)
-    elif isinstance(r, np.ndarray) and len(r) == len(means):
-        for i in range(means.size):
-            exp_matrix[:, i] = sample_count(means[i], p_dropout[i], n_samples,
-                                            r[i])
-    return exp_matrix
