@@ -299,6 +299,11 @@ class SingleCellDataset():
                                                        range(self.populations)])
         var.fillna(False, inplace=True)
         var['Base.Dispersion'] = self.dispersion
+<<<<<<< HEAD
+=======
+        # will be count matrix
+        X_ = np.zeros((self.samples, self.genes), dtype=int)
+>>>>>>> 7ccad52c9c439660eb1c5778b0768598b832a167
         # get baseline expression averages
         mus_ = average_exp(scale_factor=self.scalar, n=self.genes)
         var['Base.Mu'] = mus_
@@ -316,6 +321,7 @@ class SingleCellDataset():
             mus[markers, i] = mus[markers, i] * gamma.rvs(n)
             # log marker genes in var data frame
             var.loc[markers, 'Pop.{}.Marker'.format(i + 1)] = True
+<<<<<<< HEAD
         # log population averages
         for i in range(self.populations):
             var['Pop.{}.Mu'.format(i + 1)] = mus[:, i]
@@ -331,6 +337,33 @@ def population_markers(andata):
     markers = {i + 1: andata.var[andata.var[x]].index.values\
                for i, x in enumerate(marker_cols)}
     return markers
+=======
+        
+        # calculate expression averages across populations
+        # a |gene| x |populations| size matrix
+        means_ = mus * np.ones_like(mus) * self.dispersion.reshape(-1, 1)
+        # calculate dataset-wide median of means
+        median_ = np.median(means_)
+        # calculate dropout probabilites for each gene in each population
+        # a |gene| x |populations| size matrix
+        p_dropout = dropout_probability(means_, median_)
+        
+        for i in range(self.populations):
+            if i == 0:
+                start = 0
+            else:
+                start = self.pop_sizes[:i].sum()
+            for j in range(self.genes):
+                dist = stats.nbinom(self.dispersion[j],
+                                    1 - mus[j, i] / (mus[j, i] + 1))
+                drop = stats.bernoulli(p=p_dropout[j, i]).rvs(self.pop_sizes[i])
+                X_[start:start + self.pop_sizes[i], j] = dist.rvs(
+                                                              self.pop_sizes[i])\
+                                                       * drop
+            obs.loc[start:start + self.pop_sizes[i], 'Population'] = i + 1
+            var.loc[:, 'Pop.{}.Mu'.format(i + 1)] = mus[:, i]
+        return sc.AnnData(X=X_, obs=obs, var=var)
+>>>>>>> 7ccad52c9c439660eb1c5778b0768598b832a167
 
 # TODO: add option to simulate untargetted populations/ add treatment
 # specific populations
