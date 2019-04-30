@@ -225,7 +225,7 @@ class SingleCellDataset():
         return out_dict
 
     def simulate(self):
-        """
+        r"""
         Simulate read counts across genes and populations.           
         
         Parameters
@@ -299,11 +299,6 @@ class SingleCellDataset():
                                                        range(self.populations)])
         var.fillna(False, inplace=True)
         var['Base.Dispersion'] = self.dispersion
-<<<<<<< HEAD
-=======
-        # will be count matrix
-        X_ = np.zeros((self.samples, self.genes), dtype=int)
->>>>>>> 7ccad52c9c439660eb1c5778b0768598b832a167
         # get baseline expression averages
         mus_ = average_exp(scale_factor=self.scalar, n=self.genes)
         var['Base.Mu'] = mus_
@@ -315,13 +310,17 @@ class SingleCellDataset():
         n_markers[n_markers == 0] = 1
         # distribution to sample expression shifts from 
         gamma = stats.gamma(a=2, scale=2)
+        possible_markers = np.arange(self.genes)
         for i, n in enumerate(n_markers):
             # pick marker genes and shift their expression in population i
-            markers = np.random.choice(np.arange(self.genes), n)
+            markers = np.random.choice(possible_markers, n)
             mus[markers, i] = mus[markers, i] * gamma.rvs(n)
             # log marker genes in var data frame
             var.loc[markers, 'Pop.{}.Marker'.format(i + 1)] = True
-<<<<<<< HEAD
+            # remove selected markers from pool, so that populations don't
+            # share marker genes
+            possible_markers = np.array(list(
+                                    set(possible_markers).difference(markers)))
         # log population averages
         for i in range(self.populations):
             var['Pop.{}.Mu'.format(i + 1)] = mus[:, i]
@@ -337,33 +336,6 @@ def population_markers(andata):
     markers = {i + 1: andata.var[andata.var[x]].index.values\
                for i, x in enumerate(marker_cols)}
     return markers
-=======
-        
-        # calculate expression averages across populations
-        # a |gene| x |populations| size matrix
-        means_ = mus * np.ones_like(mus) * self.dispersion.reshape(-1, 1)
-        # calculate dataset-wide median of means
-        median_ = np.median(means_)
-        # calculate dropout probabilites for each gene in each population
-        # a |gene| x |populations| size matrix
-        p_dropout = dropout_probability(means_, median_)
-        
-        for i in range(self.populations):
-            if i == 0:
-                start = 0
-            else:
-                start = self.pop_sizes[:i].sum()
-            for j in range(self.genes):
-                dist = stats.nbinom(self.dispersion[j],
-                                    1 - mus[j, i] / (mus[j, i] + 1))
-                drop = stats.bernoulli(p=p_dropout[j, i]).rvs(self.pop_sizes[i])
-                X_[start:start + self.pop_sizes[i], j] = dist.rvs(
-                                                              self.pop_sizes[i])\
-                                                       * drop
-            obs.loc[start:start + self.pop_sizes[i], 'Population'] = i + 1
-            var.loc[:, 'Pop.{}.Mu'.format(i + 1)] = mus[:, i]
-        return sc.AnnData(X=X_, obs=obs, var=var)
->>>>>>> 7ccad52c9c439660eb1c5778b0768598b832a167
 
 # TODO: add option to simulate untargetted populations/ add treatment
 # specific populations
@@ -561,7 +533,7 @@ def dropout_probability(mu, median_avg, beta_0=-1.5):
     the following models. 
 
     ..math::
-        p_i = sigmoid(x) \\
+        p_i = 1 - sigmoid(x) \\
         sigmoid(x) = \dfrac{1}{1 + e^{-x}} \\
         x_i = \beta_0 + \dfrac{mu_i}{median(\vec \mu)} \\
         \vec \mu = \{\mu_1, \mu_2, \ldots , \mu_{p - 1}, \mu_p}
@@ -582,7 +554,7 @@ def dropout_probability(mu, median_avg, beta_0=-1.5):
         Probability of gene(s) to experience a dropout event.
     """
     x = beta_0 + 1 / median_avg * mu
-    return sigmoid(x)
+    return 1 - sigmoid(x)
 
 def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes):
     """
@@ -635,8 +607,11 @@ def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes):
         for j in range(mus.shape[0]):
             dist = stats.nbinom(dispersion[j],
                                 1 - mus[j, i] / (mus[j, i] + dispersion[j]))
-            drop = stats.bernoulli(p=p_dropout[j, i]).rvs(pop_sizes[i])
-            X_[start:start + pop_sizes[i], j] = dist.rvs(pop_sizes[i]) * drop
+            # calculate probability of reads not dropping out with bernoulli
+            # 1 = keep count, 0 = dropeed, multiplying by dropout vector
+            # moves dropped counts to 0. 
+            dropped = stats.bernoulli(p=1 - p_dropout[j, i]).rvs(pop_sizes[i])
+            X_[start:start + pop_sizes[i], j] = dist.rvs(pop_sizes[i]) * dropped
     return X_, labels_
 
 
