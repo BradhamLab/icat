@@ -445,10 +445,10 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
         gene_targets = np.random.choice(andata.shape[1],
                                         int(andata.shape[1] * percent_perturb))
     markers = population_markers(andata)
-    disp_ = andata.var['Base.Dispersion'].values
-    exp_shifts = np.ones(andata.shape[1])
-    exp_shifts[gene_targets] = stats.gamma(a=2, scale=2).\
-                                     rvs(size=gene_targets.size)
+    disp_ = andata.var['Base.Dispersion'].values.reshape((-1, 1))
+    exp_shifts = np.ones((andata.shape[1], 1))
+    exp_shifts[gene_targets, 0] = stats.gamma(a=2, scale=2).\
+                                        rvs(size=gene_targets.size)
     populations = []
     for i, each in enumerate(pop_targets):
         markers_i = markers[each]
@@ -461,10 +461,16 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
     var_ = andata.var.copy()
     var_['Perturbation.Shift'] = exp_shifts
     pop_columns = ['Pop.{}.Mu'.format(x) for x in pop_targets]
+    # calculate control median of averages to ensure equal dropout rates between
+    # datasets.
+    control_median_ = np.median(andata.var[pop_columns].values\
+                    * np.ones((andata.shape[1], len(pop_targets)))\
+                    * disp_)
     mus = andata.var[pop_columns].values \
         * np.ones((andata.shape[1], len(pop_columns))) \
-        * exp_shifts.reshape(-1, 1)
-    X_, __ = simulate_counts(samples, mus, disp_, len(pop_targets), pop_sizes)
+        * exp_shifts
+    X_, __ = simulate_counts(samples, mus, disp_, len(pop_targets), pop_sizes,
+                             median=control_median_)
     return sc.AnnData(X=X_, obs=obs_, var=var_)
 
 
@@ -556,7 +562,8 @@ def dropout_probability(mu, median_avg, beta_0=-1.5):
     x = beta_0 + 1 / median_avg * mu
     return 1 - sigmoid(x)
 
-def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes):
+def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes,
+                    median=None):
     """
     Simulate counts across genes for a set number of samples.
     
@@ -590,11 +597,21 @@ def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes):
     # vector labelling which population each sample belongs to
     labels_ = np.hstack([np.array([i + 1] * pop_sizes[i])\
                     for i in range(populations)])
+    # ensure proper shape of dispersion vector
+    if len(dispersion.shape) == 1:
+        dispersion = dispersion.reshape((-1, 1))
+    elif len(dispersion.shape) != 2\
+    and dispersion.shape[0] < dispersion.shape[1]:
+        raise ValueError("Expected column vector for dispersion. Received "
+                         "vector with shape {}.".format(dispersion.shape))
     # calculate expression averages across populations
     # a |gene| x |populations| size matrix
-    means_ = mus * np.ones_like(mus) * dispersion.reshape(-1, 1)
-    # calculate dataset-wide median of means
-    median_ = np.median(means_)
+    means_ = mus * np.ones_like(mus)
+    if median is None:
+        # calculate dataset-wide median of means
+        median_ = np.median(means_)
+    else:
+        median_ = median
     # calculate dropout probabilites for each gene in each population
     # a |gene| x |populations| size matrix
     p_dropout = dropout_probability(means_, median_)
@@ -605,8 +622,8 @@ def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes):
         else:
             start = pop_sizes[:i].sum()
         for j in range(mus.shape[0]):
-            dist = stats.nbinom(dispersion[j],
-                                1 - mus[j, i] / (mus[j, i] + dispersion[j]))
+            dist = stats.nbinom(dispersion[j, 0],
+                                1 - mus[j, i] / (mus[j, i] + dispersion[j, 0]))
             # calculate probability of reads not dropping out with bernoulli
             # 1 = keep count, 0 = dropeed, multiplying by dropout vector
             # moves dropped counts to 0. 
