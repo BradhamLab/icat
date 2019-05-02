@@ -99,8 +99,8 @@ class icat():
         return self._leiden_kws
     
     @leiden_kws.setter
-    def leiden_kws(self):
-        default_kws = {'resolution': 1, 'restrict_to': None, 'random_state': 0,
+    def leiden_kws(self, value):
+        default_kws = {'resolution': 1, 'random_state': 0,
                        'adjacency': None, 'directed': True, 'use_weights': True,
                        'n_iterations': -1, 'partition_type': None}
         if value is not None:
@@ -110,7 +110,7 @@ class icat():
         self._leiden_kws = value
 
     @property
-    def sslouvian_kws(self):
+    def sslouvain_kws(self):
         return self._sslouvain_kws
     
     @sslouvain_kws.setter
@@ -130,7 +130,7 @@ class icat():
                 if not all([isinstance(x, sc.AnnData) for x in perturbed]):
                     raise ValueError("Expected all perturbed datasets to be "
                                     "sc.AnnData objects.")
-                if not all([__check_matching_genes(controls, x)\
+                if not all([check_matching_genes(controls, x)\
                 for x in perturbed]):
                     raise ValueError("Gene columns do not match between control"
                                      " and perturbed cells.")
@@ -143,7 +143,7 @@ class icat():
                                 "{}. Expected list of sc.AnnData objects or "
                                 "a single sc.AnnData object".\
                                 format(type(perturbed)))
-        if __check_matching_genes(controls, perturbed):
+        if check_matching_genes(controls, perturbed):
             raise ValueError("Gene columns do not match between control and"
                                 " perturbed cells.")
         if self.treatment_col not in perturbed.obs.columns:
@@ -156,9 +156,9 @@ class icat():
                                obs=perturbed.obs, var=perturbed.var)
             
         # scale cells to 0 centered with unit variance
-        controls = sc.pp.scale(controls)
-        controls = sc.pp.neighbors(controls, **self._neighbor_kws)
-        controls = sc.tl.leiden(controls, **self._leiden_kws)
+        sc.pp.scale(controls)
+        sc.pp.neighbors(controls, **self._neighbor_kws)
+        sc.tl.leiden(controls, **self._leiden_kws)
 
         if self.method == 'ncfs':
             model = NCFS.NCFS(**self.method_kws)
@@ -168,7 +168,7 @@ class icat():
         else:
             model = discriminant_analysis.QuadraticDiscriminantAnalysis(
                                           **self.method_kws)
-        model.fit(controls.X, controls.obs['leiden'].values)
+        model.fit(controls.X, np.array(controls.obs['leiden'].values))
         X_ = model.transform(np.vstack((controls.X, perturbed.X)))
         if self.method == 'ncfs':
             selected = np.where(model.coef_ > self.weight_threshold)[0]
@@ -200,5 +200,5 @@ def __check_kws(reference_dict, new_dict, name):
     return new_dict
 
 
-def __check_matching_genes(ref, new):
+def check_matching_genes(ref, new):
     return set(ref.var.index.values).difference(new.var.index.values) == 0
