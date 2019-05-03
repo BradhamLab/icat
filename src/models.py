@@ -207,7 +207,9 @@ class icat():
                         np.array([np.nan]*perturbed.shape[0])])
         ss_model.fit(A_, y_)
         out = sc.AnnData(X=np.vstack((controls.X, perturbed.X)),
-                         obs=pd.concat([controls.obs, perturbed.obs]),
+                         obs=pd.concat([controls.obs, perturbed.obs],
+                                        axis=0,
+                                        sort=False).reset_index(drop=True),
                          var=controls.var)
         out.obs['sslouvain'] = ss_model.labels_
         out.uns['cluster_dims'] = X_
