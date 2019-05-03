@@ -205,14 +205,15 @@ class icat():
                                             sort=False).reset_index(drop=True),
                               var=controls.var)
         sc.pp.neighbors(combined, **self.neighbor_kws)
+        A_ = combined.uns['neighbors']['connectivities'].toarray()  
         ss_model = ssLouvain.ssLouvain(**self.sslouvain_kws)
         y_ = np.hstack([controls.obs[cluster_col].values,
                         np.array([np.nan]*perturbed.shape[0])])
         ss_model.fit(A_, y_)
 
-        out.obs['sslouvain'] = ss_model.labels_
-        out.uns['cluster_dims'] = X_
-        return out
+        combined.obs['sslouvain'] = ss_model.labels_
+        combined.uns['cluster_dims'] = X_
+        return combined
 
 
 def _check_kws(reference_dict, new_dict, name):
