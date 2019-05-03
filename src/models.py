@@ -199,18 +199,17 @@ class icat():
                       ' future runs.')
                 selected = np.arange(len(model.coef_))
             X_ = X_[:, selected]
-        A_ = neighbors.kneighbors_graph(X_,
-                                  n_neighbors=self._neighbor_kws['n_neighbors'],
-                                  mode='distance').toarray()
+        combined = sc.AnnData(X=np.vstack((controls.X, perturbed.X)),
+                              obs=pd.concat([controls.obs, perturbed.obs],
+                                            axis=0,
+                                            sort=False).reset_index(drop=True),
+                              var=controls.var)
+        sc.pp.neighbors(combined, **self.neighbor_kws)
         ss_model = ssLouvain.ssLouvain(**self.sslouvain_kws)
         y_ = np.hstack([controls.obs[cluster_col].values,
                         np.array([np.nan]*perturbed.shape[0])])
         ss_model.fit(A_, y_)
-        out = sc.AnnData(X=np.vstack((controls.X, perturbed.X)),
-                         obs=pd.concat([controls.obs, perturbed.obs],
-                                        axis=0,
-                                        sort=False).reset_index(drop=True),
-                         var=controls.var)
+
         out.obs['sslouvain'] = ss_model.labels_
         out.uns['cluster_dims'] = X_
         return out
