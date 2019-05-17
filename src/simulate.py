@@ -477,22 +477,72 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
 
 class Experiment(object):
 
-    def __init__(self, control_kwargs, perturb_kwargs):
+    def __init__(self, control_kwargs=None, perturb_kwargs=None):
 
         self.control_kwargs = control_kwargs
         self.perturb_kwargs = perturb_kwargs
 
     @property
     def control_kwargs(self):
-        """Get samples attribute."""
+        """Get control_kwargs attribute."""
         return self._control_kwargs
 
     @control_kwargs.setter
-    def samples(self, value):
-        """Set samples attribute."""
-        if value < 0 and int(value) != value:
-            raise ValueError("Expected positive integer for sample size.")
+    def control_kwargs(self, value):
+        """Set control_kwargs attribute."""
+        default_kws = utils.get_default_kwargs(SingleCellDataset, ['self'])
+        if value is not None:
+            value = utils.check_kws(default_kws, value, 'control_kwargs')
+        else:
+            value = default_kws
+        self._pca_kws = value
         self._control_kwargs = value
+
+    @property
+    def perturb_kwargs(self):
+        """Get perturb_kwargs attribute."""
+        return self._perturb_kwargs
+
+    @perturb_kwargs.setter
+    def perturb_kwargs(self, value):
+        """Set perturb_kwargs attribute."""
+        default_kws = utils.get_default_kwargs(perturb, ['andata'])
+        if value is not None:
+            value = utils.check_kws(default_kws, value, 'perturb_kwargs')
+        else:
+            value = default_kws
+        self._pca_kws = value
+        self._perturb_kwargs = value
+
+    def run(self, simulations=1, replications=1):
+        """
+        Simulate control and perturbed datasets under experimental conditions.
+
+        Parameters
+        ----------
+        simulations : int, optional
+            Number of control datasets to simulate. Default is 1, and a single
+            reference control dataset will be simulated.
+        replications : int, optional
+            Number of perturbations to simulate for each control dataset.
+            Default is 1, and a single perturbation will be simulated for each
+            reference control dataset.
+        
+        Returns
+        -------
+        list
+            Two-dimensional list that is indexed first by simulation and second
+            by replicate. 
+        """
+        out = []
+        for __ in range(simulations):
+            sim_out = []
+            controls = SingleCellDataset(**self.control_kwargs).simulate()
+            for __ in range(replications):
+                treated = perturb(controls, **self.perturb_kwargs)
+                sim_out.append({'controls': controls, 'treated': treated})
+            out.append(sim_out)
+        return out
 
 
 def average_exp(scale_factor, n=1):
