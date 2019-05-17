@@ -3,3 +3,5 @@
 *.mat
 *.mtx
 data/*
+notebooks/*
+*.pyc
