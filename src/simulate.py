@@ -331,6 +331,25 @@ class SingleCellDataset():
         obs['Population'] = labels
         return sc.AnnData(X=X, obs=obs, var=var)
 
+def dispersions(size, a=1, b=5):
+    """
+    Randomly choose dispersion parameter 'r' for simulating cell counts.
+    
+    Parameters
+    ----------
+    size : int, tuple
+        Size of array to create.
+    a : int, optional
+        Minimum dispersion value, by default 1.
+    b : int, optional
+        Maximum dispersion value, by default 5.
+    
+    Returns
+    -------
+    numpy.ndarray
+        array of dispersion paramters.
+    """
+    return np.random.choice(range(a, b), size=size)
 
 def population_markers(andata):
     marker_cols = [x for x in andata.var.columns if 'Marker' in x]
