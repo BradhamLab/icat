@@ -1,4 +1,5 @@
 import inspect
+import numpy as np
 
 def check_kws(reference_dict, new_dict, name):
     if not isinstance(new_dict, dict):
@@ -20,3 +21,14 @@ def get_default_kwargs(func, ignore_params=[]):
     params = inspect.signature(func).parameters
     kwargs = {x:params[x].default for x in params if x not in ignore_params}
     return kwargs
+
+
+def check_np_castable(obj, name):
+    """Check whether an object is castable to a numpy.ndarray."""
+    if not isinstance(obj, np.ndarray):
+        try:
+            obj = np.array(obj)
+        except:
+            raise ValueError("Expected numpy.ndarray castable object for "
+                            "`{}`. Got {}.".format(obj, type(obj)))
+    return obj
