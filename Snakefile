@@ -10,4 +10,4 @@ rule make_count_matrix:
     output:
         'data/processed/kang_2018_umi.pkl'
     script:
-        'src/make_datasets.py'
+        'src/generate_kang_et_al.py'
