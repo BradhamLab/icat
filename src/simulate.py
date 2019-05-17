@@ -8,6 +8,7 @@ import numpy as np
 from scipy import stats
 import pandas as pd
 from scanpy import api as sc
+import utils
 
 class SingleCellDataset():
     """
@@ -404,7 +405,7 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
         pop_ratios = andata.obs['Population'].value_counts().values
         pop_ratios = pop_ratios / pop_ratios.sum()
     else:
-        pop_targets = __check_np_castable(pop_targets, 'pop_targets')
+        pop_targets = utils.check_np_castable(pop_targets, 'pop_targets')
         if not set(pop_targets).issubset(andata.obs['Population']):
             diff = set(pop_targets).difference(andata.obs['Population'])
             raise ValueError("Undefined populations: {}".format(diff))
@@ -422,7 +423,7 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
                 pop_sizes[iters % len(pop_sizes)] += 1
                 remainder = samples % pop_sizes.sum()
     else:
-        pop_sizes = __check_np_castable(pop_sizes, 'pop_sizes')
+        pop_sizes = utils.check_np_castable(pop_sizes, 'pop_sizes')
         if pop_sizes.sum() != samples:
             raise ValueError('Population sizes do not sum to number of samples.')
     # determine which genes to perturb
@@ -430,7 +431,7 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
         if not set(gene_targets).issubset(range(andata.shape[1])):
             raise ValueError("Unrecognized gene targets: {}".format(
                           set(gene_targets).difference(range(andata.shape[1]))))
-        gene_targets = __check_np_castable(gene_targets, 'gene_targets')
+        gene_targets = utils.check_np_castable(gene_targets, 'gene_targets')
             
     if percent_perturb is not None and gene_targets is not None:
         n_genes = int(percent_perturb * andata.shape[1])
@@ -474,15 +475,24 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
     return sc.AnnData(X=X_, obs=obs_, var=var_)
 
 
-def __check_np_castable(obj, name):
-    """Check whether an object is castable to a numpy.ndarray."""
-    if not isinstance(obj, np.ndarray):
-        try:
-            obj = np.array(obj)
-        except:
-            raise ValueError("Expected numpy.ndarray castable object for "
-                            "`{}`. Got {}.".format(obj, type(obj)))
-    return obj
+class Experiment(object):
+
+    def __init__(self, control_kwargs, perturb_kwargs):
+
+        self.control_kwargs = control_kwargs
+        self.perturb_kwargs = perturb_kwargs
+
+    @property
+    def control_kwargs(self):
+        """Get samples attribute."""
+        return self._control_kwargs
+
+    @control_kwargs.setter
+    def samples(self, value):
+        """Set samples attribute."""
+        if value < 0 and int(value) != value:
+            raise ValueError("Expected positive integer for sample size.")
+        self._control_kwargs = value
 
 
 def average_exp(scale_factor, n=1):

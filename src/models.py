@@ -3,12 +3,15 @@ import inspect
 import numpy as np
 import pandas as pd
 from sklearn import neighbors, preprocessing
+from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis as QDA
 
 from ncfs_expanded import NCFS
 from scanpy import api as sc
 from ssLouvain import ssLouvain
+
+import utils
 
 
 class icat():
@@ -18,8 +21,8 @@ class icat():
 
     def __init__(self, method='ncfs', clustering='louvain',
                  treatment_col='treatment', method_kws=None, cluster_kws=None,
-                 cluster_col=None, weight_threshold=None,
-                 neighbor_kws=None, sslouvain_kws=None):
+                 cluster_col=None, weight_threshold=None, neighbor_kws=None,
+                 sslouvain_kws=None, pca_kws=None, use_X='X'):
         self.method = method
         self.clustering = clustering
         self.treatment_col = treatment_col
@@ -29,6 +32,8 @@ class icat():
         self.weight_threshold = weight_threshold
         self.neighbor_kws = neighbor_kws
         self.sslouvain_kws = sslouvain_kws
+        self.pca_kws = pca_kws
+        self.use_X = use_X
     
     @property
     def method(self):
@@ -72,11 +77,11 @@ class icat():
     
     @method_kws.setter
     def method_kws(self, value):
-        default_kws = {'ncfs': get_default_kwargs(NCFS.NCFS, ['self']),
-                       'lda': get_default_kwargs(LDA, ['self']),
-                       'qda': get_default_kwargs(QDA, ['self'])}
+        default_kws = {'ncfs': utils.get_default_kwargs(NCFS.NCFS, ['self']),
+                       'lda': utils.get_default_kwargs(LDA, ['self']),
+                       'qda': utils.get_default_kwargs(QDA, ['self'])}
         if value is not None:
-            value = _check_kws(default_kws[self.method], value,
+            value = utils.check_kws(default_kws[self.method], value,
                                 'method.' + self.method)
         else:
             value = default_kws[self.method]
@@ -88,7 +93,7 @@ class icat():
     
     @weight_threshold.setter
     def weight_threshold(self, value):
-        if self.method != 'ncfs':
+        if self.method != 'ncfs' and value is not None:
             print("Warning: `weight_threshold` only pertains to `ncfs` method. "
                   "Changing the value will have no affect on outcome.")
         if value is None:
@@ -101,9 +106,9 @@ class icat():
 
     @neighbor_kws.setter
     def neighbor_kws(self, value):
-        default_kws = get_default_kwargs(sc.pp.neighbors, ['adata', 'copy'])
+        default_kws = utils.get_default_kwargs(sc.pp.neighbors, ['adata', 'copy'])
         if value is not None:
-            value = _check_kws(default_kws, value, 'neighbor_kws')
+            value = utils.check_kws(default_kws, value, 'neighbor_kws')
         else:
             value = default_kws
         self._neighbor_kws = value
@@ -114,12 +119,13 @@ class icat():
     
     @cluster_kws.setter
     def cluster_kws(self, value):
-        default_kws = {'louvain': get_default_kwargs(sc.tl.louvain,
+        default_kws = {'louvain': utils.get_default_kwargs(sc.tl.louvain,
                                                      ['adata', 'copy']),
-                       'leiden': get_default_kwargs(sc.tl.leiden,
+                       'leiden': utils.get_default_kwargs(sc.tl.leiden,
                                                     ['adata', 'copy'])}
         if value is not None:
-            value = _check_kws(default_kws, value, 'cluster.' + self.cluster)
+            value = utils.check_kws(default_kws[self.clustering],
+                               value, 'cluster.' + self.clustering)
         else:
             value = default_kws[self.clustering]
         self._cluster_kws = value
@@ -130,12 +136,38 @@ class icat():
     
     @sslouvain_kws.setter
     def sslouvain_kws(self, value):
-        default_kws = get_default_kwargs(ssLouvain.ssLouvain, 'self')
+        default_kws = utils.get_default_kwargs(ssLouvain.ssLouvain, 'self')
         if value is not None:
-            value = _check_kws(default_kws, value, 'sslouvain_kws')
+            value = utils.check_kws(default_kws, value, 'sslouvain_kws')
         else:
             value = default_kws
         self._sslouvain_kws = value
+
+    @property
+    def pca_kws(self):
+        return self._pca_kws
+
+    @pca_kws.setter
+    def pca_kws(self, value):
+        default_kws = utils.get_default_kwargs(sc.pp.pca, ['data', 'copy'])
+        if value is not None:
+            value = utils.check_kws(default_kws, value, 'pca_kws')
+        else:
+            value = default_kws
+        self._pca_kws = value
+
+    @property
+    def use_X(self):
+        return self._use_X
+
+    @use_X.setter
+    def use_X(self, value):
+        if not isinstance(value, str):
+            raise ValueError("Expected string for `use_X`. Got {}".\
+                             format(type(value)))
+        if value not in ['X', 'pca']:
+            raise ValueError("Expected `X` or `pca`. Got {}".format(value))
+        self._use_X = value
 
     def cluster(self, controls, perturbed):
         if not isinstance(controls, sc.AnnData):
@@ -144,8 +176,8 @@ class icat():
             if isinstance(perturbed, list):
                 if not all([isinstance(x, sc.AnnData) for x in perturbed]):
                     raise ValueError("Expected all perturbed datasets to be "
-                                    "sc.AnnData objects.")
-                if not all([check_matching_genes(controls, x)\
+                                     "sc.AnnData objects.")
+                if not all([utils.check_matching_genes(controls, x)\
                 for x in perturbed]):
                     raise ValueError("Gene columns do not match between control"
                                      " and perturbed cells.")
@@ -158,7 +190,7 @@ class icat():
                                 "{}. Expected list of sc.AnnData objects or "
                                 "a single sc.AnnData object".\
                                 format(type(perturbed)))
-        if check_matching_genes(controls, perturbed):
+        if utils.check_matching_genes(controls, perturbed):
             raise ValueError("Gene columns do not match between control and"
                                 " perturbed cells.")
         if self.treatment_col not in perturbed.obs.columns:
@@ -172,6 +204,7 @@ class icat():
             
         # scale cells to 0 centered with unit variance
         sc.pp.scale(controls)
+        sc.pp.pca(controls, **self.pca_kws)
         sc.pp.neighbors(controls, **self.neighbor_kws)
         if self.clustering == 'louvain':
             sc.tl.louvain(controls, **self.cluster_kws)
@@ -181,16 +214,24 @@ class icat():
             cluster_col = 'leiden'
         elif self.cluster_col is not None:
             cluster_col = self.cluster_col
-
         if self.method == 'ncfs':
             model = NCFS.NCFS(**self.method_kws)
         elif self.method == 'lda':
             model = LDA(**self.method_kws)
         else:
             model = QDA(**self.method_kws)
-        model.fit(np.array(controls.X, dtype=np.float64),
+        fit_X = controls.X
+        perturb_X = perturbed.X
+        if self.use_X == 'pca':
+            pca_model = PCA(n_components=self.pca_kws['n_comps'],
+                            svd_solver=self.pca_kws['svd_solver'],
+                            random_state=self.pca_kws['random_state'])
+            fit_X = pca_model.fit_transform(controls.X)
+            perturb_X = pca_model.transform(perturb_X)
+        
+        model.fit(np.array(fit_X, dtype=np.float64),
                   np.array(controls.obs[cluster_col].values))
-        X_ = model.transform(np.vstack((controls.X, perturbed.X)))
+        X_ = model.transform(np.vstack((fit_X, perturb_X)))
         if self.method == 'ncfs':
             selected = np.where(model.coef_ > self.weight_threshold)[0]
             if len(selected) == 0:
@@ -199,11 +240,20 @@ class icat():
                       ' future runs.')
                 selected = np.arange(len(model.coef_))
             X_ = X_[:, selected]
-        combined = sc.AnnData(X=np.vstack((controls.X, perturbed.X)),
+            var_ = controls.var.iloc[selected, :]
+        elif self.method == 'lda':
+            var_ = pd.DataFrame(['LDA.{}'.format(i + 1)\
+                               for i in range(X_.shape[1])],
+                               columns=['Dimension'])
+        else:
+            var_ = pd.DataFrame(['QDA.{}'.format(i + 1)\
+                    for i in range(X_.shape[1])],
+                    columns=['Dimension'])
+        combined = sc.AnnData(X=X_,
                               obs=pd.concat([controls.obs, perturbed.obs],
                                             axis=0,
                                             sort=False).reset_index(drop=True),
-                              var=controls.var)
+                              var=var_)
         sc.pp.neighbors(combined, **self.neighbor_kws)
         A_ = combined.uns['neighbors']['connectivities'].toarray()  
         ss_model = ssLouvain.ssLouvain(**self.sslouvain_kws)
@@ -212,30 +262,7 @@ class icat():
         ss_model.fit(A_, y_)
 
         combined.obs['sslouvain'] = ss_model.labels_
-        combined.uns['cluster_dims'] = X_
         return combined
-
-
-def _check_kws(reference_dict, new_dict, name):
-    if not isinstance(new_dict, dict):
-        raise ValueError("Expected dictionary of keyword arguments for "
-                         "`{}`. Received {}.".format(name, type(new_dict)))
-    for key, item in new_dict.items():
-        if key not in reference_dict.keys():
-            raise ValueError("Unsupported keyword argument `{}` for "
-                             "{} keywords.".format(key, name))
-        new_dict[key] = item
-    return new_dict
-
-
-def check_matching_genes(ref, new):
-    return set(ref.var.index.values).difference(new.var.index.values) == 0
-
-
-def get_default_kwargs(func, ignore_params):
-    params = inspect.signature(func).parameters
-    kwargs = {x:params[x].default for x in params if x not in ignore_params}
-    return kwargs
 
 
 if __name__ == '__main__':
@@ -246,6 +273,8 @@ if __name__ == '__main__':
     controls = data_model.simulate()
     perturbed = simulate.perturb(controls)
     perturbed.obs['treatment'] = 'ayo'
-    model = icat(method_kws={'kernel': 'gaussian', 'metric': 'euclidean'},
-                 neighbor_kws={'n_neighbors': 100})
+    model = icat(method='lda', method_kws={'shrinkage': 0.75, 'solver':'eigen'},
+                 neighbor_kws={'n_neighbors': 100},
+                 sslouvain_kws={'immutable': True, 'precluster': True},
+                 cluster_kws={'resolution': 1.25})
     out = model.cluster(controls, perturbed)
