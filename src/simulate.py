@@ -342,7 +342,7 @@ def population_markers(andata):
 # specific populations
 def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
             percent_perturb=None, pop_sizes=None):
-    """
+    r"""
     Perturb a simulated single-cell dataset.
 
     Perturbs a simulated single-cell dataset by applying a Gamma-distributed
@@ -476,8 +476,21 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
 
 
 class Experiment(object):
+    """Class to simulate scRNA experiments with perturbations."""
 
     def __init__(self, control_kwargs=None, perturb_kwargs=None):
+        """
+        Simulate a scRNAseq experiment with perturbations. 
+        
+        Parameters
+        ----------
+        control_kwargs : dict, optional
+            Dictionary of keyword arguments that specify simulation parameters.
+            See `SingleCellDataSet` for more infomration. By default None, and
+            default parameters for SingleCellDataSet will be used. 
+        perturb_kwargs : dict, optional
+            [description], by default None
+        """
 
         self.control_kwargs = control_kwargs
         self.perturb_kwargs = perturb_kwargs
