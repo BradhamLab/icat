@@ -26,6 +26,8 @@ def main(configs, sims=1, reps=1):
         pop_targets = p_params.pop('pop_targets')
         if pop_targets == 'None':
             pop_targets = None
+        if p_params['gene_targets'] == 'None':
+            p_params['gene_targets'] = None
         experiment = simulate.Experiment(control_kwargs=c_params,
                                          perturb_kwargs=p_params)
         datasets[exp] = experiment.run(simulations=sims, replications=reps,
@@ -48,7 +50,7 @@ if __name__ == '__main__':
         sims = snakemake.params['sims']
         reps = snakemake.params['reps']
         out_csv = snakemake.output['csv']
-        out_dir = snakemake.params['dir']
+        out_dir = snakemake.params['outdir']
     with open(input_json) as f:
         configs = json.load(f)
     datasets, sim_data = main(configs, sims, reps)
@@ -56,10 +58,10 @@ if __name__ == '__main__':
     for each in datasets.keys():
         for n_sim in range(len(datasets[each])):
             independents = datasets[each][n_sim]
-            for n_rep in len(independents):
+            for n_rep in range(len(independents)):
                 data = [independents[n_rep]['controls'],
                         independents[n_rep]['treated']]
                 for i, x in enumerate(['Controls.pkl', 'Treated.pkl']):
                     fn = "{}Sim{}Rep{}-{}".format(each, n_sim + 1, n_rep + 1, x)
                     with open(os.path.join(out_dir, fn), 'wb') as f:
-                        pkl.dump(data[i], fn)
+                        pkl.dump(data[i], f)
