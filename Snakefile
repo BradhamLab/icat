@@ -30,7 +30,7 @@ rule fit_louvain:
     params:
         data = 'data/processed',
         label = 'Population',
-        regex = '*Experiment1Sim1Rep1-Controls.pkl'
+        regex = '*Controls.pkl'
     output:
         csv = 'data/interim/control_louvain_fits.csv'
     script:
