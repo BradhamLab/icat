@@ -57,10 +57,10 @@ if __name__ == '__main__':
     sim_data.to_csv(out_csv)
     for each in datasets.keys():
         for n_sim in range(len(datasets[each])):
-            independents = datasets[each][n_sim]
-            for n_rep in range(len(independents)):
-                data = [independents[n_rep]['controls'],
-                        independents[n_rep]['treated']]
+            replicates = datasets[each][n_sim]
+            for n_rep in range(len(replicates)):
+                data = [replicates[n_rep]['controls'],
+                        replicates[n_rep]['treated']]
                 for i, x in enumerate(['Controls.pkl', 'Treated.pkl']):
                     fn = "{}Sim{}Rep{}-{}".format(each, n_sim + 1, n_rep + 1, x)
                     with open(os.path.join(out_dir, fn), 'wb') as f:
