@@ -456,7 +456,11 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
         n_genes = int(percent_perturb * andata.shape[1])
         if len(gene_targets) < n_genes:
             n_genes -= len(gene_targets)
-            p_genes = list(set(range(andata.shape[1])).difference(gene_targets))
+            markers = population_markers(andata)
+            ignore_genes = gene_targets
+            for x in markers.values():
+                ignore_genes = np.hstack((ignore_genes, x))
+            p_genes = list(set(range(andata.shape[1])).difference(ignore_genes))
             targets = np.random.choice(p_genes, n_genes)
             gene_targets = np.hstack((targets, gene_targets))
     elif gene_targets is None:
