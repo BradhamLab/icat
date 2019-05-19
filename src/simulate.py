@@ -456,7 +456,7 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
         n_genes = int(percent_perturb * andata.shape[1])
         if len(gene_targets) < n_genes:
             n_genes -= len(gene_targets)
-            p_genes = set(range(andata.shape[1])).difference(gene_targets)
+            p_genes = list(set(range(andata.shape[1])).difference(gene_targets))
             targets = np.random.choice(p_genes, n_genes)
             gene_targets = np.hstack((targets, gene_targets))
     elif gene_targets is None:
@@ -546,7 +546,7 @@ class Experiment(object):
         self._pca_kws = value
         self._perturb_kwargs = value
 
-    def run(self, simulations=1, replications=1):
+    def run(self, simulations=1, replications=1, pop_targets=None):
         """
         Simulate control and perturbed datasets under experimental conditions.
 
@@ -559,6 +559,11 @@ class Experiment(object):
             Number of perturbations to simulate for each control dataset.
             Default is 1, and a single perturbation will be simulated for each
             reference control dataset.
+        pop_targets : list-like, optional
+            Populations to target during perturbation. Default is None, and
+            perturbed genes will be randomly selected. If a list of populations
+            is provided, marker genes for these populations will be targeted
+            instead. 
         
         Returns
         -------
@@ -570,6 +575,11 @@ class Experiment(object):
         for __ in range(simulations):
             sim_out = []
             controls = SingleCellDataset(**self.control_kwargs).simulate()
+            if pop_targets is not None:
+                markers = population_markers(controls)
+                self.perturb_kwargs['gene_targets'] = []
+                for each in pop_targets:
+                    self.perturb_kwargs['gene_targets'] += list(markers[each])
             for __ in range(replications):
                 treated = perturb(controls, **self.perturb_kwargs)
                 sim_out.append({'controls': controls, 'treated': treated})
