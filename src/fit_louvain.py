@@ -25,4 +25,27 @@ def main(andata, label_col):
 
 if __name__ == '__main__':
     from glob import glob
+    import pandas as pd
+    import pickle as pkl
+    import os
     data_dir = '../data/processed'
+    label_col = 'Population'
+    out_csv = '../data/interim/control_louvain_fits.csv'
+    regex = '*Controls.pkl'
+    try:
+        snakemake
+    except NameError:
+        snakemake = None
+    if snakemake is not None:
+        data_dir = snakemake.params['data']
+        label_col = snakemake.params['label']
+        out_csv = snakemake.output['csv']
+        regex = snakemake.params['regex']
+    datasets = sorted(glob(os.path.join(data_dir, regex)))
+    performance = dict()
+    for fn in datasets:
+        with open(fn, 'rb') as f:
+            adata = pkl.load(f)
+        name = os.path.basename(fn)
+        performance[name] = main(adata, label_col)
+    pd.DataFrame(performance).T.to_csv(out_csv)
