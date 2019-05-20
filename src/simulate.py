@@ -466,7 +466,7 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
     elif gene_targets is None:
         if percent_perturb is None:
             percent_perturb = 0.2
-        gene_targets = np.random.choice(andata.shape[1],
+        gene_targets = np.random.choice(range(andata.shape[1]),
                                         int(andata.shape[1] * percent_perturb))
     markers = population_markers(andata)
     disp_ = andata.var['Base.Dispersion'].values.reshape((-1, 1))
