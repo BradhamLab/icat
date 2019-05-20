@@ -199,11 +199,6 @@ class icat():
         # scale perturbed data using control data
         scaler = preprocessing.StandardScaler()
         scaler.fit(controls.X)
-        # perturbed = sc.AnnData(X=scaler.transform(perturbed.X),
-        #                        obs=perturbed.obs, var=perturbed.var)
-            
-        # # scale cells to 0 centered with unit variance
-        # sc.pp.scale(controls)
         sc.pp.pca(controls, **self.pca_kws)
         sc.pp.neighbors(controls, **self.neighbor_kws)
         sc.tl.umap(controls, min_dist=0.0)
@@ -221,6 +216,7 @@ class icat():
             model = LDA(**self.method_kws)
         else:
             model = QDA(**self.method_kws)
+        # scale cells to 0 centered with unit variance
         fit_X = scaler.transform(controls.X).astype(np.float64)
         perturb_X = scaler.transform(perturbed.X).astype(np.float64)
         if self.use_X == 'pca':
@@ -256,12 +252,13 @@ class icat():
                               var=var_)
         sc.pp.neighbors(combined, **self.neighbor_kws)
         sc.tl.umap(combined)
-        if combined.shape[1] > 10:
-            A_ = combined.uns['neighbors']['connectivities']
-        else:
-            A_ = neighbors.kneighbors_graph(X_,
-                                            self.neighbor_kws['n_neighbors'],
-                                            mode='distance')
+        # if combined.shape[1] > 10:
+        #     A_ = combined.uns['neighbors']['connectivities']
+        # else:
+        #     A_ = neighbors.kneighbors_graph(X_,
+        #                                     self.neighbor_kws['n_neighbors'],
+        #                                     mode='distance')
+        A_ = combined.uns['neighbors']['connectivities']
         ss_model = ssLouvain.ssLouvain(**self.sslouvain_kws)
         y_ = np.hstack([controls.obs[cluster_col].values,
                         np.array([np.nan]*perturbed.shape[0])])
