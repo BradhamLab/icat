@@ -2,7 +2,7 @@ import inspect
 
 import numpy as np
 import pandas as pd
-from sklearn import neighbors, preprocessing
+from sklearn import preprocessing, neighbors
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis as QDA
@@ -125,7 +125,7 @@ class icat():
                                                     ['adata', 'copy'])}
         if value is not None:
             value = utils.check_kws(default_kws[self.clustering],
-                               value, 'cluster.' + self.clustering)
+                                    value, 'cluster.' + self.clustering)
         else:
             value = default_kws[self.clustering]
         self._cluster_kws = value
@@ -199,13 +199,14 @@ class icat():
         # scale perturbed data using control data
         scaler = preprocessing.StandardScaler()
         scaler.fit(controls.X)
-        perturbed = sc.AnnData(X=scaler.transform(perturbed.X),
-                               obs=perturbed.obs, var=perturbed.var)
+        # perturbed = sc.AnnData(X=scaler.transform(perturbed.X),
+        #                        obs=perturbed.obs, var=perturbed.var)
             
-        # scale cells to 0 centered with unit variance
-        sc.pp.scale(controls)
+        # # scale cells to 0 centered with unit variance
+        # sc.pp.scale(controls)
         sc.pp.pca(controls, **self.pca_kws)
         sc.pp.neighbors(controls, **self.neighbor_kws)
+        sc.tl.umap(controls, min_dist=0.0)
         if self.clustering == 'louvain':
             sc.tl.louvain(controls, **self.cluster_kws)
             cluster_col = 'louvain'
@@ -220,8 +221,8 @@ class icat():
             model = LDA(**self.method_kws)
         else:
             model = QDA(**self.method_kws)
-        fit_X = controls.X
-        perturb_X = perturbed.X
+        fit_X = scaler.transform(controls.X).astype(np.float64)
+        perturb_X = scaler.transform(perturbed.X).astype(np.float64)
         if self.use_X == 'pca':
             pca_model = PCA(n_components=self.pca_kws['n_comps'],
                             svd_solver=self.pca_kws['svd_solver'],
@@ -229,8 +230,7 @@ class icat():
             fit_X = pca_model.fit_transform(controls.X)
             perturb_X = pca_model.transform(perturb_X)
         
-        model.fit(np.array(fit_X, dtype=np.float64),
-                  np.array(controls.obs[cluster_col].values))
+        model.fit(fit_X, np.array(controls.obs[cluster_col].values))
         X_ = model.transform(np.vstack((fit_X, perturb_X)))
         if self.method == 'ncfs':
             selected = np.where(model.coef_ > self.weight_threshold)[0]
@@ -255,7 +255,10 @@ class icat():
                                             sort=False).reset_index(drop=True),
                               var=var_)
         sc.pp.neighbors(combined, **self.neighbor_kws)
-        A_ = combined.uns['neighbors']['connectivities'].toarray()  
+        sc.tl.umap(combined, min_dist=0.0)
+        A_ = combined.uns['neighbors']['connectivities'].toarray()
+        # A_ = neighbors.kneighbors_graph(X_, self.neighbor_kws['n_neighbors'])\
+        #      .toarray()
         ss_model = ssLouvain.ssLouvain(**self.sslouvain_kws)
         y_ = np.hstack([controls.obs[cluster_col].values,
                         np.array([np.nan]*perturbed.shape[0])])
