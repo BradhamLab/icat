@@ -8,7 +8,7 @@ import numpy as np
 from scipy import stats
 import pandas as pd
 from scanpy import api as sc
-import utils
+from icat.src import utils
 
 class SingleCellDataset():
     """
