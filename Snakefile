@@ -16,21 +16,22 @@ rule simulate_data:
     input:
         json='data/external/experiments.json'
     output:
-        csv='data/processed/simulations.csv'
+        csv='data/processed/simulated/simulations.csv',
     params:
         sims=3,
         reps=3,
-        outdir='data/processed/'
+        outdir='data/processed/simulated/'
     script:
         'src/generate_simulated_datasets.py'
 
 rule fit_louvain:
     input:
-        'data/processed/simulations.csv'
+        'data/processed/simulated/simulations.csv'
     params:
-        data = 'data/processed',
+        data = 'data/processed/simulated',
         label = 'Population',
-        regex = '*Controls.pkl'
+        regex = '*Controls.pkl',
+        plotdir = 'plots/simulated/'
     output:
         csv = 'data/interim/control_louvain_fits.csv'
     script:

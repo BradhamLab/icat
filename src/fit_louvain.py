@@ -1,6 +1,10 @@
 from sklearn import metrics
 import numpy as np
+import pandas as pd
 import scanpy.api as sc
+import matplotlib.pyplot as plt
+import pickle as pkl
+import os
 
 def main(andata, label_col):
     sc.pp.pca(andata)
@@ -23,6 +27,12 @@ def main(andata, label_col):
                 performance['resolution'] = r
     return performance
 
+def plot_cells(andata, n, fn):
+    sc.pp.pca(andata)
+    sc.pp.neighbors(andata, n_neighbors=n)
+    sc.tl.umap(andata, min_dist=0)
+    sc.pl.umap(andata, color='Population', save=fn, show=False)
+
 if __name__ == '__main__':
     from glob import glob
     import pandas as pd
@@ -32,6 +42,7 @@ if __name__ == '__main__':
     label_col = 'Population'
     out_csv = '../data/interim/control_louvain_fits.csv'
     regex = '*Controls.pkl'
+    plot_dir = '../plots/simulated'
     try:
         snakemake
     except NameError:
@@ -41,11 +52,26 @@ if __name__ == '__main__':
         label_col = snakemake.params['label']
         out_csv = snakemake.output['csv']
         regex = snakemake.params['regex']
+        plot_dir = snakemake.params['plotdir']
+    sc.settings.figdir = plot_dir
     datasets = sorted(glob(os.path.join(data_dir, regex)))
     performance = dict()
     for fn in datasets:
         with open(fn, 'rb') as f:
             adata = pkl.load(f)
+        with open(fn.replace('Controls', 'Treated'), 'rb') as f:
+            perturbed = pkl.load(f)
         name = os.path.basename(fn)
         performance[name] = main(adata, label_col)
+        combined = sc.AnnData(X=np.vstack((adata.X, perturbed.X)),
+                              obs=pd.concat((adata.obs, perturbed.obs)),
+                              var=adata.var)
+        base = name.replace('Controls.pkl', "")
+        names = [base + x for x in ['Controls.png', 'Perturbed.png',
+                                    "Combined.png"]]
+        for data, plotfile in zip([adata, perturbed, combined], names):
+            plot_cells(data, int(performance[name]['n_neighbors']), plotfile)
+            plt.cla()
+            plt.clf()
+            plt.close()
     pd.DataFrame(performance).T.to_csv(out_csv)
