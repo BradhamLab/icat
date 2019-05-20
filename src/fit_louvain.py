@@ -11,7 +11,7 @@ def main(andata, label_col):
     performance = {'score': -np.inf,
                    'n_neighbors': None,
                    'resolution': None}
-    n_max = int(0.75 * andata.shape[0])
+    n_max = int(0.60 * andata.shape[0])
     n_min = 3
     resolutions = [1]
     for n in range(n_min, n_max):
