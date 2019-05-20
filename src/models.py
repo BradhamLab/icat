@@ -11,7 +11,7 @@ from ncfs_expanded import NCFS
 from scanpy import api as sc
 from ssLouvain import ssLouvain
 
-import utils
+from icat.src import utils
 
 
 class icat():
@@ -255,10 +255,13 @@ class icat():
                                             sort=False).reset_index(drop=True),
                               var=var_)
         sc.pp.neighbors(combined, **self.neighbor_kws)
-        sc.tl.umap(combined, min_dist=0.0)
-        A_ = combined.uns['neighbors']['connectivities'].toarray()
-        # A_ = neighbors.kneighbors_graph(X_, self.neighbor_kws['n_neighbors'])\
-        #      .toarray()
+        sc.tl.umap(combined)
+        if combined.shape[1] > 10:
+            A_ = combined.uns['neighbors']['connectivities']
+        else:
+            A_ = neighbors.kneighbors_graph(X_,
+                                            self.neighbor_kws['n_neighbors'],
+                                            mode='distance')
         ss_model = ssLouvain.ssLouvain(**self.sslouvain_kws)
         y_ = np.hstack([controls.obs[cluster_col].values,
                         np.array([np.nan]*perturbed.shape[0])])
