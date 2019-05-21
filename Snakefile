@@ -31,7 +31,7 @@ rule fit_louvain:
         data = 'data/processed/simulated',
         label = 'Population',
         regex = '*Controls.pkl',
-        plotdir = 'plots/simulated/'
+        plotdir = 'figures/simulated/'
     output:
         csv = 'data/interim/control_louvain_fits.csv'
     script:
