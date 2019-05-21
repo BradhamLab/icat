@@ -579,11 +579,24 @@ class Experiment(object):
         for __ in range(simulations):
             sim_out = []
             controls = SingleCellDataset(**self.control_kwargs).simulate()
+            markers = population_markers(controls)
             if pop_targets is not None:
-                markers = population_markers(controls)
                 self.perturb_kwargs['gene_targets'] = []
                 for each in pop_targets:
                     self.perturb_kwargs['gene_targets'] += list(markers[each])
+            else:
+                markers = np.hstack([x for x in markers.values()])
+                possible = set(range(controls.shape[1])).difference(markers)
+                try:
+                    p = self.perturb_kwargs['percent_perturb']
+                except KeyError:
+                    p = None
+                if p is None:
+                    p = 0.20
+                targets = np.random.choice(list(possible),
+                                           int(p * controls.shape[1]))
+                self.perturb_kwargs['gene_targets'] = targets
+                self.perturb_kwargs['percent_perturb'] = None
             for __ in range(replications):
                 treated = perturb(controls, **self.perturb_kwargs)
                 sim_out.append({'controls': controls, 'treated': treated})
