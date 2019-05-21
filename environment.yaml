@@ -7,7 +7,9 @@ dependencies:
   - appdirs=1.4.3=py_1
   - asn1crypto=0.24.0=py37_1003
   - attrs=19.1.0=py_0
+  - backcall=0.1.0=py_0
   - blas=1.0=openblas
+  - bleach=3.1.0=py_0
   - blosc=1.16.3=hf484d3e_0
   - bzip2=1.0.6=h14c3975_1002
   - ca-certificates=2019.3.9=hecc5488_0
@@ -20,7 +22,9 @@ dependencies:
   - cycler=0.10.0=py_1
   - datrie=0.7.1=py37h14c3975_0
   - decorator=4.4.0=py37_1
+  - defusedxml=0.5.0=py_1
   - docutils=0.14=py37_1001
+  - entrypoints=0.3=py37_1000
   - fontconfig=2.13.1=he4413a7_1000
   - freetype=2.10.0=he983fc9_0
   - gettext=0.19.8.1=hc5be6a0_1002
@@ -33,8 +37,17 @@ dependencies:
   - idna=2.8=py37_1000
   - igraph=0.7.1=h2166141_1005
   - intel-openmp=2019.3=199
+  - ipykernel=5.1.1=py37h24bf2e0_0
+  - ipython=7.5.0=py37h24bf2e0_0
+  - ipython_genutils=0.2.0=py_1
+  - jedi=0.13.3=py37_0
+  - jinja2=2.10.1=py_0
   - joblib=0.13.2=py_0
   - jsonschema=3.0.1=py37_0
+  - jupyter_client=5.2.4=py_3
+  - jupyter_core=4.4.0=py_0
+  - jupyterlab=0.35.6=py37_0
+  - jupyterlab_server=0.2.0=py_0
   - kiwisolver=1.1.0=py37hc9558a2_0
   - libblas=3.8.0=10_openblas
   - libcblas=3.8.0=10_openblas
@@ -46,6 +59,7 @@ dependencies:
   - liblapack=3.8.0=10_openblas
   - libopenblas=0.3.2=h5a2b251_1
   - libpng=1.6.37=hed695b0_0
+  - libsodium=1.0.16=h14c3975_1001
   - libstdcxx-ng=8.2.0=hdf63c60_1
   - libuuid=2.32.1=h14c3975_1000
   - libxcb=1.13=h14c3975_1002
@@ -53,28 +67,43 @@ dependencies:
   - llvmlite=0.28.0=py37hdbcaa40_0
   - louvain=0.6.1=py37hf484d3e_2
   - lzo=2.10=h14c3975_1000
+  - markupsafe=1.1.1=py37h14c3975_0
   - matplotlib-base=3.0.3=py37h5f35d83_1
+  - mistune=0.8.4=py37h14c3975_1000
   - mkl=2019.3=199
   - mkl_fft=1.0.13=py37h516909a_1
   - mkl_random=1.0.4=py37hf2d7682_0
   - mock=3.0.5=py37_0
+  - nb_conda_kernels=2.2.1=py37_0
+  - nbconvert=5.5.0=py_0
+  - nbformat=4.4.0=py_1
   - ncurses=6.1=he6710b0_1
   - networkx=2.3=py_0
+  - notebook=5.7.8=py37_0
   - numba=0.43.1=py37hf2d7682_0
   - numexpr=2.6.9=py37h637b7d7_1000
   - numpy=1.16.3=py37he5ce36f_0
   - numpy-base=1.15.0=py37hc937464_0
   - openblas=0.3.6=h6e990d7_2
   - openssl=1.1.1b=h14c3975_1
-  - pandas=0.24.2=py37hf484d3e_0
+  - pandas=0.24.2=py37he6710b0_0
+  - pandoc=2.7.2=0
+  - pandocfilters=1.4.2=py_1
+  - parso=0.4.0=py_0
   - patsy=0.5.1=py_0
   - pcre=8.41=hf484d3e_1003
+  - pexpect=4.7.0=py37_0
+  - pickleshare=0.7.5=py37_1000
   - pip=19.1.1=py37_0
   - pixman=0.34.0=h14c3975_1003
+  - prometheus_client=0.6.0=py_0
+  - prompt_toolkit=2.0.9=py_0
   - psutil=5.6.2=py37h516909a_0
   - pthread-stubs=0.4=h14c3975_1001
+  - ptyprocess=0.6.0=py_1001
   - pycairo=1.18.1=py37h438ddbb_0
   - pycparser=2.19=py37_1
+  - pygments=2.4.0=py_0
   - pyopenssl=19.0.0=py37_0
   - pyparsing=2.4.0=py_0
   - pyrsistent=0.15.2=py37h516909a_0
@@ -85,21 +114,28 @@ dependencies:
   - python-igraph=0.7.1.post7=py37h516909a_0
   - pytz=2019.1=py_0
   - pyyaml=5.1=py37h14c3975_0
+  - pyzmq=18.0.1=py37hc4ba49a_1
   - ratelimiter=1.2.0=py37_1000
   - readline=7.0=h7b6447c_5
   - requests=2.22.0=py37_0
   - scikit-learn=0.21.1=py37h627018c_0
   - scipy=1.2.1=py37h09a28d5_1
   - seaborn=0.9.0=py_1
+  - send2trash=1.5.0=py_0
   - setuptools=41.0.1=py37_0
   - six=1.12.0=py37_1000
   - smmap2=2.0.5=py_0
   - snakemake-minimal=5.4.5=py_0
   - sqlite=3.28.0=h7b6447c_0
   - statsmodels=0.9.0=py37h3010b51_1000
+  - terminado=0.8.2=py37_0
+  - testpath=0.4.2=py_1001
   - tk=8.6.9=h84994c4_1001
   - tornado=6.0.2=py37h516909a_0
+  - traitlets=4.3.2=py37_1000
   - urllib3=1.24.3=py37_0
+  - wcwidth=0.1.7=py_1
+  - webencodings=0.5.1=py_1
   - wheel=0.33.4=py37_0
   - wrapt=1.11.1=py37h516909a_0
   - xorg-kbproto=1.0.7=h14c3975_1002
@@ -115,6 +151,7 @@ dependencies:
   - xorg-xproto=7.0.31=h14c3975_1007
   - xz=5.2.4=h14c3975_4
   - yaml=0.1.7=h14c3975_1001
+  - zeromq=4.3.1=hf484d3e_1000
   - zlib=1.2.11=h7b6447c_3
   - pip:
     - anndata==0.6.19
