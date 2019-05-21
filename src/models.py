@@ -251,7 +251,7 @@ class icat():
                                             sort=False).reset_index(drop=True),
                               var=var_)
         sc.pp.neighbors(combined, **self.neighbor_kws)
-        sc.tl.umap(combined)
+        sc.tl.umap(combined, min_dist=0.0)
         # if combined.shape[1] > 10:
         #     A_ = combined.uns['neighbors']['connectivities']
         # else:
