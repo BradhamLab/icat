@@ -2,7 +2,7 @@
 
 rule all:
     input:
-        'data/interim/control_louvain_fits.csv'
+        'data/results/icat_performance.csv'
 
 rule make_count_matrix:
     params:
@@ -36,3 +36,16 @@ rule fit_louvain:
         csv = 'data/interim/control_louvain_fits.csv'
     script:
         'src/fit_louvain.py'
+
+rule evaluate_icat:
+    input:
+        csv='data/interim/control_louvain_fits.csv'
+    params:
+        data = 'data/processed/simulated',
+        ctrl_str = "Controls",
+        prtb_str = 'Treated'
+    output:
+        csv='data/results/icat_performance.csv'
+    script:
+        'src/evaluation.py'
+    
