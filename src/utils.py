@@ -1,6 +1,10 @@
 import inspect
 import numpy as np
 import collections
+from sklearn import metrics
+import scanpy.api as sc
+import numpy as np
+import pandas as pd
 
 def check_kws(reference_dict, new_dict, name):
     if not isinstance(new_dict, dict):
@@ -81,3 +85,30 @@ def flatten_dict(d, parent_key='', sep='.'):
         else:
             items.append((new_key, v))
     return dict(items)
+
+
+def rbind_adata(adata_lists):
+    combined = sc.AnnData(X=np.vstack([each.X for each in adata_lists]),
+                        obs=pd.concat([each.obs for each in adata_lists],
+                                      axis=0,
+                                      sort=False).reset_index(drop=True),
+                        var=adata_lists[0].var)
+    return combined
+
+
+def performance(adata, true_col, pred_col):
+    """Measure the performance of a clustering partition."""
+    known = adata.obs[true_col].values.astype(str)
+    pred = adata.obs[pred_col].values.astype(str)
+    mi = metrics.adjusted_mutual_info_score(known, pred, 
+                                            average_method='arithmetic')
+    homog = metrics.homogeneity_score(known, pred)
+    comp = metrics.completeness_score(known, pred)
+    ar = metrics.adjusted_rand_score(known, pred)
+    fm = metrics.fowlkes_mallows_score(known, pred)
+    measures = {'adjusted.mutual.info': mi,
+                'homogeneity': homog,
+                'completeness': comp,
+                'adjusted.rand': ar,
+                'fowlkes.mallows': fm}
+    return measures
