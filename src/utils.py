@@ -5,6 +5,8 @@ from sklearn import metrics
 import scanpy.api as sc
 import numpy as np
 import pandas as pd
+from matplotlib import pyplot as plt
+import seaborn as sns
 
 def check_kws(reference_dict, new_dict, name):
     if not isinstance(new_dict, dict):
@@ -112,3 +114,27 @@ def performance(adata, true_col, pred_col):
                 'adjusted.rand': ar,
                 'fowlkes.mallows': fm}
     return measures
+
+
+def plot_umap(adata, color, shape):
+    __, ax = plt.subplots(figsize=(10, 8))
+    colors =plt.rcParams['axes.prop_cycle'].by_key()['color']
+    pallete = {}
+    for i, each in enumerate(adata.obs[color].unique()):
+        pallete[each] = colors[i]
+    figure = sns.scatterplot(x=adata.obsm['X_umap'][:, 0],
+                             y=adata.obsm['X_umap'][:, 1],
+                             hue=adata.obs[color],
+                             palette=pallete,
+                             style=adata.obs[shape],
+                             ax=ax,
+                             s=100)
+    legend = ax.get_legend()
+    for i, handle in enumerate(legend.legendHandles):
+        if handle.get_label() == shape:
+            legend.legendHandles[i].set_facecolor([0, 0, 0, 0])
+            legend.legendHandles[i].set_color([0, 0, 0, 0])
+            legend.legendHandles[i].set_edgecolor([0, 0, 0, 0])
+    legend.draw()
+
+    return figure
