@@ -1,51 +1,43 @@
 
+import glob
+import os
+
+def id_from_data(data_dir, str_pattern):
+    to_glob = os.path.join(data_dir, '*' + str_pattern)
+    ids = [os.path.basename(x).replace(str_pattern, '')\
+           for x in glob.glob(to_glob)]
+    return ids
+SIMS = id_from_data('data/processed/simulated', 'Controls.pkl')
 
 rule all:
     input:
-        'data/results/icat_performance.csv'
-
-rule make_count_matrix:
-    params:
-        'data/raw'
-    output:
-        'data/processed/kang_2018_umi.pkl'
-    script:
-        'src/generate_kang_et_al.py'
-
-rule simulate_data:
-    input:
-        json='data/external/experiments.json'
-    output:
-        csv='data/processed/simulated/simulations.csv',
-    params:
-        sims=3,
-        reps=3,
-        outdir='data/processed/simulated/'
-    script:
-        'src/generate_simulated_datasets.py'
+        ['data/interim/fits/{sim}Controls.csv'.format(sim=sim)\
+        for sim in SIMS]
 
 rule fit_louvain:
     input:
-        'data/processed/simulated/simulations.csv'
+        ctrl='data/processed/simulated/{sim}Controls.pkl',
+        prtb='data/processed/simulated/{sim}Treated.pkl'
     params:
-        data = 'data/processed/simulated',
-        label = 'Population',
-        regex = '*Controls.pkl',
-        plotdir = 'figures/simulated/'
+        label='Population',
+        plotdir='figures/simulated/{sim}/'
     output:
-        csv = 'data/interim/control_louvain_fits.csv'
+        json='data/interim/fits/{sim}Controls_fits.json',
+        ctrl_png='figures/simulated/{sim}/umap_controls.png',
+        prtb_png='figures/simulated/{sim}/umap_treated.png',
+        comb_png='figures/simulated/{sim}/umap_combined.png'
     script:
         'src/fit_louvain.py'
 
-rule evaluate_icat:
-    input:
-        csv='data/interim/control_louvain_fits.csv'
-    params:
-        data = 'data/processed/simulated',
-        ctrl_str = "Controls",
-        prtb_str = 'Treated'
-    output:
-        csv='data/results/icat_performance.csv'
-    script:
-        'src/evaluation.py'
+# rule evaluate_icat:
+#     input:
+#         csv='data/interim/control_louvain_fits.csv'
+#     params:
+#         data = 'data/processed/simulated',
+#         ctrl_str = "Controls",
+#         prtb_str = 'Treated'
+#     output:
+#         csv='data/results/icat_performance.csv'
+#     script:
+#         'src/evaluation.py'
     
