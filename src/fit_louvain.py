@@ -35,13 +35,17 @@ def main(andata, label_col):
                 performance['resolution'] = r
     return performance
 
+
 def plot_cells(andata, n, fn):
     andata.obs['Population'] = andata.obs['Population'].astype('category')
     sc.pp.pca(andata)
     sc.pp.neighbors(andata, n_neighbors=n)
     sc.tl.umap(andata, min_dist=0)
-    sc.pl.umap(andata, color='Population', save='_' + fn, show=False)
-    plt.title(fn.replace('.png', ''))
+    utils.plot_umap(andata, color='Population', shape='Treatment')
+    plt.savefig(fn)
+    plt.cla()
+    plt.clf()
+    plt.close()
 
 if __name__ == '__main__':
     # ctrl = '../data/processed/simulated/Experiment1Sim1Rep1-Controls.pkl'
@@ -68,10 +72,13 @@ if __name__ == '__main__':
     
     performance = main(adata, label_col)
     names = ['controls.png', 'treated.png', "combined.png"]
+    adata.obs['Treatment'] = 'Control'
+    perturbed['Treatment'] = 'Perturbed'
     combined = utils.rbind_adata([adata, perturbed])
     # add dakota style formatting
     for data, plotfile in zip([adata, perturbed, combined], names):
-        plot_cells(data, int(performance['n_neighbors']), plotfile)
+        fn = os.path.join(plot_dir, 'umap_' + plotfile)
+        plot_cells(data, int(performance['n_neighbors']), fn)
         plt.cla()
         plt.clf()
         plt.close()
