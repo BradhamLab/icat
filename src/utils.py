@@ -132,9 +132,8 @@ def plot_umap(adata, color, shape):
     legend = ax.get_legend()
     for i, handle in enumerate(legend.legendHandles):
         if handle.get_label() == shape:
-            legend.legendHandles[i].set_facecolor([0, 0, 0, 0])
-            legend.legendHandles[i].set_color([0, 0, 0, 0])
-            legend.legendHandles[i].set_edgecolor([0, 0, 0, 0])
-    legend.draw()
+            legend.legendHandles[i].set_facecolor('white')
+            legend.legendHandles[i].set_color('white')
+            legend.legendHandles[i].set_edgecolor('white')
 
     return figure
