@@ -1,77 +1,79 @@
-from sklearn import metrics
-import numpy as np
-import pandas as pd
 import scanpy.api as sc
 import matplotlib.pyplot as plt
+from cycler import cycler
 import pickle as pkl
+from icat.src import utils
+import json
+import pandas as pd
+import numpy as np
 import os
+import colorcet as cc
+
+try:
+    loc = os.path.dirname(os.path.abspath(__file__))
+    plt.style.use(os.path.join(loc, 'configs/icat.mplstyle'))
+    plt.rc('axes', prop_cycle=cycler('color', cc.glasbey_light))
+except:
+    pass
 
 def main(andata, label_col):
     sc.pp.pca(andata)
-    performance = {'score': -np.inf,
-                   'n_neighbors': None,
-                   'resolution': None}
+    performance = dict()
     n_max = int(0.60 * andata.shape[0])
     n_min = 3
+    score = -np.inf
     resolutions = [1]
-    for n in range(n_min, n_max):
+    for n in range(n_min, n_max + 1):
         for r in resolutions:
             sc.pp.neighbors(andata, n_neighbors=n)
             sc.tl.umap(andata, min_dist=0.0)
             sc.tl.louvain(andata, resolution=r, key_added='louvain')
-            score = metrics.adjusted_rand_score(andata.obs[label_col],
-                                                andata.obs['louvain'])
-            if score > performance['score']:
-                performance['score'] = score
+            measures = utils.performance(andata, label_col, 'louvain')
+            if score < measures['adjusted.rand']:
+                performance = measures.copy()
                 performance['n_neighbors'] = n
                 performance['resolution'] = r
     return performance
 
 def plot_cells(andata, n, fn):
+    andata.obs['Population'] = andata.obs['Population'].astype('category')
     sc.pp.pca(andata)
     sc.pp.neighbors(andata, n_neighbors=n)
     sc.tl.umap(andata, min_dist=0)
-    sc.pl.umap(andata, color='Population', save=fn, show=False)
+    sc.pl.umap(andata, color='Population', save='_' + fn, show=False)
+    plt.title(fn.replace('.png', ''))
 
 if __name__ == '__main__':
-    from glob import glob
-    import pandas as pd
-    import pickle as pkl
-    import os
-    data_dir = '../data/processed'
-    label_col = 'Population'
-    out_csv = '../data/interim/control_louvain_fits.csv'
-    regex = '*Controls.pkl'
-    plot_dir = '../plots/simulated'
+    # ctrl = '../data/processed/simulated/Experiment1Sim1Rep1-Controls.pkl'
+    # prtb = '../data/processed/simulated/Experiment1Sim1Rep1-Treated.pkl'
+    # label_col = 'Population'
+    # out = '../data/interim/Experiment1Sim1Rep1-Controls_fits.json'
+    # out = '../figures/simulated/Experiment1Sim1Rep1/'
     try:
         snakemake
     except NameError:
         snakemake = None
     if snakemake is not None:
-        data_dir = snakemake.params['data']
+        ctrl = snakemake.input['ctrl']
+        prtb = snakemake.input['prtb']
         label_col = snakemake.params['label']
-        out_csv = snakemake.output['csv']
-        regex = snakemake.params['regex']
         plot_dir = snakemake.params['plotdir']
+        out_json = snakemake.output['json']
+        
     sc.settings.figdir = plot_dir
-    datasets = sorted(glob(os.path.join(data_dir, regex)))
-    performance = dict()
-    for fn in datasets:
-        with open(fn, 'rb') as f:
-            adata = pkl.load(f)
-        with open(fn.replace('Controls', 'Treated'), 'rb') as f:
-            perturbed = pkl.load(f)
-        name = os.path.basename(fn)
-        performance[name] = main(adata, label_col)
-        combined = sc.AnnData(X=np.vstack((adata.X, perturbed.X)),
-                              obs=pd.concat((adata.obs, perturbed.obs)),
-                              var=adata.var)
-        base = name.replace('Controls.pkl', "")
-        names = [base + x for x in ['Controls.png', 'Perturbed.png',
-                                    "Combined.png"]]
-        for data, plotfile in zip([adata, perturbed, combined], names):
-            plot_cells(data, int(performance[name]['n_neighbors']), plotfile)
-            plt.cla()
-            plt.clf()
-            plt.close()
-    pd.DataFrame(performance).T.to_csv(out_csv)
+    with open(ctrl, 'rb') as f:
+        adata = pkl.load(f)
+    with open(prtb, 'rb') as f:
+        perturbed = pkl.load(f)
+    
+    performance = main(adata, label_col)
+    names = ['controls.png', 'treated.png', "combined.png"]
+    combined = utils.rbind_adata([adata, perturbed])
+    # add dakota style formatting
+    for data, plotfile in zip([adata, perturbed, combined], names):
+        plot_cells(data, int(performance['n_neighbors']), plotfile)
+        plt.cla()
+        plt.clf()
+        plt.close()
+    with open(out_json, 'w') as f:
+        json.dump(performance, f)
