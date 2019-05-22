@@ -128,7 +128,7 @@ def plot_umap(adata, color, shape):
                              palette=pallete,
                              style=adata.obs[shape],
                              ax=ax,
-                             s=100)
+                             s=150)
     legend = ax.get_legend()
     for i, handle in enumerate(legend.legendHandles):
         if handle.get_label() == shape:
