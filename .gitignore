@@ -6,3 +6,4 @@ data/*
 notebooks/*
 *.pyc
 figures/*
+plots/*
