@@ -29,15 +29,19 @@ rule fit_louvain:
     script:
         'src/fit_louvain.py'
 
-# rule evaluate_icat:
-#     input:
-#         csv='data/interim/control_louvain_fits.csv'
-#     params:
-#         data = 'data/processed/simulated',
-#         ctrl_str = "Controls",
-#         prtb_str = 'Treated'
-#     output:
-#         csv='data/results/icat_performance.csv'
-#     script:
-#         'src/evaluation.py'
+rule evaluate_icat:
+    input:
+        ctrl='data/processed/simulated/{sim}Controls.pkl',
+        prtb='data/processed/simulated/{sim}Treated.pkl',
+        json='data/interim/fits/{sim}Controls_fits.json'
+    params:
+        name='{sim}',
+        plotdir='figures/clustered/{sim}/'
+    output:
+        csv='data/results/{sim}_icat_performance.csv',
+        p1='figures/clustered/{sim}/umap_louvain.png',
+        p2='figures/clustered/{sim}/umap_ncfs-louvain.png',
+        p3='figures/clustered/{sim}/umap_sslouvain.png'
+    script:
+        'src/evaluation.py'
     
