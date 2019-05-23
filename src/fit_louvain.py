@@ -73,7 +73,7 @@ if __name__ == '__main__':
     performance = main(adata, label_col)
     names = ['controls.png', 'treated.png', "combined.png"]
     adata.obs['Treatment'] = 'Control'
-    perturbed['Treatment'] = 'Perturbed'
+    perturbed.obs['Treatment'] = 'Perturbed'
     combined = utils.rbind_adata([adata, perturbed])
     # add dakota style formatting
     for data, plotfile in zip([adata, perturbed, combined], names):
