@@ -65,9 +65,9 @@ def performance(adata, true_col, pred_col):
     return measures
 
 if __name__ == '__main__':
-    data_dir = '../data/processed/simulated'
-    control_csv = '../data/interim/control_louvain_fits.csv'
-    out_csv = '../data/results/icat_performance.csv'
+    data_dir = 'data/processed/simulated'
+    control_csv = 'data/interim/control_louvain_fits.csv'
+    out_csv = 'data/results/icat_performance.csv'
     control_str = 'Controls'
     perturb_str = 'Treated'
     icat_kws = {'method_kws': {'sigma': 2, 'reg': 3},
