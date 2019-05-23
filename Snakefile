@@ -23,9 +23,9 @@ rule fit_louvain:
         plotdir='figures/simulated/{sim}/'
     output:
         json='data/interim/fits/{sim}Controls_fits.json',
-        ctrl_png='figures/simulated/{sim}/umap_controls.png',
-        prtb_png='figures/simulated/{sim}/umap_treated.png',
-        comb_png='figures/simulated/{sim}/umap_combined.png'
+        ctrl_svg='figures/simulated/{sim}/umap_controls.svg',
+        prtb_svg='figures/simulated/{sim}/umap_treated.svg',
+        comb_svg='figures/simulated/{sim}/umap_combined.svg'
     script:
         'src/fit_louvain.py'
 
@@ -39,9 +39,9 @@ rule evaluate_icat:
         plotdir='figures/clustered/{sim}/'
     output:
         csv='data/results/{sim}_icat_performance.csv',
-        p1='figures/clustered/{sim}/umap_louvain.png',
-        p2='figures/clustered/{sim}/umap_ncfs-louvain.png',
-        p3='figures/clustered/{sim}/umap_sslouvain.png'
+        p1='figures/clustered/{sim}/umap_louvain.svg',
+        p2='figures/clustered/{sim}/umap_ncfs-louvain.svg',
+        p3='figures/clustered/{sim}/umap_sslouvain.svg'
     script:
         'src/evaluation.py'
     
