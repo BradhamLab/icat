@@ -11,7 +11,7 @@ SIMS = id_from_data('data/processed/simulated', 'Controls.pkl')
 
 rule all:
     input:
-        ['data/interim/fits/{sim}Controls.csv'.format(sim=sim)\
+        ['data/results/{sim}_icat_performance.csv''.format(sim=sim)\
         for sim in SIMS]
 
 rule fit_louvain:
