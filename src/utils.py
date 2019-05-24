@@ -116,17 +116,19 @@ def performance(adata, true_col, pred_col):
     return measures
 
 
-def plot_umap(adata, color, shape):
-    __, ax = plt.subplots(figsize=(10, 8))
+def plot_umap(adata, color, shape, ax=None):
+    if ax is None:
+        __, ax = plt.subplots(figsize=(10, 8))
     colors =plt.rcParams['axes.prop_cycle'].by_key()['color']
     pallete = {}
+    adata.obs[color] = adata.obs[color].astype(str)
     for i, each in enumerate(adata.obs[color].unique()):
         pallete[each] = colors[i]
     figure = sns.scatterplot(x=adata.obsm['X_umap'][:, 0],
                              y=adata.obsm['X_umap'][:, 1],
                              hue=adata.obs[color],
                              palette=pallete,
-                             style=adata.obs[shape],
+                             style=adata.obs[shape].astype(str),
                              ax=ax,
                              s=150)
     legend = ax.get_legend()
