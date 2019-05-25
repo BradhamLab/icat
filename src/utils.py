@@ -1,12 +1,24 @@
-import inspect
-import numpy as np
 import collections
-from sklearn import metrics
-import scanpy.api as sc
+import inspect
+import os
+import re
+
 import numpy as np
 import pandas as pd
-from matplotlib import pyplot as plt
+import scanpy.api as sc
 import seaborn as sns
+from cycler import cycler
+from matplotlib import pyplot as plt
+from sklearn import metrics
+
+import colorcet as cc
+
+try:
+    loc = os.path.dirname(os.path.abspath(__file__))
+    plt.style.use(os.path.join(loc, 'configs/icat.mplstyle'))
+    plt.rc('axes', prop_cycle=cycler('color', cc.glasbey_light))
+except:
+    pass
 
 def check_kws(reference_dict, new_dict, name):
     if not isinstance(new_dict, dict):
@@ -137,3 +149,13 @@ def plot_umap(adata, color, shape):
             legend.legendHandles[i].set_edgecolor('white')
 
     return figure
+
+def parse_sim(name):
+    exp_re = re.compile('^Experiment*[0-9]')
+    sim_re = re.compile('Sim*[0-9]')
+    rep_re = re.compile('Rep*[0-9]')
+    
+    out = {'Experiment': exp_re.search(name).group(),
+           'Sim': sim_re.search(name).group(),
+           'Rep': rep_re.search(name).group()}
+    return out
