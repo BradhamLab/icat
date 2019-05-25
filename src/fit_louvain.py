@@ -71,7 +71,7 @@ if __name__ == '__main__':
         perturbed = pkl.load(f)
     
     performance = main(adata, label_col)
-    names = ['controls.png', 'treated.png', "combined.png"]
+    names = ['controls.svg', 'treated.svg', "combined.svg"]
     adata.obs['Treatment'] = 'Control'
     perturbed.obs['Treatment'] = 'Perturbed'
     combined = utils.rbind_adata([adata, perturbed])
