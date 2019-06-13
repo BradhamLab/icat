@@ -7,6 +7,7 @@ from sklearn.exceptions import NotFittedError
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis as QDA
+from scipy import stats
 
 from ncfs_expanded import NCFS
 from scanpy import api as sc
@@ -56,7 +57,9 @@ class SignalNoiseModel(object):
             Single-cell expression profile across cells. Values are assumed to
             be log-transformed.
         
-
+        Returns
+        -------
+        None
         """
         #  use count data for mixtures
         counts, bins = np.histogram(X, bins=30)
@@ -88,7 +91,10 @@ class SignalNoiseModel(object):
         gmm.fit(X)
         self.gmm_ = gmm
         self.range_ = [0, np.max(X) + normal_spread]
-        self.weights = {'noise': gmm.weights[0], 'signal': gmm.weights[1]}
+        self.weights_ = {'noise': gmm.weights[0], 'signal': gmm.weights[1]}
+        self.params_ = {'noise': {'lambda': gmm.distributions[0].parameters[0]},
+                        'signal': {'mean': gmm.distributions[1].parameters[0],
+                                   'var': gmm.distributions[1].parameters[1]}}
 
     def __check_fit(self):
         if self.gmm_ is None:
@@ -140,6 +146,52 @@ class SignalNoiseModel(object):
         while idx < p_x.shape[0] - 1 and p_x[idx][0] > p_x[idx][1]:
             idx += 1
         return space[idx][0]
+
+class SEG():
+    def __init__(self):
+        """Class to find stabley expressed genes between datasets."""
+        self.index_ = None
+
+    def __check_fit(self):
+        if self.index_ is None:
+            raise NotFittedError("This SEG is not fitted.")
+
+    def __corrected_w(self, X, mu_min, mu_max):
+        w = sum(X==0) / X.shape[0]
+        return np.sqrt(w * (np.mean(X) - mu_min) / (mu_max - mu_min))
+
+    def fit(self, X, idxs):
+        mus = np.mean(X, axis=0)
+        mu_min = np.min(mus)
+        mu_max = np.max(mus)
+        metric_array = np.zeros((X.shape[1], 4))
+        for i in range(X.shape[1]):
+            gene_X = X[:, i]
+            mixture = SignalNoiseModel()
+            mixture.fit(gene_X)
+            # high percentage of noise mixing -> unstable
+            mixing = mixture.weights_['noise']
+            # high variance in signal -> unstable
+            signal_var = mixture.params_['signal']['var']
+            # high proportion of zeros -> unstable 
+            w = self.__corrected_w(gene_X, mu_min, mu_max)
+            # high H -> unstable
+            H = stats.kruskal(*[gene_X[idx, :] for idx in idxs]).statistic
+            metric_array[i, :] = np.array([mixing, signal_var, w, H])
+        # get ranks for each gene
+        sorted_ = np.argsort(metric_array, axis=0)
+        ranks = np.empty_like(sorted_)
+        for i in range(metric_array.shape[1]):
+            ranks[sorted_[:, i], i] = np.arange(metric_array.shape[0])
+        ranks = ranks / (ranks.shape[0] - 1)
+        self.index_ = np.mean(ranks, axis=1)
+
+    def get_stable(self, n_genes=100):
+        self.__check_fit()
+        # want lowest
+        return np.argsort(self.index_)[:n_genes]
+
+
 
 
 class icat():
