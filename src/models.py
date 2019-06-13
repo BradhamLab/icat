@@ -3,6 +3,7 @@ import inspect
 import numpy as np
 import pandas as pd
 from sklearn import preprocessing, neighbors
+from sklearn.exceptions import NotFittedError
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis as QDA
@@ -10,8 +11,135 @@ from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis as QDA
 from ncfs_expanded import NCFS
 from scanpy import api as sc
 from ssLouvain import ssLouvain
+import pomegranate as pmg
 
 from icat.src import utils
+
+class SignalNoiseModel(object):
+    def __init__(self):
+        """
+        Model technical noise in a single-cell expression profile.
+        
+        Attributes
+        ----------
+        gmm_ : pomegranate.GeneralMixtureModel 
+            Mixture of a Poisson and Normal Distribution to de-convolve noise
+            and signal.
+        range_ : list
+            Two element list with range of possible values. Minimum is always
+            zero, and max is set to the maximum observed value + spread.
+        weights_ : dict
+            Mixing proportions beteen technical noise and actual signal. Keyed
+            by 'noise' and 'signal', respectively.
+
+        Methods
+        -------
+        pdf : Calculate the probability of values within an array.
+        cdf : Calculate cumulative density probabilities of values in an array.
+        threshold: Find the first value such that P(Noise) < P(Signal)
+        """
+        self.gmm_ = None
+        self.range_ = None
+        self.weights_ = None
+
+    def fit(self, X):
+        """
+        Fit data to a mixture model to distinguish signal from technical noise.
+
+        Fit data to a mixture model where technical noise of scRNAseq profiles
+        is modelled using a Poisson distribution, and true expression is
+        modelled as a Gaussian Distribution. 
+        
+        Parameters
+        ----------
+        X : numpy.array
+            Single-cell expression profile across cells. Values are assumed to
+            be log-transformed.
+        
+
+        """
+        #  use count data for mixtures
+        counts, bins = np.histogram(X, bins=30)
+
+        # estimate center as maximum non-zero count
+        mode_idx = np.where(counts == np.max(counts[1:]))[0][0]
+        # estimate 2SD as center - end value --> find values in normal dist.
+        normal_spread = bins[-1] - bins[mode_idx]
+
+        # find minimum value heuristically expected to be in signal
+        noise_indices = np.where(bins < bins[mode_idx] - normal_spread)[0]
+        if len(noise_indices) > 0:
+            normal_min = bins[noise_indices[-1]]
+        else:
+            # no values below expected threshold, set to first non-zero value
+            normal_min = bins[1]
+
+        # estimate Normal distribution from likely normal samples
+        signal = pmg.NormalDistribution.from_samples(X[X >= normal_min])
+        # estimate Poisson from likely non-normal samples
+        pois_samples = X[X < normal_min]
+        percent_zeros = sum(X == 0) / len(X) 
+        pois_lambda = percent_zeros
+        if len(pois_samples) != 0:
+            pois_lambda = max(np.mean(pois_samples), percent_zeros)
+        noise = pmg.PoissonDistribution(pois_lambda)
+        # instantiate and fit mixture to data
+        gmm = pmg.GeneralMixtureModel([noise, signal])
+        gmm.fit(X)
+        self.gmm_ = gmm
+        self.range_ = [0, np.max(X) + normal_spread]
+        self.weights = {'noise': gmm.weights[0], 'signal': gmm.weights[1]}
+
+    def __check_fit(self):
+        if self.gmm_ is None:
+            raise NotFittedError("This SignalNoiseModel is not fitted.")
+
+    def pdf(self, X):
+        """
+        Calculate probability density function of the fit mixture model.
+        
+        Parameters
+        ----------
+        X : np.array
+            Linespace defining the domain of the mixture model.
+        
+        Returns
+        -------
+        np.array
+            Array of probabilities along the domain.
+        """
+        self.__check_fit()
+        return self.gmm_.probability(X)
+
+    def cdf(self, X):
+        """
+        Calculate cumulative density function of the fit mixture model.
+        
+        Parameters
+        ----------
+        X : np.array
+            Linespace defining the domain of the mixture model.
+        
+        Returns
+        -------
+        np.array
+            Array of cumulative densities for each provided value.
+        """
+        self.__check_fit()
+        values = np.zeros_like(X)
+        for i, x in enumerate(X):
+            space = np.arange(0, x + 0.01, 0.01)
+            values[i] = np.sum(self.pdf(space)*0.01)
+        return values
+
+    def threshold(self):
+        self.__check_fit()
+        space = np.arange(self.range_[0], self.range_[1], 0.01).reshape(-1, 1)
+        p_x = self.gmm_.predict_proba(space)
+        idx = 0
+        while idx < p_x.shape[0] - 1 and p_x[idx][0] > p_x[idx][1]:
+            idx += 1
+        return space[idx][0]
 
 
 class icat():
