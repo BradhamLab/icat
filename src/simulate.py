@@ -550,6 +550,9 @@ class Experiment(object):
         self._pca_kws = value
         self._perturb_kwargs = value
 
+    def simulate_controls(self):
+        return SingleCellDataset(**self.control_kwargs).simulate()
+
     def run(self, simulations=1, replications=1, controls=None,
             pop_targets=None):
         """
@@ -584,7 +587,7 @@ class Experiment(object):
         for __ in range(simulations):
             sim_out = []
             if controls is None:
-                controls = SingleCellDataset(**self.control_kwargs).simulate()
+                controls = self.simulate_controls()
             if not isinstance(controls, sc.AnnData):
                 raise ValueError("Unexpected type for `controls`: {}".format(
                                   type(controls)))
