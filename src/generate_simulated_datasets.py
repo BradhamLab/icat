@@ -7,6 +7,13 @@ import pandas as pd
 import simulate
 import utils
 
+def parse_params(sim_params):
+    if sim_params['dispersion'] == 'random':
+        sim_params['dispersion'] = simulate.dispersions(sim_params['genes'])
+    if 'gene_targets' in sim_params:
+        if sim_params['gene_targets'] == 'None':
+            sim_params['gene_targets'] = None
+    return sim_params
 
 def main(configs, sims=1, reps=1):
     datasets = dict()
@@ -17,21 +24,32 @@ def main(configs, sims=1, reps=1):
             if isinstance(v, list):
                 v = ';'.join([str(x) for x in v])
             values[k] = v
-        csv_dict[exp] = values
-        c_params = params['controls']
-        p_params = params['perturbation']
-        if c_params['dispersion'] == 'random':
-            c_params['dispersion'] = simulate.dispersions(c_params['genes'])
-        # not interested in the current functionality of pop_targets
-        pop_targets = p_params.pop('pop_targets')
-        if pop_targets == 'None':
+        csv_dict[exp] = values  # TODO: look at this with change
+        # parameters defining control space
+        c_params = parse_params(params['controls'])
+        # list of perturbations to apply to control cells 
+        perturb_list = params['perturbations']
+        controls = None
+        for i, p_params in enumerate(perturb_list):
+            # not interested in the current functionality of pop_targets in
+            # SingleCellDataset.simulate(), pass to Experiment.run() instead.
             pop_targets = None
-        if p_params['gene_targets'] == 'None':
-            p_params['gene_targets'] = None
-        experiment = simulate.Experiment(control_kwargs=c_params,
-                                         perturb_kwargs=p_params)
-        datasets[exp] = experiment.run(simulations=sims, replications=reps,
-                                       pop_targets=pop_targets)
+            if 'pop_targets' in p_params:
+                pop_targets = p_params.pop('pop_targets')
+                if pop_targets == 'None':
+                    pop_targets = None
+            # create experiment object for control-perturbation pairing
+            experiment = simulate.Experiment(control_kwargs=c_params,
+                                             perturb_kwargs=p_params)
+            # simulate baseline control dataset to be used for all associated
+            # perturbations
+            if controls is None:
+                controls = experiment.simulate_controls()
+            exp_key = "{}.P{}".format(exp, i + 1)
+            datasets[exp_key] = experiment.run(simulations=sims,
+                                               replications=reps,
+                                               controls=controls,
+                                               pop_targets=pop_targets)
     return datasets, pd.DataFrame(csv_dict).T
     
 
