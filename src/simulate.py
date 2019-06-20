@@ -550,7 +550,8 @@ class Experiment(object):
         self._pca_kws = value
         self._perturb_kwargs = value
 
-    def run(self, simulations=1, replications=1, pop_targets=None):
+    def run(self, simulations=1, replications=1, controls=None,
+            pop_targets=None):
         """
         Simulate control and perturbed datasets under experimental conditions.
 
@@ -563,6 +564,10 @@ class Experiment(object):
             Number of perturbations to simulate for each control dataset.
             Default is 1, and a single perturbation will be simulated for each
             reference control dataset.
+        controls : sc.AnnData, optional
+            A dataset of simulated control cells to perturb. Default is None,
+            and a control dataset will be simulated according to parameters
+            defined by `control_kwargs`.
         pop_targets : list-like, optional
             Populations to target during perturbation. Default is None, and
             perturbed genes will be randomly selected. If a list of populations
@@ -578,7 +583,11 @@ class Experiment(object):
         out = []
         for __ in range(simulations):
             sim_out = []
-            controls = SingleCellDataset(**self.control_kwargs).simulate()
+            if controls is None:
+                controls = SingleCellDataset(**self.control_kwargs).simulate()
+            if not isinstance(controls, sc.AnnData):
+                raise ValueError("Unexpected type for `controls`: {}".format(
+                                  type(controls)))
             markers = population_markers(controls)
             if pop_targets is not None:
                 self.perturb_kwargs['gene_targets'] = []
