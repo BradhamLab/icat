@@ -8,48 +8,55 @@ import simulate
 import utils
 
 def parse_params(sim_params):
-    if sim_params['dispersion'] == 'random':
+    if 'dispersion' in sim_params and sim_params['dispersion'] == 'random':
         sim_params['dispersion'] = simulate.dispersions(sim_params['genes'])
     if 'gene_targets' in sim_params:
         if sim_params['gene_targets'] == 'None':
             sim_params['gene_targets'] = None
     return sim_params
 
+def run_simulation(c_params, p_params, sims, reps, controls=None):
+        c_params = parse_params(c_params)
+        p_params = parse_params(p_params)
+        # not interested in the current functionality of pop_targets in
+        # SingleCellDataset.simulate(), pass to Experiment.run() instead.
+        pop_targets = None
+        if 'pop_targets' in p_params:
+            pop_targets = p_params.pop('pop_targets')
+            if pop_targets == 'None':
+                pop_targets = None
+        # create experiment object for control-perturbation pairing
+        experiment = simulate.Experiment(control_kwargs=c_params,
+                                            perturb_kwargs=p_params)
+        # simulate baseline control dataset to be used for all associated
+        # perturbations
+        if controls is None:
+            controls = experiment.simulate_controls()
+        return (experiment.run(simulations=sims, replications=reps,
+                               controls=controls, pop_targets=pop_targets),
+                controls)
+
 def main(configs, sims=1, reps=1):
     datasets = dict()
     csv_dict = dict()
     for exp, params in configs.items():
-        values = utils.flatten_dict(params)
-        for k, v in values.items():
-            if isinstance(v, list):
-                v = ';'.join([str(x) for x in v])
-            values[k] = v
-        csv_dict[exp] = values  # TODO: look at this with change
-        # parameters defining control space
-        c_params = parse_params(params['controls'])
-        # list of perturbations to apply to control cells 
-        perturb_list = params['perturbations']
+        control_params = params['controls']
+        perturbations = params['perturbations']
         controls = None
-        for i, p_params in enumerate(perturb_list):
-            # not interested in the current functionality of pop_targets in
-            # SingleCellDataset.simulate(), pass to Experiment.run() instead.
-            pop_targets = None
-            if 'pop_targets' in p_params:
-                pop_targets = p_params.pop('pop_targets')
-                if pop_targets == 'None':
-                    pop_targets = None
-            # create experiment object for control-perturbation pairing
-            experiment = simulate.Experiment(control_kwargs=c_params,
-                                             perturb_kwargs=p_params)
-            # simulate baseline control dataset to be used for all associated
-            # perturbations
-            if controls is None:
-                controls = experiment.simulate_controls()
-            exp_key = "{}.P{}".format(exp, i + 1)
-            datasets[exp_key] = experiment.run(simulations=sims,
-                                               replications=reps,
-                                               controls=controls,
-                                               pop_targets=pop_targets)
+        for k, v in perturbations.items():
+            simmed, controls = run_simulation(control_params, v, sims, reps,
+                                              controls=controls)
+            exp_key = "{}.Perturbation{}".format(exp, k)
+            datasets[exp_key] = simmed
+            flattened =  dict(utils.flatten_dict(control_params),
+                              **utils.flatten_dict({'perturbation': v}))
+            for k, v in flattened.items():
+                if isinstance(v, list):
+                    v = ';'.join([str(x) for x in v])
+                flattened[k] = v
+            csv_dict[exp_key] = flattened  # TODO: look at this with change
+        # parameters defining control space
+
     return datasets, pd.DataFrame(csv_dict).T
     
 
