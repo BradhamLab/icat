@@ -381,7 +381,7 @@ def population_markers(andata):
 # TODO: add option to simulate untargetted populations/ add treatment
 # specific populations
 def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
-            percent_perturb=None, pop_sizes=None):
+            percent_perturb=None, pop_sizes=None, percentile=0.5):
     r"""
     Perturb a simulated single-cell dataset.
 
@@ -419,6 +419,9 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
     pop_sizes : list-like, optional
         Desired population sizes for each perturbed population. By default None,
         and the number of cells will be evenly distributed between populations.
+    percentile : float, optional
+        Percentile to use when calculationg dropout probabilities. Default is
+        0.5, and the median will be used.
     
     Returns
     -------
@@ -515,7 +518,7 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
         * np.ones((andata.shape[1], len(pop_columns))) \
         * exp_shifts
     X_, __ = simulate_counts(samples, mus, disp_, len(pop_targets), pop_sizes,
-                             quartile='second')
+                             percentile=percentile)
     return sc.AnnData(X=X_, obs=obs_, var=var_)
 
 
@@ -574,7 +577,7 @@ class Experiment(object):
     def simulate_controls(self):
         return SingleCellDataset(**self.control_kwargs).simulate()
 
-    def new_population(self, adata, n_cells, perturbed=False):
+    def new_population(self, adata, n_cells, perturbed=False, pop_id=None):
         mus = adata.var['Base.Mu'].values
         if perturbed:
             mus *= adata.var['Perturbation.Shift'].values
@@ -588,6 +591,8 @@ class Experiment(object):
         mus[new_markers] *= gamma.rvs(len(new_markers))
         counts = simulate_counts(n_cells, mus, adata.var['dispersion'],
                                  1, n_cells)
+        if pop_id is None:
+            pop_cols = 
         
 
     def run(self, simulations=1, replications=1, controls=None,
@@ -654,7 +659,7 @@ class Experiment(object):
 
 
 def average_exp(scale_factor, n=1):
-    """
+    r"""
     Simulate average expression parameters for simulated genes.
 
     Simulate average expression parameters for simulated genes. Average values
@@ -782,11 +787,11 @@ def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes,
     means_ = mus \
            * np.ones((dispersion.shape[0], populations))\
            * dispersion
-    median_ = np.percentile(means_, percentile)
+    percentile_ = np.percentile(means_, percentile)
 
     # calculate dropout probabilites for each gene in each population
     # a |gene| x |populations| size matrix
-    p_dropout = dropout_probability(means_, median_)
+    p_dropout = dropout_probability(means_, percentile_)
     # simulate counts across populations
     for i in range(populations):
         if i == 0:
