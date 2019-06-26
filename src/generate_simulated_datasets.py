@@ -86,7 +86,10 @@ if __name__ == '__main__':
             for n_rep in range(len(replicates)):
                 data = [replicates[n_rep]['controls'],
                         replicates[n_rep]['treated']]
-                for i, x in enumerate(['Controls.pkl', 'Treated.pkl']):
-                    fn = "{}Sim{}Rep{}-{}".format(each, n_sim + 1, n_rep + 1, x)
-                    with open(os.path.join(out_dir, fn), 'wb') as f:
-                        pkl.dump(data[i], f)
+                exp_dir = os.path.join(out_dir,
+                                       "{}Sim{}Rep{}".format(each, n_sim + 1,
+                                                             n_rep + 1))
+                for i, x in enumerate(['Controls', 'Treated']):
+                    write_dir = os.path.join(exp_dir, x)
+                    data[i].write_csvs(dirname=write_dir)
+                    
