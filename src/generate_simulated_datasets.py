@@ -27,7 +27,7 @@ def run_simulation(c_params, p_params, sims, reps, controls=None):
                 pop_targets = None
         # create experiment object for control-perturbation pairing
         experiment = simulate.Experiment(control_kwargs=c_params,
-                                            perturb_kwargs=p_params)
+                                         perturb_kwargs=p_params)
         # simulate baseline control dataset to be used for all associated
         # perturbations
         if controls is None:
