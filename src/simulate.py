@@ -4,11 +4,15 @@ Module to simulate single-cell RNA sequencing data
 @author: Dakota Y. Hawkins
 @contact: dyh0110@bu.edu 
 """
+import re
+
 import numpy as np
-from scipy import stats
 import pandas as pd
-from scanpy import api as sc
+from scipy import stats
+
 from icat.src import utils
+from scanpy import api as sc
+
 
 class SingleCellDataset():
     """
@@ -578,21 +582,65 @@ class Experiment(object):
         return SingleCellDataset(**self.control_kwargs).simulate()
 
     def new_population(self, adata, n_cells, perturbed=False, pop_id=None):
+        """
+        Add a new populatin to a previously simulated single-cell dataset.
+        
+        Parameters
+        ----------
+        adata : sc.AnnData
+            Previously simulated single-cell dataset.
+        n_cells : int
+            Number of cells to simulate.
+        perturbed : bool, optional
+            Whether the previously simulated dataset is a perturbed dataset.
+            Default is False.
+        pop_id : int, optional
+            Id to denote new population. Default is None, and the id will be
+            incremented from the previously simulated.
+        
+        Returns
+        -------
+        sc.AnnData
+            Previously simulated single-cell dataset with new population
+            appended.
+        
+        Raises
+        ------
+        ValueError
+            Raised is provided `pop_id` is non-unique.
+        """
         mus = adata.var['Base.Mu'].values
         if perturbed:
             mus *= adata.var['Perturbation.Shift'].values
-        previous_markers = population_markers(adata)
+        previous_markers = np.hstack([x for x in\
+                                      population_markers(adata).values()])
         n_markers = np.random.binomial(adata.shape[1],
                                        self.control_kwargs['p_marker'])
         new_markers = np.random.choice(list(set(range(adata.shape[1]))
                                             - set(previous_markers)),
                                        n_markers)
+        pop_markers = np.array([False]*adata.shape[1])
+        pop_markers[new_markers] = True
         gamma = stats.gamma(a=2, scale=2)
         mus[new_markers] *= gamma.rvs(len(new_markers))
-        counts = simulate_counts(n_cells, mus, adata.var['dispersion'],
-                                 1, n_cells)
+        counts, __ = simulate_counts(n_cells, mus,
+                                     adata.var['Base.Dispersion'].values,
+                                     1, [n_cells])
         if pop_id is None:
-            pop_cols = 
+            c_pops = adata.obs['Population'].unique()
+            try:
+                pop_id = c_pops.max() + 1
+            except TypeError:
+                pop_id = len(c_pops) + 1
+        else:
+            if pop_id in adata.obs['Population']:
+                raise ValueError("Non-unique population id: {}".format(pop_id))
+        pop_var = pd.DataFrame({'Pop.{}.Mu'.format(pop_id): mus,
+                                'Pop.{}.Marker'.format(pop_id): pop_markers})
+        pop_obs = pd.DataFrame({'Population': np.array([pop_id]*n_cells)})
+        new_adata = sc.AnnData(X=counts, obs=pop_obs, var=pop_var)
+        return utils.rbind_adata([adata, new_adata])
+        
         
 
     def run(self, simulations=1, replications=1, controls=None,
