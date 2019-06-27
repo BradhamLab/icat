@@ -1,0 +1,44 @@
+configfile: "../../snakemake-config.yaml"
+
+import os
+import json
+import itertools
+
+# this is unecessary, but prevents flagged erros in editors
+try:
+    config
+except NameError:
+    config = {}
+
+FILES = ['X.csv', 'obs.csv', 'var.csv']
+CONDITIONS = ['Controls', 'Treated']
+with open(os.path.join('../../', config['simulations']['json']), 'r') as f:
+    exp_configs = json.load(f)
+EXPERIMENTS = []
+for key, value in exp_configs.items():
+    for perturbation in value['perturbations']:
+        exp_pert = "{}.Perturbation{}".format(key, perturbation)
+        for sim in range(config['simulations']['sims']):
+            for rep in range(config['simulations']['reps']):
+                EXPERIMENTS.append('{}Sim{}Rep{}'.format(exp_pert, sim +1,
+                                                         rep + 1))
+expected_out = ["../../data/processed/simulated/{exp}/{treat}/{out}".\
+                format(exp=exp, treat=treat, out=out)\
+                for exp, treat, out in itertools.product(EXPERIMENTS,
+                                                         CONDITIONS, FILES)]
+rule all:
+    input:
+        expected_out
+
+rule simulate_data:
+    input:
+        input_json=os.path.join('../../', config['simulations']['json']),
+    params:
+        sims=config['simulations']['sims'],
+        reps=config['simulations']['reps'],
+        outdir="../../data/processed/simulated/"
+    output:
+        data=expected_out,
+        csv="../../data/processed/simulated/simulations.csv"
+    script:
+        "../../src/generate_simulated_datasets.py"
