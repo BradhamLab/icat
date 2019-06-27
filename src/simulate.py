@@ -614,6 +614,12 @@ class Experiment(object):
             mus *= adata.var['Perturbation.Shift'].values
         previous_markers = np.hstack([x for x in\
                                       population_markers(adata).values()])
+        # don't set markers to perturbed genes, goal is to simulate an
+        # unperturbed cell identity
+        if perturbed:
+            p_genes = adata.var.index[adata.var['Perturbation.Shift'] != 1]\
+                           .values
+            previous_markers = np.hstack([previous_markers, p_genes])
         n_markers = np.random.binomial(adata.shape[1],
                                        self.control_kwargs['p_marker'])
         new_markers = np.random.choice(list(set(range(adata.shape[1]))
@@ -641,8 +647,6 @@ class Experiment(object):
         new_adata = sc.AnnData(X=counts, obs=pop_obs, var=pop_var)
         return utils.rbind_adata([adata, new_adata])
         
-        
-
     def run(self, simulations=1, replications=1, controls=None,
             pop_targets=None):
         """
