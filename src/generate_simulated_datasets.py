@@ -4,8 +4,8 @@ import pickle as pkl
 
 import pandas as pd
 
-import simulate
-import utils
+from icat.src import simulate
+from icat.src import utils
 
 def parse_params(sim_params):
     if 'dispersion' in sim_params and sim_params['dispersion'] == 'random':
@@ -91,5 +91,5 @@ if __name__ == '__main__':
                                                              n_rep + 1))
                 for i, x in enumerate(['Controls', 'Treated']):
                     write_dir = os.path.join(exp_dir, x)
-                    data[i].write_csvs(dirname=write_dir)
+                    data[i].write_csvs(dirname=write_dir, skip_data=False)
                     
