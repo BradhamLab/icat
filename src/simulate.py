@@ -579,7 +579,10 @@ class Experiment(object):
         self._perturb_kwargs = value
 
     def simulate_controls(self):
-        return SingleCellDataset(**self.control_kwargs).simulate()
+        adata = SingleCellDataset(**self.control_kwargs).simulate()
+        adata.obs.index = adata.obs.index.astype(int)
+        adata.var.index = adata.var.index.astype(int)
+        return adata
 
     def new_population(self, adata, n_cells, perturbed=False, pop_id=None):
         """
