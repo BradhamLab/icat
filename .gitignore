@@ -7,3 +7,5 @@ notebooks/*
 *.pyc
 figures/*
 plots/*
+*.Rhistory
+*.vscode/

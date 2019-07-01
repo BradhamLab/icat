@@ -65,9 +65,6 @@ if __name__ == '__main__':
     icat_kws = {'method_kws': {'sigma': 2, 'reg': 3},
                 'neighbor_kws': {'n_neighbors': None},
                 'cluster_kws': {'resolution': None}}
-    exp_re = re.compile('^Experiment*[0-9]')
-    sim_re = re.compile('Sim*[0-9]')
-    rep_re = re.compile('Rep*[0-9]')
     try:
         snakemake
     except NameError:
@@ -98,9 +95,10 @@ if __name__ == '__main__':
         if key not in ['n_neighbors', 'resolution']:
             value = fit_data[key]
             df['base.' + key] = value
-    df['Experiment'] = exp_re.search(name).group()
-    df['Sim'] = sim_re.search(name).group()
-    df['Rep'] = rep_re.search(name).group()
+    parsed_name = utils.parse_sim(name)
+    df['Experiment'] = parsed_name['Experiment']
+    df['Sim'] = parsed_name['Sim']
+    df['Rep'] = parsed_name['Rep']
     df.to_csv(out_csv)
         
     

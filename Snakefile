@@ -11,7 +11,7 @@ SIMS = id_from_data('data/processed/simulated', 'Controls.pkl')
 
 rule all:
     input:
-        ['data/results/{sim}_icat_performance.csv'.format(sim=sim)\
+        ['figures/clustered/{sim}/seurat.svg'.format(sim=sim)\
         for sim in SIMS]
 
 rule fit_louvain:
@@ -44,4 +44,51 @@ rule evaluate_icat:
         p3='figures/clustered/{sim}/umap_sslouvain.svg'
     script:
         'src/evaluation.py'
+
+rule export_data:
+    input:
+        ctrl='data/processed/simulated/{sim}Controls.pkl',
+        prtb='data/processed/simulated/{sim}Treated.pkl',
+    params:
+        ctrl_dir='data/interim/csvs/{sim}/Controls/',
+        prtb_dir='data/interim/csvs/{sim}/Treated/'
+    output:
+        'data/interim/csvs/{sim}/Controls/X.csv',
+        'data/interim/csvs/{sim}/Controls/obs.csv',
+        'data/interim/csvs/{sim}/Treated/X.csv',
+        'data/interim/csvs/{sim}/Treated/obs.csv'
+    script:
+        'src/to_csv.py'
+
+rule cluster_seurat:
+    input:
+        X_ctrl='data/interim/csvs/{sim}/Controls/X.csv',
+        obs_ctrl='data/interim/csvs/{sim}/Controls/obs.csv',
+        X_prtb='data/interim/csvs/{sim}/Treated/X.csv',
+        obs_prtb='data/interim/csvs/{sim}/Treated/obs.csv'
+    output:
+        csv='data/interim/seurat/{sim}/clustered.csv'
+    script:
+        'src/cluster_seurat.R'
+
+rule evaluate_seurat:
+    input:
+        csv='data/interim/seurat/{sim}/clustered.csv'
+    output:
+        csv='data/results/{sim}_seurat_performance.csv',
+        svg='figures/clustered/{sim}/seurat.svg'
+    params:
+        name='{sim}'
+    script:
+        'src/evaluate_seurat.py'
+
+rule concat_seurat:
+    input:
+        csvs=['data/results/{sim}_seurat_performance.csv'.format(sim=sim)\
+              for sim in SIMS]
+    output:
+        csv='data/final/seurat_performance.csv'
+    script:
+        'src/concatenate_results.py'
+
     
