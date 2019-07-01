@@ -3,6 +3,7 @@ configfile: "../../snakemake-config.yaml"
 import os
 import json
 import itertools
+from icat.src import snakemake_utils as utils
 
 # this is unecessary, but prevents flagged erros in editors
 try:
@@ -10,18 +11,13 @@ try:
 except NameError:
     config = {}
 
+INPUT_JSON = os.path.join('../../', config['simulations']['json'])
 FILES = ['X.csv', 'obs.csv', 'var.csv']
 CONDITIONS = ['Controls', 'Treated']
-with open(os.path.join('../../', config['simulations']['json']), 'r') as f:
-    exp_configs = json.load(f)
-EXPERIMENTS = []
-for key, value in exp_configs.items():
-    for perturbation in value['perturbations']:
-        exp_pert = "{}.Perturbation{}".format(key, perturbation)
-        for sim in range(config['simulations']['sims']):
-            for rep in range(config['simulations']['reps']):
-                EXPERIMENTS.append('{}Sim{}Rep{}'.format(exp_pert, sim +1,
-                                                         rep + 1))
+EXPERIMENTS = utils.get_simulation_ids(INPUT_JSON,
+                                       config['simulations']['sims'],
+                                       config['simulations']['reps'])
+
 expected_out = ["../../data/processed/simulated/{exp}/{treat}/{out}".\
                 format(exp=exp, treat=treat, out=out)\
                 for exp, treat, out in itertools.product(EXPERIMENTS,
@@ -32,7 +28,7 @@ rule all:
 
 rule simulate_data:
     input:
-        input_json=os.path.join('../../', config['simulations']['json']),
+        json=os.path.join('../../', config['simulations']['json']),
     params:
         sims=config['simulations']['sims'],
         reps=config['simulations']['reps'],
