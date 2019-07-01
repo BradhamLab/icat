@@ -1,0 +1,60 @@
+# colors based off of Monokai Pro https://www.monokai.pro/
+lines.color: FCFCFA
+lines.linewidth: 4
+lines.markersize: 10
+lines.solid_capstyle: butt
+
+text.color: FCFCFA
+
+legend.fancybox: true
+axes.prop_cycle: cycler('color', ['78DCE8', 'FF6087', 'FFD766', 'A9DC76', 'FB9767', 'AB9DF2'])
+axes.facecolor: 2C2A2D
+axes.labelcolor: FCFCFA
+axes.labelsize: 20
+axes.axisbelow: true
+axes.grid: false
+axes.edgecolor: 2C2A2D
+axes.linewidth: 3.0
+axes.titlesize: 24
+
+patch.edgecolor: 2C2A2D
+patch.linewidth: 0.5
+
+svg.fonttype: path
+
+grid.linestyle: -
+grid.linewidth: 1.0
+grid.color: 929292
+
+xtick.major.size: 0
+xtick.minor.size: 0
+xtick.labelsize: 16
+xtick.color: 929292
+ytick.major.size: 0
+ytick.minor.size: 0
+ytick.labelsize: 16
+ytick.color: 929292
+
+font.size:18.0
+
+savefig.edgecolor: 2C2A2D
+savefig.facecolor: 2C2A2D
+
+figure.subplot.left: 0.08
+figure.subplot.right: 0.95
+figure.subplot.bottom: 0.07
+figure.subplot.wspace: 0.25
+figure.subplot.hspace: 0.25
+figure.facecolor: 2C2A2D
+figure.edgecolor: 2C2A2D
+figure.figsize: 8.0, 6.0
+
+# boxplot params
+boxplot.flierprops.linewidth: 2.0
+boxplot.boxprops.linewidth: 2.0
+boxplot.capprops.linewidth: 2.0
+boxplot.medianprops.linewidth: 2.0
+boxplot.meanprops.linewidth: 2.0
+
+# colormap settings
+image.cmap : magma

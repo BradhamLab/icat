@@ -3,15 +3,195 @@ import inspect
 import numpy as np
 import pandas as pd
 from sklearn import preprocessing, neighbors
+from sklearn.exceptions import NotFittedError
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis as QDA
+from scipy import stats
 
 from ncfs_expanded import NCFS
 from scanpy import api as sc
 from ssLouvain import ssLouvain
+import pomegranate as pmg
 
 from icat.src import utils
+
+class SignalNoiseModel(object):
+    def __init__(self):
+        """
+        Model technical noise in a single-cell expression profile.
+        
+        Attributes
+        ----------
+        gmm_ : pomegranate.GeneralMixtureModel 
+            Mixture of a Poisson and Normal Distribution to de-convolve noise
+            and signal.
+        range_ : list
+            Two element list with range of possible values. Minimum is always
+            zero, and max is set to the maximum observed value + spread.
+        weights_ : dict
+            Mixing proportions beteen technical noise and actual signal. Keyed
+            by 'noise' and 'signal', respectively.
+
+        Methods
+        -------
+        pdf : Calculate the probability of values within an array.
+        cdf : Calculate cumulative density probabilities of values in an array.
+        threshold: Find the first value such that P(Noise) < P(Signal)
+        """
+        self.gmm_ = None
+        self.range_ = None
+        self.weights_ = None
+
+    def fit(self, X):
+        """
+        Fit data to a mixture model to distinguish signal from technical noise.
+
+        Fit data to a mixture model where technical noise of scRNAseq profiles
+        is modelled using a Poisson distribution, and true expression is
+        modelled as a Gaussian Distribution. 
+        
+        Parameters
+        ----------
+        X : numpy.array
+            Single-cell expression profile across cells. Values are assumed to
+            be log-transformed.
+        
+        Returns
+        -------
+        None
+        """
+        #  use count data for mixtures
+        counts, bins = np.histogram(X, bins=30)
+
+        # estimate center as maximum non-zero count
+        mode_idx = np.where(counts == np.max(counts[1:]))[0][0]
+        # estimate 2SD as center - end value --> find values in normal dist.
+        normal_spread = bins[-1] - bins[mode_idx]
+
+        # find minimum value heuristically expected to be in signal
+        noise_indices = np.where(bins < bins[mode_idx] - normal_spread)[0]
+        if len(noise_indices) > 0:
+            normal_min = bins[noise_indices[-1]]
+        else:
+            # no values below expected threshold, set to first non-zero value
+            normal_min = bins[1]
+
+        # estimate Normal distribution from likely normal samples
+        signal = pmg.NormalDistribution.from_samples(X[X >= normal_min])
+        # estimate Poisson from likely non-normal samples
+        pois_samples = X[X < normal_min]
+        percent_zeros = sum(X == 0) / len(X) 
+        pois_lambda = percent_zeros
+        if len(pois_samples) != 0:
+            pois_lambda = max(np.mean(pois_samples), percent_zeros)
+        noise = pmg.PoissonDistribution(pois_lambda)
+        # instantiate and fit mixture to data
+        gmm = pmg.GeneralMixtureModel([noise, signal])
+        gmm.fit(X)
+        self.gmm_ = gmm
+        self.range_ = [0, np.max(X) + normal_spread]
+        self.weights_ = {'noise': gmm.weights[0], 'signal': gmm.weights[1]}
+        self.params_ = {'noise': {'lambda': gmm.distributions[0].parameters[0]},
+                        'signal': {'mean': gmm.distributions[1].parameters[0],
+                                   'var': gmm.distributions[1].parameters[1]}}
+
+    def __check_fit(self):
+        if self.gmm_ is None:
+            raise NotFittedError("This SignalNoiseModel is not fitted.")
+
+    def pdf(self, X):
+        """
+        Calculate probability density function of the fit mixture model.
+        
+        Parameters
+        ----------
+        X : np.array
+            Linespace defining the domain of the mixture model.
+        
+        Returns
+        -------
+        np.array
+            Array of probabilities along the domain.
+        """
+        self.__check_fit()
+        return self.gmm_.probability(X)
+
+    def cdf(self, X):
+        """
+        Calculate cumulative density function of the fit mixture model.
+        
+        Parameters
+        ----------
+        X : np.array
+            Linespace defining the domain of the mixture model.
+        
+        Returns
+        -------
+        np.array
+            Array of cumulative densities for each provided value.
+        """
+        self.__check_fit()
+        values = np.zeros_like(X)
+        for i, x in enumerate(X):
+            space = np.arange(0, x + 0.01, 0.01)
+            values[i] = np.sum(self.pdf(space)*0.01)
+        return values
+
+    def threshold(self):
+        self.__check_fit()
+        space = np.arange(self.range_[0], self.range_[1], 0.01).reshape(-1, 1)
+        p_x = self.gmm_.predict_proba(space)
+        idx = 0
+        while idx < p_x.shape[0] - 1 and p_x[idx][0] > p_x[idx][1]:
+            idx += 1
+        return space[idx][0]
+
+class SEG():
+    def __init__(self):
+        """Class to find stabley expressed genes between datasets."""
+        self.index_ = None
+
+    def __check_fit(self):
+        if self.index_ is None:
+            raise NotFittedError("This SEG is not fitted.")
+
+    def __corrected_w(self, X, mu_min, mu_max):
+        w = sum(X==0) / X.shape[0]
+        return np.sqrt(w * (np.mean(X) - mu_min) / (mu_max - mu_min))
+
+    def fit(self, X, idxs):
+        mus = np.mean(X, axis=0)
+        mu_min = np.min(mus)
+        mu_max = np.max(mus)
+        metric_array = np.zeros((X.shape[1], 4))
+        for i in range(X.shape[1]):
+            gene_X = X[:, i]
+            mixture = SignalNoiseModel()
+            mixture.fit(gene_X)
+            # high percentage of noise mixing -> unstable
+            mixing = mixture.weights_['noise']
+            # high variance in signal -> unstable
+            signal_var = mixture.params_['signal']['var']
+            # high proportion of zeros -> unstable 
+            w = self.__corrected_w(gene_X, mu_min, mu_max)
+            # high H -> unstable
+            H = stats.kruskal(*[gene_X[idx, :] for idx in idxs]).statistic
+            metric_array[i, :] = np.array([mixing, signal_var, w, H])
+        # get ranks for each gene
+        sorted_ = np.argsort(metric_array, axis=0)
+        ranks = np.empty_like(sorted_)
+        for i in range(metric_array.shape[1]):
+            ranks[sorted_[:, i], i] = np.arange(metric_array.shape[0])
+        ranks = ranks / (ranks.shape[0] - 1)
+        self.index_ = np.mean(ranks, axis=1)
+
+    def get_stable(self, n_genes=100):
+        self.__check_fit()
+        # want lowest
+        return np.argsort(self.index_)[:n_genes]
+
+
 
 
 class icat():

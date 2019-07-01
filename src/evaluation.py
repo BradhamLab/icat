@@ -6,8 +6,21 @@ import pandas as pd
 import os
 import pickle as pkl
 import re
+import json
+from icat.src import utils
+from matplotlib import pyplot as plt
+import seaborn as sns
+from cycler import cycler
+import colorcet as cc
 
-def evaluate_icat(control, treated, label_col, icat_kws):
+try:
+    loc = os.path.dirname(os.path.abspath(__file__))
+    plt.style.use(os.path.join(loc, 'configs/icat.mplstyle'))
+    plt.rc('axes', prop_cycle=cycler('color', cc.glasbey_light))
+except:
+    pass
+
+def evaluate_icat(control, treated, label_col, icat_kws, plot_dir):
     # adjusted rand no NCFS
     # adjusted rand no ssLouvain
     # adjusted rand with both NCFS and ssLouvain
@@ -24,86 +37,68 @@ def evaluate_icat(control, treated, label_col, icat_kws):
         n_neighbors = icat_kws['neighbor_kws']['n_neighbors']
     except KeyError:
         n_neighbors = 15
-    sc.pp.neighbors(control, n_neighbors=n_neighbors)
-    sc.tl.umap(control, min_dist=0.0)
-    sc.tl.louvain(control, key_added='control.louvain')
-    control_only = performance(control, 'Population', 'control.louvain')
-    for key in list(control_only.keys()):
-        value = control_only.pop(key)
-        control_only['base.' + key] = value
+    sc.tl.pca(combined)
     sc.pp.neighbors(combined, n_neighbors=n_neighbors)
     sc.tl.umap(combined, min_dist=0.0)
-    sc.tl.louvain(combined)
+    sc.tl.louvain(combined, key_added='louvain')
     icat = models.icat(**icat_kws)
     icat_clustered = icat.cluster(control, treated)
-    sc.tl.louvain(icat_clustered, key_added='ncfs.louvain')
+    sc.tl.louvain(icat_clustered, key_added='ncfs-louvain')
     measures = []
-    
     # mutual information, homogeneity score, completeness score
     # rand, fowlkes mallows
     for data, col in zip([combined, icat_clustered, icat_clustered],
-                         ['louvain', 'ncfs.louvain', 'sslouvain']):
-        split_perf = performance(data, 'Population', col)
+                         ['louvain', 'ncfs-louvain', 'sslouvain']):
+        print(data)
+        split_perf = utils.performance(data, 'Population', col)
         split_perf['method'] = col
-        measures.append(dict(split_perf, **control_only))
-
+        measures.append(split_perf)
+        utils.plot_umap(data, col, 'Population')
+        plt.savefig(os.path.join(plot_dir, 'umap_' + col + '.svg'))
+        plt.cla()
+        plt.clf()
+        plt.close()
     return measures
 
-def performance(adata, true_col, pred_col):
-    known = adata.obs[true_col].astype(str)
-    pred = adata.obs[pred_col].astype(str)
-    mi = metrics.adjusted_mutual_info_score(known, pred)
-    homog = metrics.homogeneity_score(known, pred)
-    comp = metrics.completeness_score(known, pred)
-    ar = metrics.adjusted_rand_score(known, pred)
-    fm = metrics.fowlkes_mallows_score(known, pred)
-    measures = {'adjusted.mutual.info': mi,
-                'homogeneity': homog,
-                'completeness': comp,
-                'adjusted.rand': ar,
-                'fowlkes.mallows': fm}
-    return measures
 
 if __name__ == '__main__':
-    data_dir = 'data/processed/simulated'
-    control_csv = 'data/interim/control_louvain_fits.csv'
-    out_csv = 'data/results/icat_performance.csv'
-    control_str = 'Controls'
-    perturb_str = 'Treated'
     icat_kws = {'method_kws': {'sigma': 2, 'reg': 3},
-                'neighbor_kws': {'n_neighbors': None}}
-    exp_re = re.compile('^Experiment*[0-9]')
-    sim_re = re.compile('Sim*[0-9]')
-    rep_re = re.compile('Rep*[0-9]')
+                'neighbor_kws': {'n_neighbors': None},
+                'cluster_kws': {'resolution': None}}
     try:
         snakemake
     except NameError:
         snakemake = None
     if snakemake is not None:
-        data_dir = snakemake.params['data']
-        control_csv = snakemake.input['csv']
+        ctrl = snakemake.input['ctrl']
+        prtb = snakemake.input['prtb']
+        fit_json = snakemake.input['json']
+        name = snakemake.params['name']
+        plot_dir = snakemake.params['plotdir']
         out_csv = snakemake.output['csv']
-        control_str = snakemake.params['ctrl_str']
-        perturb_str = snakemake.params['prtb_str']
-    fit_data = pd.read_csv(control_csv, index_col=0)
-    out_list = []
-    for exp in fit_data.index.values:
-        control_fn = os.path.join(data_dir, exp)
-        perturb_fn = os.path.join(data_dir, 
-                                  exp.replace(control_str, perturb_str))
-        with open(control_fn, 'rb') as f:
-            control_data = pkl.load(f)
-        with open(perturb_fn, 'rb') as f:
-            perturb_data = pkl.load(f)
-        icat_kws['neighbor_kws']['n_neighbors']\
-        = int(fit_data.loc[exp, 'n_neighbors'])
-        perf = evaluate_icat(control_data, perturb_data, 'Population', icat_kws)
-        df = pd.DataFrame(perf)
-        df['Experiment'] = exp_re.search(exp).group()
-        df['Sim'] = sim_re.search(exp).group()
-        df['Rep'] = rep_re.search(exp).group()
-        out_list.append(df)
-    out_df = pd.concat(out_list, axis=0).reset_index(drop=True)
-    out_df.to_csv(out_csv)
+    if not os.path.exists(plot_dir):
+        os.mkdir(plot_dir)
+    with open(ctrl, 'rb') as f:
+        control_data = pkl.load(f)
+    with open(prtb, 'rb') as f:
+        perturb_data = pkl.load(f)
+    with open(fit_json, 'r') as f:
+        fit_data = json.load(f)
+    control_data.obs['Population'] = control_data.obs['Population'].astype(str)
+    perturb_data.obs['Population'] = control_data.obs['Population'].astype(str)
+    icat_kws['neighbor_kws']['n_neighbors'] = fit_data['n_neighbors']
+    icat_kws['cluster_kws']['resolution'] = fit_data['resolution']
+    perf = evaluate_icat(control_data, perturb_data, 'Population', icat_kws,
+                         plot_dir)
+    df = pd.DataFrame(perf)
+    for key in list(fit_data.keys()):
+        if key not in ['n_neighbors', 'resolution']:
+            value = fit_data[key]
+            df['base.' + key] = value
+    parsed_name = utils.parse_sim(name)
+    df['Experiment'] = parsed_name['Experiment']
+    df['Sim'] = parsed_name['Sim']
+    df['Rep'] = parsed_name['Rep']
+    df.to_csv(out_csv)
         
     
