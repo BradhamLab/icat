@@ -102,11 +102,15 @@ def flatten_dict(d, parent_key='', sep='.'):
 
 
 def rbind_adata(adata_lists):
+    df_cols = [adata_lists[0].var.columns] + [None]*(len(adata_lists) - 1)
+    for i, adata in enumerate(adata_lists[1:]):
+        df_cols[i + 1] = adata.var.columns.difference(df_cols[i])
     combined = sc.AnnData(X=np.vstack([each.X for each in adata_lists]),
-                        obs=pd.concat([each.obs for each in adata_lists],
-                                      axis=0,
-                                      sort=False).reset_index(drop=True),
-                        var=adata_lists[0].var)
+                          obs=pd.concat([each.obs for each in adata_lists],
+                                        axis=0,
+                                        sort=False).reset_index(drop=True),
+                          var=pd.concat([each.var[col] for each, col\
+                                        in zip(adata_lists, df_cols)], axis=1))
     return combined
 
 

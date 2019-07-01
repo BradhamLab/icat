@@ -4,11 +4,15 @@ Module to simulate single-cell RNA sequencing data
 @author: Dakota Y. Hawkins
 @contact: dyh0110@bu.edu 
 """
+import re
+
 import numpy as np
-from scipy import stats
 import pandas as pd
-from scanpy import api as sc
+from scipy import stats
+
 from icat.src import utils
+from scanpy import api as sc
+
 
 class SingleCellDataset():
     """
@@ -42,7 +46,8 @@ class SingleCellDataset():
         Simulate a single-cell RNA sequencing dataset with the set parameters.
     """
     def __init__(self, samples=200, genes=1000, populations=2,
-                 pop_sizes=None, p_marker=None, dispersion=1, scalar=100):
+                 pop_sizes=None, p_marker=None, dispersion=1, scalar=100,
+                 percentile=0.5):
         """
         Parameters
         ----------
@@ -68,6 +73,10 @@ class SingleCellDataset():
             Scalar value multiplied to a beta-distributed random variable to
             estimate average gene expression for a simualted gene. Default is
             100.
+        percentile : float, optional
+            Float value between 0 and 1 denoting which percentile to use when
+            calculating dropout probabilities. Default is 0.5, and the median
+            will be calculated. 
         """
         self.samples = samples
         self.genes = genes
@@ -76,6 +85,7 @@ class SingleCellDataset():
         self.p_marker = p_marker
         self.dispersion = dispersion
         self.scalar = scalar
+        self.percentile = percentile
         
     @property
     def samples(self):
@@ -207,6 +217,19 @@ class SingleCellDataset():
             raise ValueError("Expected `scalar` value > 1: values less than one"
                              " will result in average gene expressions < 1.")
         self._scalar = value
+    
+    @property
+    def percentile(self):
+        """Get percentile parameter."""
+        return self._percentile
+    
+    @percentile.setter
+    def percentile(self, value):
+        if not isinstance(value, float):
+            raise ValueError("Expected float value for `percentile` parameter.")
+        if not 0 <= value <= 1:
+            raise ValueError("`percentile` must be a float between 0 and 1.")
+        self._percentile = value
 
     def __repr__(self):
         """Return string representation of SingleCellDataset object."""
@@ -222,7 +245,8 @@ class SingleCellDataset():
                     'pop_sizes': self.pop_sizes,
                     'p_marker': self.p_marker,
                     'dispersion': self.dispersion,
-                    'scalar': self.scalar}
+                    'scalar': self.scalar,
+                    'percentile': self.percentile}
         return out_dict
 
     def simulate(self):
@@ -327,7 +351,8 @@ class SingleCellDataset():
             var['Pop.{}.Mu'.format(i + 1)] = mus[:, i]
         
         X, labels = simulate_counts(self.samples, mus, self.dispersion,
-                                    self.populations, self.pop_sizes)
+                                    self.populations, self.pop_sizes,
+                                    percentile=self.percentile)
         obs['Population'] = labels
         return sc.AnnData(X=X, obs=obs, var=var)
 
@@ -360,7 +385,7 @@ def population_markers(andata):
 # TODO: add option to simulate untargetted populations/ add treatment
 # specific populations
 def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
-            percent_perturb=None, pop_sizes=None):
+            percent_perturb=None, pop_sizes=None, percentile=0.5):
     r"""
     Perturb a simulated single-cell dataset.
 
@@ -398,6 +423,9 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
     pop_sizes : list-like, optional
         Desired population sizes for each perturbed population. By default None,
         and the number of cells will be evenly distributed between populations.
+    percentile : float, optional
+        Percentile to use when calculationg dropout probabilities. Default is
+        0.5, and the median will be used.
     
     Returns
     -------
@@ -487,14 +515,14 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
     pop_columns = ['Pop.{}.Mu'.format(x) for x in pop_targets]
     # calculate control median of averages to ensure equal dropout rates between
     # datasets.
-    control_median_ = np.median(andata.var[pop_columns].values\
-                    * np.ones((andata.shape[1], len(pop_targets)))\
-                    * disp_)
+    # control_median_ = np.median(andata.var[pop_columns].values\
+    #                 * np.ones((andata.shape[1], len(pop_targets)))\
+    #                 * disp_)
     mus = andata.var[pop_columns].values \
         * np.ones((andata.shape[1], len(pop_columns))) \
         * exp_shifts
     X_, __ = simulate_counts(samples, mus, disp_, len(pop_targets), pop_sizes,
-                             median=control_median_)
+                             percentile=percentile)
     return sc.AnnData(X=X_, obs=obs_, var=var_)
 
 
@@ -550,7 +578,80 @@ class Experiment(object):
         self._pca_kws = value
         self._perturb_kwargs = value
 
-    def run(self, simulations=1, replications=1, pop_targets=None):
+    def simulate_controls(self):
+        adata = SingleCellDataset(**self.control_kwargs).simulate()
+        adata.obs.index = adata.obs.index.astype(int)
+        adata.var.index = adata.var.index.astype(int)
+        return adata
+
+    def new_population(self, adata, n_cells, perturbed=False, pop_id=None):
+        """
+        Add a new populatin to a previously simulated single-cell dataset.
+        
+        Parameters
+        ----------
+        adata : sc.AnnData
+            Previously simulated single-cell dataset.
+        n_cells : int
+            Number of cells to simulate.
+        perturbed : bool, optional
+            Whether the previously simulated dataset is a perturbed dataset.
+            Default is False.
+        pop_id : int, optional
+            Id to denote new population. Default is None, and the id will be
+            incremented from the previously simulated.
+        
+        Returns
+        -------
+        sc.AnnData
+            Previously simulated single-cell dataset with new population
+            appended.
+        
+        Raises
+        ------
+        ValueError
+            Raised is provided `pop_id` is non-unique.
+        """
+        mus = adata.var['Base.Mu'].values
+        if perturbed:
+            mus *= adata.var['Perturbation.Shift'].values
+        previous_markers = np.hstack([x for x in\
+                                      population_markers(adata).values()])
+        # don't set markers to perturbed genes, goal is to simulate an
+        # unperturbed cell identity
+        if perturbed:
+            p_genes = adata.var.index[adata.var['Perturbation.Shift'] != 1]\
+                           .values
+            previous_markers = np.hstack([previous_markers, p_genes])
+        n_markers = np.random.binomial(adata.shape[1],
+                                       self.control_kwargs['p_marker'])
+        new_markers = np.random.choice(list(set(range(adata.shape[1]))
+                                            - set(previous_markers)),
+                                       n_markers)
+        pop_markers = np.array([False]*adata.shape[1])
+        pop_markers[new_markers] = True
+        gamma = stats.gamma(a=2, scale=2)
+        mus[new_markers] *= gamma.rvs(len(new_markers))
+        counts, __ = simulate_counts(n_cells, mus,
+                                     adata.var['Base.Dispersion'].values,
+                                     1, [n_cells])
+        if pop_id is None:
+            c_pops = adata.obs['Population'].unique()
+            try:
+                pop_id = c_pops.max() + 1
+            except TypeError:
+                pop_id = len(c_pops) + 1
+        else:
+            if pop_id in adata.obs['Population']:
+                raise ValueError("Non-unique population id: {}".format(pop_id))
+        pop_var = pd.DataFrame({'Pop.{}.Mu'.format(pop_id): mus,
+                                'Pop.{}.Marker'.format(pop_id): pop_markers})
+        pop_obs = pd.DataFrame({'Population': np.array([pop_id]*n_cells)})
+        new_adata = sc.AnnData(X=counts, obs=pop_obs, var=pop_var)
+        return utils.rbind_adata([adata, new_adata])
+        
+    def run(self, simulations=1, replications=1, controls=None,
+            pop_targets=None):
         """
         Simulate control and perturbed datasets under experimental conditions.
 
@@ -563,6 +664,10 @@ class Experiment(object):
             Number of perturbations to simulate for each control dataset.
             Default is 1, and a single perturbation will be simulated for each
             reference control dataset.
+        controls : sc.AnnData, optional
+            A dataset of simulated control cells to perturb. Default is None,
+            and a control dataset will be simulated according to parameters
+            defined by `control_kwargs`.
         pop_targets : list-like, optional
             Populations to target during perturbation. Default is None, and
             perturbed genes will be randomly selected. If a list of populations
@@ -578,7 +683,11 @@ class Experiment(object):
         out = []
         for __ in range(simulations):
             sim_out = []
-            controls = SingleCellDataset(**self.control_kwargs).simulate()
+            if controls is None:
+                controls = self.simulate_controls()
+            if not isinstance(controls, sc.AnnData):
+                raise ValueError("Unexpected type for `controls`: {}".format(
+                                  type(controls)))
             markers = population_markers(controls)
             if pop_targets is not None:
                 self.perturb_kwargs['gene_targets'] = []
@@ -605,7 +714,7 @@ class Experiment(object):
 
 
 def average_exp(scale_factor, n=1):
-    """
+    r"""
     Simulate average expression parameters for simulated genes.
 
     Simulate average expression parameters for simulated genes. Average values
@@ -651,7 +760,7 @@ def sigmoid(x):
 
 
 def dropout_probability(mu, median_avg, beta_0=-1.5):
-    """
+    r"""
     Estimate the probability of dropout for a given gene.
 
     Estimate the probability of a dropout even using a sigmoid function, and
@@ -682,8 +791,8 @@ def dropout_probability(mu, median_avg, beta_0=-1.5):
     return 1 - sigmoid(x)
 
 def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes,
-                    median=None):
-    """
+                    percentile=0.5):
+    r"""
     Simulate counts across genes for a set number of samples.
     
     Parameters
@@ -700,6 +809,9 @@ def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes,
         Number of populations to sample.
     pop_sizes : numpy.ndarray
         list of samples per population.
+    percentile : float, optional
+        Which percentile to use when calculating dropout probabilities. Default
+        is 0.5, and the median will be used.
     
     Returns
     -------
@@ -723,23 +835,25 @@ def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes,
     and dispersion.shape[0] < dispersion.shape[1]:
         raise ValueError("Expected column vector for dispersion. Received "
                          "vector with shape {}.".format(dispersion.shape))
-    # calculate expression averages across populations
-    # a |gene| x |populations| size matrix
-    means_ = mus * np.ones_like(mus)
-    if median is None:
-        # calculate dataset-wide median of means
-        median_ = np.median(means_)
-    else:
-        median_ = median
+    if len(mus.shape) == 1:
+        mus = mus.reshape((-1, 1))
+    # calculate theoretical expression averages across populations
+    # |gene| x |populations| matrix
+    means_ = mus \
+           * np.ones((dispersion.shape[0], populations))\
+           * dispersion
+    percentile_ = np.percentile(means_, percentile)
+
     # calculate dropout probabilites for each gene in each population
     # a |gene| x |populations| size matrix
-    p_dropout = dropout_probability(means_, median_)
+    p_dropout = dropout_probability(means_, percentile_)
     # simulate counts across populations
     for i in range(populations):
         if i == 0:
             start = 0
         else:
             start = pop_sizes[:i].sum()
+        # simulate gene counts for each cell in population i
         for j in range(mus.shape[0]):
             dist = stats.nbinom(dispersion[j, 0],
                                 1 - mus[j, i] / (mus[j, i] + dispersion[j, 0]))

@@ -91,7 +91,10 @@ class SignalNoiseModel(object):
         gmm.fit(X)
         self.gmm_ = gmm
         self.range_ = [0, np.max(X) + normal_spread]
-        self.weights_ = {'noise': gmm.weights[0], 'signal': gmm.weights[1]}
+        # exponentiate log weights, will likely change depending on
+        # pomegrante 
+        self.weights_ = {'noise': np.exp(gmm.weights[0]),
+                         'signal': np.exp(gmm.weights[1])}
         self.params_ = {'noise': {'lambda': gmm.distributions[0].parameters[0]},
                         'signal': {'mean': gmm.distributions[1].parameters[0],
                                    'var': gmm.distributions[1].parameters[1]}}
@@ -160,7 +163,11 @@ class SEG():
         w = sum(X==0) / X.shape[0]
         return np.sqrt(w * (np.mean(X) - mu_min) / (mu_max - mu_min))
 
-    def fit(self, X, idxs):
+    def fit(self, datasets, ds_col):
+        combined = utils.rbind_adata(datasets)
+        idxs = [np.where(combined.obs[ds_col] == x)[0]\
+                for x in combined.obs[ds_col].unique()]
+        X = combined.X
         mus = np.mean(X, axis=0)
         mu_min = np.min(mus)
         mu_max = np.max(mus)
@@ -168,7 +175,7 @@ class SEG():
         for i in range(X.shape[1]):
             gene_X = X[:, i]
             mixture = SignalNoiseModel()
-            mixture.fit(gene_X)
+            mixture.fit(np.log2(gene_X + 1))
             # high percentage of noise mixing -> unstable
             mixing = mixture.weights_['noise']
             # high variance in signal -> unstable
@@ -176,7 +183,7 @@ class SEG():
             # high proportion of zeros -> unstable 
             w = self.__corrected_w(gene_X, mu_min, mu_max)
             # high H -> unstable
-            H = stats.kruskal(*[gene_X[idx, :] for idx in idxs]).statistic
+            H = stats.kruskal(*[gene_X[idx] for idx in idxs]).statistic
             metric_array[i, :] = np.array([mixing, signal_var, w, H])
         # get ranks for each gene
         sorted_ = np.argsort(metric_array, axis=0)
@@ -190,8 +197,6 @@ class SEG():
         self.__check_fit()
         # want lowest
         return np.argsort(self.index_)[:n_genes]
-
-
 
 
 class icat():
@@ -352,6 +357,8 @@ class icat():
     def cluster(self, controls, perturbed):
         if not isinstance(controls, sc.AnnData):
             raise ValueError("Expected AnnData objecto for `controls`.")
+        if self.treatment_col not in controls.obs.columns:
+            controls.obs[self.treatment_col] = 'Controls'
         if not isinstance(perturbed, sc.AnnData):
             if isinstance(perturbed, list):
                 if not all([isinstance(x, sc.AnnData) for x in perturbed]):
@@ -361,10 +368,7 @@ class icat():
                 for x in perturbed]):
                     raise ValueError("Gene columns do not match between control"
                                      " and perturbed cells.")
-                perturbed = sc.AnnData(
-                                X=np.vstack([each.X for each in perturbed]),
-                                obs=pd.concat([each.obs for each in perturbed]),
-                                var=controls.var)
+                perturbed = utils.rbind_adata(perturbed)
             else:
                 raise ValueError("Unexpected input type for `perturbed`: "
                                 "{}. Expected list of sc.AnnData objects or "
@@ -396,6 +400,10 @@ class icat():
             model = LDA(**self.method_kws)
         else:
             model = QDA(**self.method_kws)
+        # find genes stably expressed across datasets
+        if self.method == 'ncfs':
+            seg_model = SEG()
+            seg_model.fit([controls] + [perturbed], self.treatment_col)
         # scale cells to 0 centered with unit variance
         fit_X = scaler.transform(controls.X).astype(np.float64)
         perturb_X = scaler.transform(perturbed.X).astype(np.float64)
@@ -415,8 +423,17 @@ class icat():
                       'All genes will be used. Try lowering threshold value for'
                       ' future runs.')
                 selected = np.arange(len(model.coef_))
+            stable_genes = seg_model.get_stable(len(selected))
+            # this is currently selecting stable genes with NCFS weights
+            # applied, maybe better to select unweighted genes.
+            selected = np.hstack((selected, stable_genes))
             X_ = X_[:, selected]
+            controls.var['ncfs.weights'] = model.coef_
             var_ = controls.var.iloc[selected, :]
+            # var_['ncfs.weights'] = model.coef_[selected]
+            # var_['status'] = 'stable'
+            # var_['status'][var_['ncfs.weights']\
+            #                > self.weight_threshold] = 'marker'
         elif self.method == 'lda':
             var_ = pd.DataFrame(['LDA.{}'.format(i + 1)\
                                for i in range(X_.shape[1])],
@@ -456,8 +473,7 @@ if __name__ == '__main__':
     controls = data_model.simulate()
     perturbed = simulate.perturb(controls)
     perturbed.obs['treatment'] = 'ayo'
-    model = icat(method='lda', method_kws={'shrinkage': 0.75, 'solver':'eigen'},
+    model = icat(method='ncfs', method_kws={'reg': 3, 'sigma': 2},
                  neighbor_kws={'n_neighbors': 100},
-                 sslouvain_kws={'immutable': True, 'precluster': True},
-                 cluster_kws={'resolution': 1.25})
+                 sslouvain_kws={'immutable': True, 'precluster': False})
     out = model.cluster(controls, perturbed)

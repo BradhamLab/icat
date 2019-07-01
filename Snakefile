@@ -24,16 +24,16 @@ rule all:
 
 rule simulate_data:
     input:
-        input_json=os.path.join('../../', config['simulations']['json']),
+        json=config['simulations']['json'],
     params:
         sims=config['simulations']['sims'],
         reps=config['simulations']['reps'],
         outdir="data/processed/simulated/"
     output:
         data=SIMULATED,
-        csv="../../data/processed/simulated/simulations.csv"
+        csv="data/processed/simulated/simulations.csv"
     script:
-        "../../src/generate_simulated_datasets.py"
+        "src/generate_simulated_datasets.py"
 
 rule fit_louvain:
     input:
@@ -84,10 +84,29 @@ rule cluster_seurat:
         prtb_obs='data/processed/simulated/{exp}/Treated/obs.csv',
         prtb_var='data/processed/simulated/{exp}/Treated/var.csv',
         json='data/interim/fits/{exp}Controls_fits.json'
-    output:
-        csv='data/interim/seurat/{exp}/clustered.csv'
     params:
         name='{sim}'
+    output:
+        csv='data/processed/clustered/seurat/{exp}/clustered.csv'
     script:
         'src/cluster_seurat.R'
+
+rule cluster_scanorama:
+    input:
+        ctrl_X='data/processed/simulated/{exp}/Controls/X.csv',
+        ctrl_obs='data/processed/simulated/{exp}/Controls/obs.csv',
+        ctrl_var='data/processed/simulated/{exp}/Controls/var.csv',
+        prtb_X='data/processed/simulated/{exp}/Treated/X.csv',
+        prtb_obs='data/processed/simulated/{exp}/Treated/obs.csv',
+        prtb_var='data/processed/simulated/{exp}/Treated/var.csv',
+        json='data/interim/fits/{exp}Controls_fits.json'
+    output:
+        X='data/processed/clustered/scanorama/{exp}/X.csv',
+        obs='data/processed/clustered/scanorama/{exp}/obs.csv',
+        var='data/processed/clustered/scanorama/{exp}/var.csv'
+    params:
+        name='{exp}'
+        outdir='data/processed/clustered/scanorama/{exp}/'
+    script:
+        'src/run_scanorama.py'
     
