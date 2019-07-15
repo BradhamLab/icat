@@ -58,25 +58,31 @@ if __name__ == '__main__':
     except NameError:
         snakemake = None
     if snakemake is not None:
-        ctrl = snakemake.input['ctrl']
-        prtb = snakemake.input['prtb']
+        ctrl_X = snakemake.input['ctrl_X']
+        ctrl_obs = snakemake.input['ctrl_obs']
+        ctrl_var = snakemake.input['ctrl_var']
+        prtb_X = snakemake.input['prtb_X']
+        prtb_obs = snakemake.input['prtb_obs']
+        prtb_var = snakemake.input['prtb_var']
         label_col = snakemake.params['label']
         plot_dir = snakemake.params['plotdir']
         out_json = snakemake.output['json']
         
     sc.settings.figdir = plot_dir
-    with open(ctrl, 'rb') as f:
-        adata = pkl.load(f)
-    with open(prtb, 'rb') as f:
-        perturbed = pkl.load(f)
+    ctrl = sc.AnnData(X=pd.read_csv(ctrl_X, header=None).values,
+                      obs=pd.read_csv(ctrl_obs, index_col=0),
+                      var=pd.read_csv(ctrl_var, index_col=0))
+    prtb = sc.AnnData(X=pd.read_csv(prtb_X, header=None).values,
+                      obs=pd.read_csv(prtb_obs, index_col=0),
+                      var=pd.read_csv(prtb_var, index_col=0))
     
-    performance = main(adata, label_col)
+    performance = main(ctrl, label_col)
     names = ['controls.svg', 'treated.svg', "combined.svg"]
-    adata.obs['Treatment'] = 'Control'
-    perturbed.obs['Treatment'] = 'Perturbed'
-    combined = utils.rbind_adata([adata, perturbed])
+    ctrl.obs['Treatment'] = 'Control'
+    prtb.obs['Treatment'] = 'Perturbed'
+    combined = utils.rbind_adata([ctrl, prtb])
     # add dakota style formatting
-    for data, plotfile in zip([adata, perturbed, combined], names):
+    for data, plotfile in zip([ctrl, prtb, combined], names):
         fn = os.path.join(plot_dir, 'umap_' + plotfile)
         plot_cells(data, int(performance['n_neighbors']), fn)
         plt.cla()
