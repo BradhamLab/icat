@@ -70,18 +70,24 @@ if __name__ == '__main__':
     except NameError:
         snakemake = None
     if snakemake is not None:
-        ctrl = snakemake.input['ctrl']
-        prtb = snakemake.input['prtb']
+        ctrl_X = snakemake.input['ctrl_X']
+        ctrl_obs = snakemake.input['ctrl_obs']
+        ctrl_var = snakemake.input['ctrl_var']
+        prtb_X = snakemake.input['prtb_X']
+        prtb_obs = snakemake.input['prtb_obs']
+        prtb_var = snakemake.input['prtb_var']
         fit_json = snakemake.input['json']
         name = snakemake.params['name']
         plot_dir = snakemake.params['plotdir']
         out_csv = snakemake.output['csv']
     if not os.path.exists(plot_dir):
         os.mkdir(plot_dir)
-    with open(ctrl, 'rb') as f:
-        control_data = pkl.load(f)
-    with open(prtb, 'rb') as f:
-        perturb_data = pkl.load(f)
+    control_data = sc.AnnData(X=pd.read_csv(ctrl_X, header=None).values,
+                              obs=pd.read_csv(ctrl_obs, index_col=0),
+                              var=pd.read_csv(ctrl_var, index_col=0))
+    perturb_data = sc.AnnData(X=pd.read_csv(prtb_X, header=None).values,
+                              obs=pd.read_csv(prtb_obs, index_col=0),
+                              var=pd.read_csv(prtb_var, index_col=0))
     with open(fit_json, 'r') as f:
         fit_data = json.load(f)
     control_data.obs['Population'] = control_data.obs['Population'].astype(str)
