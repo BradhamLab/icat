@@ -105,7 +105,7 @@ rule cluster_scanorama:
         obs='data/processed/clustered/scanorama/{exp}/obs.csv',
         var='data/processed/clustered/scanorama/{exp}/var.csv'
     params:
-        name='{exp}'
+        name='{exp}',
         outdir='data/processed/clustered/scanorama/{exp}/'
     script:
         'src/run_scanorama.py'
