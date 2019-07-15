@@ -19,8 +19,12 @@ SIMULATED = ["data/processed/simulated/{exp}/{treat}/{out}".\
 
 rule all:
     input:
-        ['data/results/{exp}_icat_performance.csv'.format(exp=exp)\
-        for exp in EXPERIMENTS]
+        ['data/results/clustered/icat/{exp}/performance.csv'.format(exp=exp)\
+            for exp in EXPERIMENTS],
+        ['data/results/clustered/seurat/{exp}/clustered.csv'.format(exp=exp)\
+            for exp in EXPERIMENTS],
+        ['data/results/clustered/scanorama/{exp}/obs.csv'.format(exp=exp)\
+            for exp in EXPERIMENTS],
 
 rule simulate_data:
     input:
@@ -65,15 +69,16 @@ rule cluster_icat:
         json='data/interim/fits/{exp}Controls_fits.json'
     params:
         name='{exp}',
-        plotdir='figures/clustered/{exp}/'
+        plotdir='figures/clustered/{exp}/',
+        outdir='data/results/clustered/icat/{exp}',
     output:
-        csv='data/results/{exp}_icat_performance.csv',
+        csv='data/results/clustered/icat/{exp}/performance.csv',
+        obs='data/results/clustered/icat/{exp}/obs.csv',
         p1='figures/clustered/{exp}/umap_louvain.svg',
         p2='figures/clustered/{exp}/umap_ncfs-louvain.svg',
         p3='figures/clustered/{exp}/umap_sslouvain.svg'
     script:
         'src/evaluation.py'
-
 
 rule cluster_seurat:
     input:
@@ -85,9 +90,9 @@ rule cluster_seurat:
         prtb_var='data/processed/simulated/{exp}/Treated/var.csv',
         json='data/interim/fits/{exp}Controls_fits.json'
     params:
-        name='{sim}'
+        name='{exp}'
     output:
-        csv='data/processed/clustered/seurat/{exp}/clustered.csv'
+        csv='data/results/clustered/seurat/{exp}/clustered.csv'
     script:
         'src/cluster_seurat.R'
 
@@ -101,12 +106,12 @@ rule cluster_scanorama:
         prtb_var='data/processed/simulated/{exp}/Treated/var.csv',
         json='data/interim/fits/{exp}Controls_fits.json'
     output:
-        X='data/processed/clustered/scanorama/{exp}/X.csv',
-        obs='data/processed/clustered/scanorama/{exp}/obs.csv',
-        var='data/processed/clustered/scanorama/{exp}/var.csv'
+        X='data/results/clustered/scanorama/{exp}/X.csv',
+        obs='data/results/clustered/scanorama/{exp}/obs.csv',
+        var='data/results/clustered/scanorama/{exp}/var.csv'
     params:
         name='{exp}',
-        outdir='data/processed/clustered/scanorama/{exp}/'
+        outdir='data/results/clustered/scanorama/{exp}/'
     script:
         'src/run_scanorama.py'
     
