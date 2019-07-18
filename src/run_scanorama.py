@@ -50,7 +50,7 @@ if __name__ == '__main__':
                                           index_col=0),
                           var=pd.read_csv(snakemake.input['prtb_var'],
                                           index_col=0))
-        with open(snakemake.params['json'], 'r') as f:
+        with open(snakemake.input['json'], 'r') as f:
             fit_data = json.load(f)
         k = fit_data['n_neighbors']
         out = main([ctrl, prtb], k)
