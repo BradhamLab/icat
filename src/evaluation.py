@@ -1,17 +1,18 @@
-from scanpy import api as sc
-from sklearn import metrics
-from icat.src import models
-import numpy as np
-import pandas as pd
+import json
 import os
 import pickle as pkl
 import re
-import json
-from icat.src import utils
-from matplotlib import pyplot as plt
+
+import numpy as np
+import pandas as pd
 import seaborn as sns
 from cycler import cycler
+from matplotlib import pyplot as plt
+from sklearn import metrics
+
 import colorcet as cc
+from icat.src import models, utils
+from scanpy import api as sc
 
 try:
     loc = os.path.dirname(os.path.abspath(__file__))
@@ -58,7 +59,7 @@ def evaluate_icat(control, treated, label_col, icat_kws, plot_dir):
         plt.cla()
         plt.clf()
         plt.close()
-    return measures
+    return measures, icat_clustered
 
 
 if __name__ == '__main__':
@@ -80,6 +81,7 @@ if __name__ == '__main__':
         name = snakemake.params['name']
         plot_dir = snakemake.params['plotdir']
         out_csv = snakemake.output['csv']
+        out_dir = snakemake.params['outdir']
     if not os.path.exists(plot_dir):
         os.mkdir(plot_dir)
     control_data = sc.AnnData(X=pd.read_csv(ctrl_X, header=None).values,
@@ -94,8 +96,9 @@ if __name__ == '__main__':
     perturb_data.obs['Population'] = control_data.obs['Population'].astype(str)
     icat_kws['neighbor_kws']['n_neighbors'] = fit_data['n_neighbors']
     icat_kws['cluster_kws']['resolution'] = fit_data['resolution']
-    perf = evaluate_icat(control_data, perturb_data, 'Population', icat_kws,
-                         plot_dir)
+    perf, adata = evaluate_icat(control_data, perturb_data, 'Population',
+                                icat_kws, plot_dir)
+    adata.write_csvs(dirname=snakemake.params['outdir'], skip_data=False)
     df = pd.DataFrame(perf)
     for key in list(fit_data.keys()):
         if key not in ['n_neighbors', 'resolution']:
@@ -106,5 +109,3 @@ if __name__ == '__main__':
     df['Sim'] = parsed_name['Sim']
     df['Rep'] = parsed_name['Rep']
     df.to_csv(out_csv)
-        
-    
