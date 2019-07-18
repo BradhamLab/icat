@@ -1,1 +1,1 @@
-conda create env --name icat --file environment.yaml
+conda env create --name icat --file environment.yaml
