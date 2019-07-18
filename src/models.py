@@ -400,10 +400,6 @@ class icat():
             model = LDA(**self.method_kws)
         else:
             model = QDA(**self.method_kws)
-        # find genes stably expressed across datasets
-        if self.method == 'ncfs':
-            seg_model = SEG()
-            seg_model.fit([controls] + [perturbed], self.treatment_col)
         # scale cells to 0 centered with unit variance
         fit_X = scaler.transform(controls.X).astype(np.float64)
         perturb_X = scaler.transform(perturbed.X).astype(np.float64)
@@ -417,16 +413,12 @@ class icat():
         model.fit(fit_X, np.array(controls.obs[cluster_col].values))
         X_ = model.transform(np.vstack((fit_X, perturb_X)))
         if self.method == 'ncfs':
-            selected = np.where(model.coef_ > self.weight_threshold)[0]
+            selected = np.where(model.coef_**2 > self.weight_threshold)[0]
             if len(selected) == 0:
                 print('WARNING: No feature weights met threshold criteria. '
                       'All genes will be used. Try lowering threshold value for'
                       ' future runs.')
                 selected = np.arange(len(model.coef_))
-            stable_genes = seg_model.get_stable(len(selected))
-            # this is currently selecting stable genes with NCFS weights
-            # applied, maybe better to select unweighted genes.
-            selected = np.hstack((selected, stable_genes))
             X_ = X_[:, selected]
             controls.var['ncfs.weights'] = model.coef_
             var_ = controls.var.iloc[selected, :]
@@ -474,6 +466,7 @@ if __name__ == '__main__':
     perturbed = simulate.perturb(controls)
     perturbed.obs['treatment'] = 'ayo'
     model = icat(method='ncfs', method_kws={'reg': 3, 'sigma': 2},
+                 weight_threshold=0,
                  neighbor_kws={'n_neighbors': 100},
                  sslouvain_kws={'immutable': True, 'precluster': False})
     out = model.cluster(controls, perturbed)
