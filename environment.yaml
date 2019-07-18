@@ -1,4 +1,4 @@
-name: icat-test
+name: icat
 channels:
   - bioconda
   - conda-forge
@@ -135,5 +135,5 @@ dependencies:
     - scanpy==1.4.3
     - tqdm==4.32.1
     - umap-learn==0.3.8
-prefix: /home/dakota/anaconda3/envs/icat-test
+prefix: /home/dakota/anaconda3/envs/icat
 
