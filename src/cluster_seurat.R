@@ -1,4 +1,7 @@
-library(Seurat)
+suppressPackageStartupMessages({
+  library(Seurat)
+})
+
 
 create_seurat <- function(X, obs) {
   X_data = as.data.frame(t(read.csv(X, header=FALSE)))
