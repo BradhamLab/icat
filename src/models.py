@@ -306,15 +306,15 @@ class icat():
     def cluster_kws(self, value):
         default_kws = {'louvain': utils.get_default_kwargs(sc.tl.louvain,
                                                      ['adata', 'copy'])}
-        if 'leiden' in dir(sc.tl):
-            default_kws['leiden'] = utils.get_default_kwargs(sc.tl.leiden,
-                                                             ['adata', 'copy'])
-        else:
-            if self.clustering == 'leiden':
-                raise ValueError('The version of Scanpy you are running does '\
-                                 'not support Leiden clustering. If you wish '\
-                                 'to use Leiden clustering, try upgrading your'\
-                                 'version of Scanpy.')
+        # if 'leiden' in dir(sc.tl):
+        #     default_kws['leiden'] = utils.get_default_kwargs(sc.tl.leiden,
+        #                                                      ['adata', 'copy'])
+        # else:
+        #     if self.clustering == 'leiden':
+        #         raise ValueError('The version of Scanpy you are running does '\
+        #                          'not support Leiden clustering. If you wish '\
+        #                          'to use Leiden clustering, try upgrading your'\
+        #                          'version of Scanpy.')
 
         if value is not None:
             value = utils.check_kws(default_kws[self.clustering],
