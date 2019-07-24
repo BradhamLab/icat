@@ -316,6 +316,17 @@ class icat():
         self._cluster_kws = value
 
     @property
+    def cluster_col(self):
+        return self._cluster_col
+    
+    @cluster_col.setter
+    def cluster_col(self, value):
+        if not isinstance(value, [str, int]):
+            raise ValueError('Expected integer index or string name for '+\
+                             '`cluster_col`')
+        self._cluster_col = value
+
+    @property
     def sslouvain_kws(self):
         return self._sslouvain_kws
     
@@ -356,7 +367,7 @@ class icat():
 
     def cluster(self, controls, perturbed):
         if not isinstance(controls, sc.AnnData):
-            raise ValueError("Expected AnnData objecto for `controls`.")
+            raise ValueError("Expected AnnData object for `controls`.")
         if self.treatment_col not in controls.obs.columns:
             controls.obs[self.treatment_col] = 'Controls'
         if not isinstance(perturbed, sc.AnnData):
