@@ -306,13 +306,11 @@ class icat():
     def cluster_kws(self, value):
         default_kws = {'louvain': utils.get_default_kwargs(sc.tl.louvain,
                                                      ['adata', 'copy'])}
-        try:
+        if 'leiden' in dir(sc.tl):
             default_kws['leiden'] = utils.get_default_kwargs(sc.tl.leiden,
                                                              ['adata', 'copy'])
-        except AttributeError:
-            if self.clusters != 'leiden':
-                pass
-            else:
+        else:
+            if self.clustering == 'leiden':
                 raise ValueError('The version of Scanpy you are running does '\
                                  'not support Leiden clustering. If you wish '\
                                  'to use Leiden clustering, try upgrading your'\
