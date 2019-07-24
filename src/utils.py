@@ -11,14 +11,14 @@ from cycler import cycler
 from matplotlib import pyplot as plt
 from sklearn import metrics
 
-import colorcet as cc
+# try:
+#     import colorcet as cc
+#     loc = os.path.dirname(os.path.abspath(__file__))
+#     plt.style.use(os.path.join(loc, 'configs/icat.mplstyle'))
+#     plt.rc('axes', prop_cycle=cycler('color', cc.glasbey_light))
+# except ImportError:
+#     pass
 
-try:
-    loc = os.path.dirname(os.path.abspath(__file__))
-    plt.style.use(os.path.join(loc, 'configs/icat.mplstyle'))
-    plt.rc('axes', prop_cycle=cycler('color', cc.glasbey_light))
-except:
-    pass
 
 def check_kws(reference_dict, new_dict, name):
     if not isinstance(new_dict, dict):
