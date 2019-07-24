@@ -392,7 +392,7 @@ class icat():
             raise ValueError("Expected {} column in perturbed data.".format(
                                 self.treatment_col))
         # scale perturbed data using control data
-        scaler = preprocessing.StandardScaler()
+        scaler = preprocessing.MinMaxScaler()
         scaler.fit(controls.X)
         sc.pp.pca(controls, **self.pca_kws)
         sc.pp.neighbors(controls, **self.neighbor_kws)
