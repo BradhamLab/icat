@@ -397,21 +397,29 @@ class icat():
         sc.pp.pca(controls, **self.pca_kws)
         sc.pp.neighbors(controls, **self.neighbor_kws)
         sc.tl.umap(controls, min_dist=0.0)
-        if self.clustering == 'louvain':
-            sc.tl.louvain(controls, **self.cluster_kws)
-            cluster_col = 'louvain'
-        elif self.clustering == 'leiden':
-            sc.tl.leiden(controls, **self.cluster_kws)
-            cluster_col = 'leiden'
-        elif self.cluster_col is not None:
-            cluster_col = self.cluster_col
+        # no previous clustering provided, cluster ya self
+        if self.cluster_col is None:
+            if self.clustering == 'louvain':
+                sc.tl.louvain(controls, **self.cluster_kws)
+                self.cluster_col = 'louvain'
+            elif self.clustering == 'leiden':
+                sc.tl.leiden(controls, **self.cluster_kws)
+                self.cluster_col = 'leiden'
+        else:
+            if self.cluster_col not in controls.obs.columns:
+                raise ValueError("`cluster_col` - {} not found in control data."\
+                                 .format(self.cluster_col))
+            if np.any([pd.isnull(x) for x in controls.obs[self.cluster_col]]):
+                raise ValueError("Expected labelled cells by passing "\
+                                 "`cluster_col`={}. ".format(self.cluster_col) +
+                                 "Received atleast one unannotated cell.")
         if self.method == 'ncfs':
             model = NCFS.NCFS(**self.method_kws)
         elif self.method == 'lda':
             model = LDA(**self.method_kws)
         else:
             model = QDA(**self.method_kws)
-        # scale cells to 0 centered with unit variance
+        # scale genes between 0 and 1 -- TODO: change to option 
         fit_X = scaler.transform(controls.X).astype(np.float64)
         perturb_X = scaler.transform(perturbed.X).astype(np.float64)
         if self.use_X == 'pca':
@@ -421,7 +429,7 @@ class icat():
             fit_X = pca_model.fit_transform(controls.X)
             perturb_X = pca_model.transform(perturb_X)
         
-        model.fit(fit_X, np.array(controls.obs[cluster_col].values))
+        model.fit(fit_X, np.array(controls.obs[self.cluster_col].values))
         X_ = model.transform(np.vstack((fit_X, perturb_X)))
         if self.method == 'ncfs':
             selected = np.where(model.coef_**2 > self.weight_threshold)[0]
@@ -433,7 +441,7 @@ class icat():
             X_ = X_[:, selected]
             controls.var['ncfs.weights'] = model.coef_
             var_ = controls.var.iloc[selected, :]
-            # var_['ncfs.weights'] = model.coef_[selected]
+            var_['ncfs.weights'] = model.coef_[selected]
             # var_['status'] = 'stable'
             # var_['status'][var_['ncfs.weights']\
             #                > self.weight_threshold] = 'marker'
@@ -460,7 +468,7 @@ class icat():
         #                                     mode='distance')
         A_ = combined.uns['neighbors']['connectivities']
         ss_model = ssLouvain.ssLouvain(**self.sslouvain_kws)
-        y_ = np.hstack([controls.obs[cluster_col].values,
+        y_ = np.hstack([controls.obs[self.cluster_col].values,
                         np.array([np.nan]*perturbed.shape[0])])
         ss_model.fit(A_, y_)
 
