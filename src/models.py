@@ -329,7 +329,7 @@ class icat():
     
     @cluster_col.setter
     def cluster_col(self, value):
-        if not isinstance(value, [str, int]):
+        if not isinstance(value, (str, int)):
             raise ValueError('Expected integer index or string name for '+\
                              '`cluster_col`')
         self._cluster_col = value
@@ -449,7 +449,7 @@ class icat():
             X_ = X_[:, selected]
             controls.var['ncfs.weights'] = model.coef_
             var_ = controls.var.iloc[selected, :]
-            var_['ncfs.weights'] = model.coef_[selected]
+            # var_['ncfs.weights'] = model.coef_[selected]
             # var_['status'] = 'stable'
             # var_['status'][var_['ncfs.weights']\
             #                > self.weight_threshold] = 'marker'
