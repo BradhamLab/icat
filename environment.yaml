@@ -1,7 +1,7 @@
 name: icat
 channels:
-  - bioconda
   - conda-forge
+  - bioconda
   - defaults
 dependencies:
   - _libgcc_mutex=0.1=main
@@ -133,7 +133,8 @@ dependencies:
     - param==1.9.1
     - pyct==0.4.6
     - scanpy==1.4.3
+    - sortedcontainers==2.1.0
     - tqdm==4.32.1
     - umap-learn==0.3.8
-prefix: /home/dakota/anaconda3/envs/icat
+prefix: /home/dakota/miniconda3/envs/icat
 

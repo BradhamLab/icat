@@ -305,15 +305,34 @@ class icat():
     @cluster_kws.setter
     def cluster_kws(self, value):
         default_kws = {'louvain': utils.get_default_kwargs(sc.tl.louvain,
-                                                     ['adata', 'copy']),
-                       'leiden': utils.get_default_kwargs(sc.tl.leiden,
-                                                    ['adata', 'copy'])}
+                                                     ['adata', 'copy'])}
+        if 'leiden' in dir(sc.tl):
+            default_kws['leiden'] = utils.get_default_kwargs(sc.tl.leiden,
+                                                             ['adata', 'copy'])
+        else:
+            if self.clustering == 'leiden':
+                raise ValueError('The version of Scanpy you are running does '\
+                                 'not support Leiden clustering. If you wish '\
+                                 'to use Leiden clustering, try upgrading your'\
+                                 'version of Scanpy.')
+
         if value is not None:
             value = utils.check_kws(default_kws[self.clustering],
                                     value, 'cluster.' + self.clustering)
         else:
             value = default_kws[self.clustering]
         self._cluster_kws = value
+
+    @property
+    def cluster_col(self):
+        return self._cluster_col
+    
+    @cluster_col.setter
+    def cluster_col(self, value):
+        if not isinstance(value, (str, int)):
+            raise ValueError('Expected integer index or string name for '+\
+                             '`cluster_col`')
+        self._cluster_col = value
 
     @property
     def sslouvain_kws(self):
@@ -356,7 +375,7 @@ class icat():
 
     def cluster(self, controls, perturbed):
         if not isinstance(controls, sc.AnnData):
-            raise ValueError("Expected AnnData objecto for `controls`.")
+            raise ValueError("Expected AnnData object for `controls`.")
         if self.treatment_col not in controls.obs.columns:
             controls.obs[self.treatment_col] = 'Controls'
         if not isinstance(perturbed, sc.AnnData):
@@ -381,26 +400,34 @@ class icat():
             raise ValueError("Expected {} column in perturbed data.".format(
                                 self.treatment_col))
         # scale perturbed data using control data
-        scaler = preprocessing.StandardScaler()
+        scaler = preprocessing.MinMaxScaler()
         scaler.fit(controls.X)
         sc.pp.pca(controls, **self.pca_kws)
         sc.pp.neighbors(controls, **self.neighbor_kws)
         sc.tl.umap(controls, min_dist=0.0)
-        if self.clustering == 'louvain':
-            sc.tl.louvain(controls, **self.cluster_kws)
-            cluster_col = 'louvain'
-        elif self.clustering == 'leiden':
-            sc.tl.leiden(controls, **self.cluster_kws)
-            cluster_col = 'leiden'
-        elif self.cluster_col is not None:
-            cluster_col = self.cluster_col
+        # no previous clustering provided, cluster ya self
+        if self.cluster_col is None:
+            if self.clustering == 'louvain':
+                sc.tl.louvain(controls, **self.cluster_kws)
+                self.cluster_col = 'louvain'
+            elif self.clustering == 'leiden':
+                sc.tl.leiden(controls, **self.cluster_kws)
+                self.cluster_col = 'leiden'
+        else:
+            if self.cluster_col not in controls.obs.columns:
+                raise ValueError("`cluster_col` - {} not found in control data."\
+                                 .format(self.cluster_col))
+            if np.any([pd.isnull(x) for x in controls.obs[self.cluster_col]]):
+                raise ValueError("Expected labelled cells by passing "\
+                                 "`cluster_col`={}. ".format(self.cluster_col) +
+                                 "Received atleast one unannotated cell.")
         if self.method == 'ncfs':
             model = NCFS.NCFS(**self.method_kws)
         elif self.method == 'lda':
             model = LDA(**self.method_kws)
         else:
             model = QDA(**self.method_kws)
-        # scale cells to 0 centered with unit variance
+        # scale genes between 0 and 1 -- TODO: change to option 
         fit_X = scaler.transform(controls.X).astype(np.float64)
         perturb_X = scaler.transform(perturbed.X).astype(np.float64)
         if self.use_X == 'pca':
@@ -410,7 +437,7 @@ class icat():
             fit_X = pca_model.fit_transform(controls.X)
             perturb_X = pca_model.transform(perturb_X)
         
-        model.fit(fit_X, np.array(controls.obs[cluster_col].values))
+        model.fit(fit_X, np.array(controls.obs[self.cluster_col].values))
         X_ = model.transform(np.vstack((fit_X, perturb_X)))
         if self.method == 'ncfs':
             selected = np.where(model.coef_**2 > self.weight_threshold)[0]
@@ -434,10 +461,13 @@ class icat():
             var_ = pd.DataFrame(['QDA.{}'.format(i + 1)\
                     for i in range(X_.shape[1])],
                     columns=['Dimension'])
+        obs_ = pd.concat([controls.obs, perturbed.obs], axis=0, sort=False)
+        if not obs_.index.is_unique:
+            print("WARNING: control and perturbed datasets contain overlapping" 
+                  " cell ids. Index will be reset.")
+            obs_.reset_index(drop=False)
         combined = sc.AnnData(X=X_,
-                              obs=pd.concat([controls.obs, perturbed.obs],
-                                            axis=0,
-                                            sort=False).reset_index(drop=True),
+                              obs=obs_,
                               var=var_)
         sc.pp.neighbors(combined, **self.neighbor_kws)
         sc.tl.umap(combined, min_dist=0.0)
@@ -449,7 +479,7 @@ class icat():
         #                                     mode='distance')
         A_ = combined.uns['neighbors']['connectivities']
         ss_model = ssLouvain.ssLouvain(**self.sslouvain_kws)
-        y_ = np.hstack([controls.obs[cluster_col].values,
+        y_ = np.hstack([controls.obs[self.cluster_col].values,
                         np.array([np.nan]*perturbed.shape[0])])
         ss_model.fit(A_, y_)
 

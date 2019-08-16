@@ -11,14 +11,14 @@ from cycler import cycler
 from matplotlib import pyplot as plt
 from sklearn import metrics
 
-import colorcet as cc
+# try:
+#     import colorcet as cc
+#     loc = os.path.dirname(os.path.abspath(__file__))
+#     plt.style.use(os.path.join(loc, 'configs/icat.mplstyle'))
+#     plt.rc('axes', prop_cycle=cycler('color', cc.glasbey_light))
+# except ImportError:
+#     pass
 
-try:
-    loc = os.path.dirname(os.path.abspath(__file__))
-    plt.style.use(os.path.join(loc, 'configs/icat.mplstyle'))
-    plt.rc('axes', prop_cycle=cycler('color', cc.glasbey_light))
-except:
-    pass
 
 def check_kws(reference_dict, new_dict, name):
     if not isinstance(new_dict, dict):
@@ -108,9 +108,13 @@ def rbind_adata(adata_lists):
     combined = sc.AnnData(X=np.vstack([each.X for each in adata_lists]),
                           obs=pd.concat([each.obs for each in adata_lists],
                                         axis=0,
-                                        sort=False).reset_index(drop=True),
+                                        sort=False),
                           var=pd.concat([each.var[col] for each, col\
                                         in zip(adata_lists, df_cols)], axis=1))
+    if not combined.obs.index.is_unique:
+        print("WARNING: control and perturbed datasets contain overlapping" 
+              " cell ids. Index will be reset.")
+        combined.obs.reset_index()
     return combined
 
 
