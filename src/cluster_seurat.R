@@ -1,5 +1,6 @@
 suppressPackageStartupMessages({
   library(Seurat)
+  library("rjson")
 })
 
 
@@ -20,7 +21,7 @@ rename_cells <- function(seurat_obj, prefix) {
   return(Seurat::RenameCells(seurat_obj, new.names=ids))
 }
 
-cluster_across_treatments <- function(ctrl, prtb) {
+cluster_across_treatments <- function(ctrl, prtb, k) {
   # rename cells, add treatment column
   ctrl <- rename_cells(ctrl, 'ctrl')
   ctrl@meta.data$treatment <- rep('ctrl', ncol(ctrl@raw.data))
@@ -36,7 +37,8 @@ cluster_across_treatments <- function(ctrl, prtb) {
                                   accept.high=0.5)
   kept <- Seurat::AlignSubspace(kept, reduction.type='cca',
                                 grouping.var='treatment', dims.align=1:20)
-  kept <- Seurat::FindClusters(kept, reduction.type='cca.aligned', dims.use=1:20)
+  kept <- Seurat::FindClusters(kept, reduction.type='cca.aligned', k.param=k,
+                               dims.use=1:20)
   metadata <- combined@meta.data
   metadata$cluster <- NULL
   combined@meta.data[row.names(kept@meta.data), 'cluster'] <- sapply(kept@meta.data$res.0.8,
@@ -47,10 +49,11 @@ cluster_across_treatments <- function(ctrl, prtb) {
   return(combined@meta.data)
 }
 
-main <- function(X_ctrl, obs_ctrl, X_prtb, obs_prtb, out_csv) {
+main <- function(X_ctrl, obs_ctrl, X_prtb, obs_prtb, fit_json, out_csv) {
   ctrl <- create_seurat(X_ctrl, obs_ctrl)
   prtb <- create_seurat(X_prtb, obs_prtb)
-  clustered <- cluster_across_treatments(ctrl, prtb)
+  k <- fromJSON(file=fit_json)$n_neighbors
+  clustered <- cluster_across_treatments(ctrl, prtb, k)
   write.csv(clustered, out_csv)
 }
 
@@ -59,6 +62,7 @@ if (exists('snakemake')) {
        snakemake@input[['obs_ctrl']],
        snakemake@input[['X_prtb']],
        snakemake@input[['obs_prtb']],
+       snakemake@input[['json']],
        snakemake@output[['csv']])
 }
 
