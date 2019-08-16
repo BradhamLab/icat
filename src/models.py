@@ -461,10 +461,13 @@ class icat():
             var_ = pd.DataFrame(['QDA.{}'.format(i + 1)\
                     for i in range(X_.shape[1])],
                     columns=['Dimension'])
+        obs_ = pd.concat([controls.obs, perturbed.obs], axis=0, sort=False)
+        if not obs_.index.is_unique:
+            print("WARNING: control and perturbed datasets contain overlapping" 
+                  " cell ids. Index will be reset.")
+            obs_.reset_index(drop=False)
         combined = sc.AnnData(X=X_,
-                              obs=pd.concat([controls.obs, perturbed.obs],
-                                            axis=0,
-                                            sort=False).reset_index(drop=True),
+                              obs=obs_,
                               var=var_)
         sc.pp.neighbors(combined, **self.neighbor_kws)
         sc.tl.umap(combined, min_dist=0.0)

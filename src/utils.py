@@ -108,9 +108,13 @@ def rbind_adata(adata_lists):
     combined = sc.AnnData(X=np.vstack([each.X for each in adata_lists]),
                           obs=pd.concat([each.obs for each in adata_lists],
                                         axis=0,
-                                        sort=False).reset_index(drop=True),
+                                        sort=False),
                           var=pd.concat([each.var[col] for each, col\
                                         in zip(adata_lists, df_cols)], axis=1))
+    if not combined.obs.index.is_unique:
+        print("WARNING: control and perturbed datasets contain overlapping" 
+              " cell ids. Index will be reset.")
+        combined.obs.reset_index()
     return combined
 
 
