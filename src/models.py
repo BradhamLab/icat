@@ -329,7 +329,7 @@ class icat():
     
     @cluster_col.setter
     def cluster_col(self, value):
-        if not isinstance(value, (str, int)):
+        if not isinstance(value, (str, int)) and value is not None:
             raise ValueError('Expected integer index or string name for '+\
                              '`cluster_col`')
         self._cluster_col = value
