@@ -10,7 +10,10 @@ from cycler import cycler
 from matplotlib import pyplot as plt
 from sklearn import metrics
 
-import colorcet as cc
+try: 
+    import colorcet as cc
+except ImportError:
+    pass
 from icat.src import models, utils
 from scanpy import api as sc
 
@@ -28,11 +31,7 @@ def evaluate_icat(control, treated, label_col, icat_kws, plot_dir):
     # use downstream plotting?
     control.obs['treatment'] = 'Control'
     treated.obs['treatment'] = 'Perturbed'
-    combined = sc.AnnData(X=np.vstack([control.X, treated.X]),
-                          obs=pd.concat([control.obs, treated.obs],
-                                        axis=0,
-                                        sort=False).reset_index(drop=True),
-                          var=control.var)
+    combined = utils.rbind_adata([control, treated])
     sc.pp.pca(combined)
     try:
         n_neighbors = icat_kws['neighbor_kws']['n_neighbors']
@@ -50,8 +49,7 @@ def evaluate_icat(control, treated, label_col, icat_kws, plot_dir):
     # rand, fowlkes mallows
     for data, col in zip([combined, icat_clustered, icat_clustered],
                          ['louvain', 'ncfs-louvain', 'sslouvain']):
-        print(data)
-        split_perf = utils.performance(data, 'Population', col)
+        split_perf = utils.performance(data, label_col, col)
         split_perf['method'] = col
         measures.append(split_perf)
         utils.plot_umap(data, col, 'Population')
