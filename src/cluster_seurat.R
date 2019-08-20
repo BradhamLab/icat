@@ -58,16 +58,10 @@ main <- function(X_ctrl, obs_ctrl, X_prtb, obs_prtb, fit_json, out_csv) {
 }
 
 if (exists('snakemake')) {
-  print(snakemake@input[['X_ctrl']])
-  print(snakemake@input[['obs_ctrl']])
-  print(snakemake@input[['X_prtb']])
-  print(snakemake@input[['obs_prtb']])
-  print(snakemake@input[['json']])
-  print(snakemake@output[['csv']])
-  main(snakemake@input[['X_ctrl']],
-       snakemake@input[['obs_ctrl']],
-       snakemake@input[['X_prtb']],
-       snakemake@input[['obs_prtb']],
+  main(snakemake@input[['ctrl_X']],
+       snakemake@input[['ctrl_obs']],
+       snakemake@input[['prtb_X']],
+       snakemake@input[['prtb_obs']],
        snakemake@input[['json']],
        snakemake@output[['csv']])
 }

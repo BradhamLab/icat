@@ -84,10 +84,8 @@ rule cluster_seurat:
     input:
         ctrl_X='data/processed/simulated/{exp}/Controls/X.csv',
         ctrl_obs='data/processed/simulated/{exp}/Controls/obs.csv',
-        ctrl_var='data/processed/simulated/{exp}/Controls/var.csv',
         prtb_X='data/processed/simulated/{exp}/Treated/X.csv',
         prtb_obs='data/processed/simulated/{exp}/Treated/obs.csv',
-        prtb_var='data/processed/simulated/{exp}/Treated/var.csv',
         json='data/interim/fits/{exp}Controls_fits.json'
     params:
         name='{exp}'
