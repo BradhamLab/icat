@@ -78,7 +78,7 @@ rule cluster_icat:
         p2='figures/clustered/{exp}/umap_ncfs-louvain.svg',
         p3='figures/clustered/{exp}/umap_sslouvain.svg'
     script:
-        'src/evaluation.py'
+        'src/evaluate_icat.py'
 
 rule cluster_seurat:
     input:
@@ -113,5 +113,5 @@ rule cluster_scanorama:
         name='{exp}',
         outdir='data/results/clustered/scanorama/{exp}/'
     script:
-        'src/run_scanorama.py'
+        'src/evaluate_scanorama.py'
     
