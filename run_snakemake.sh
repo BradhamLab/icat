@@ -3,6 +3,7 @@
 #$ -M dyh0110@bu.edu
 #$ -m eas
 
-export PYTHONPATH="{PTYHONPATH}:/projectnb/bradham/PythonModules"
+export PYTHONPATH="{PYTHONPATH}:/projectnb/bradham/PythonModules"
+export R_LIBS="{R_LIBS}:/projectnb/bradham/RPackages"
 source activate icat
 snakemake --cluster 'qsub -v PYTHONPATH=/projectnb/bradham/PythonModules -P bradham -pe omp 3' --jobs 100
