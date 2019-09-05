@@ -9,3 +9,4 @@ figures/*
 plots/*
 *.Rhistory
 *.vscode/
+snakejob*

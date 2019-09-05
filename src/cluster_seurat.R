@@ -1,6 +1,9 @@
+if (exists("snakemake")) {
+  .libPaths(c("/projectnb/bradham/RPackages", .libPaths()))
+}
 suppressPackageStartupMessages({
   library(Seurat)
-  library("rjson")
+  library(rjson)
 })
 
 
@@ -59,7 +62,8 @@ main <- function(X_ctrl, obs_ctrl, X_prtb, obs_prtb, fit_json, out_csv) {
 
 if (exists('snakemake')) {
   # snakemake likely only being run on scc, add location to user pkgs
-  .libPaths(c("/projectnb/bradham/RPackages", .libPaths()))
+  print(sessionInfo())
+  print(.libPaths())
   main(snakemake@input[['ctrl_X']],
        snakemake@input[['ctrl_obs']],
        snakemake@input[['prtb_X']],
