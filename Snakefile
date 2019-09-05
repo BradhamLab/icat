@@ -16,6 +16,7 @@ SIMULATED = ["data/processed/simulated/{exp}/{treat}/{out}".\
              format(exp=exp, treat=treat, out=out)\
              for exp, treat, out in itertools.product(EXPERIMENTS,
                                                       CONDITIONS, FILES)]
+BENCHMARK = ['cellmix1', 'cellmix2', 'cellmix3', 'cellmix4', 'sc_celseq2']
 
 rule all:
     input:
@@ -25,7 +26,10 @@ rule all:
             for exp in EXPERIMENTS],
         ['data/results/clustered/scanorama/{exp}/obs.csv'.format(exp=exp)\
             for exp in EXPERIMENTS],
+        # ['data/processed/BenchData/{bench}/X.csv'.format(bench=bench)\
+        #     for bench in BENCHMARK]
 
+# ---------------------------- Analyze Simulated Data --------------------------
 rule simulate_data:
     input:
         json=config['simulations']['json'],
@@ -112,4 +116,55 @@ rule cluster_scanorama:
         outdir='data/results/clustered/scanorama/{exp}/'
     script:
         'src/evaluate_scanorama.py'
+    
+# ------------------------ Analyze Benchmark Data ------------------------------
+
+rule format_benchmark_data:
+    input:
+        counts=['data/raw/BenchData/{bench}.count.csv'.format(bench=bench)\
+                for bench in BENCHMARK],
+        meta=['data/raw/BenchData/{bench}.metadata.csv'.format(bench=bench)\
+              for bench in BENCHMARK]
+    output:
+        X=['data/processed/BenchData/{bench}/X.csv'.format(bench=bench)
+           for bench in BENCHMARK],
+        obs=['data/processed/BenchData/{bench}/obs.csv'.format(bench=bench)
+             for bench in BENCHMARK]
+    params:
+        outdir='data/processed/BenchData/'
+    script:
+        'src/format_benchmark_data.py'
+
+rule fit_benchmark_data:
+    input:
+        ctrl_X='data/processed/BenchData/sc_celseq2/X.csv',
+        ctrl_obs='data/processed/BenchData/sc_celseq2/obs.csv',
+        prtb_X = ['data/processed/BenchData/{}/X.csv'.format(x)\
+                  for x in ['cellmix1', 'cellmix2', 'cellmix3', 'cellmix4']],
+        prtb_obs = ['data/processed/BenchData/{}/obs.csv'.format(x)\
+                    for x in ['cellmix1', 'cellmix2', 'cellmix3', 'cellmix4']]
+    params:
+        label='cell_line',
+        plotdir='figures/benchmark/'
+    output:
+        json='data/interim/fits/benchmark/isolated_fits.json',
+        ctrl_svg='figures/benchmark/umap_isolated_cells.svg',
+        prtb_svg='figures/benchmark/umap_mixed_cells.svg',
+        comb_svg='figures/benchmark/umap_combined.svg'
+    script:
+        'src/fit_louvain.py'
+
+rule benchmark_icat:
+    input:
+        X=['data/processed/BenchData/{bench}/X.csv'.format(bench=bench)\
+           for bench in BENCHMARK],
+        obs=['data/processed/BenchData/{bench}/obs.csv'.format(bench=bench)\
+             for bench in BENCHMARK]
+    params:
+        control_id='sc_celseq2'
+    output:
+        'data/results/benchmark/icat_clusters.csv'
+    script:
+        'src/benchmark_icat.py'
+
     
