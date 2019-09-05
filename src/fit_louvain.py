@@ -60,30 +60,52 @@ if __name__ == '__main__':
     if snakemake is not None:
         ctrl_X = snakemake.input['ctrl_X']
         ctrl_obs = snakemake.input['ctrl_obs']
-        ctrl_var = snakemake.input['ctrl_var']
+        try:
+            ctrl_var = snakemake.input['ctrl_var']
+        except AttributeError:
+            ctrl_var = None
         prtb_X = snakemake.input['prtb_X']
         prtb_obs = snakemake.input['prtb_obs']
-        prtb_var = snakemake.input['prtb_var']
+        try:
+            prtb_var = snakemake.input['prtb_var']
+        except AttributeError:
+            prtb_var = None
         label_col = snakemake.params['label']
         plot_dir = snakemake.params['plotdir']
         out_json = snakemake.output['json']
         
     sc.settings.figdir = plot_dir
-    ctrl = sc.AnnData(X=pd.read_csv(ctrl_X, header=None).values,
-                      obs=pd.read_csv(ctrl_obs, index_col=0),
-                      var=pd.read_csv(ctrl_var, index_col=0))
-    prtb = sc.AnnData(X=pd.read_csv(prtb_X, header=None).values,
-                      obs=pd.read_csv(prtb_obs, index_col=0),
-                      var=pd.read_csv(prtb_var, index_col=0))
+    if ctrl_var is not None:
+        ctrl = sc.AnnData(X=pd.read_csv(ctrl_X, header=None).values,
+                          obs=pd.read_csv(ctrl_obs, index_col=0),
+                          var=pd.read_csv(ctrl_var, index_col=0))
+    else:
+        ctrl = sc.AnnData(X=pd.read_csv(ctrl_X, header=None).values,
+                          obs=pd.read_csv(ctrl_obs, index_col=0))
+    if isinstance(prtb_X, list):
+        adatas = []
+        for x, obs in zip(sorted(prtb_X), sorted(prtb_obs)):
+            adata = sc.AnnData(X=np.loadtxt(x, delimiter=','),
+                               obs=pd.read_csv(obs, index_col=0))
+            adatas.append(adata)
+        prtb = utils.rbind_adata(adatas)
+        ctrl.obs['Mixture'] = 'No'
+        prtb.obs['Mixture'] = 'Yes'
+    
+    else:
+        prtb = sc.AnnData(X=pd.read_csv(prtb_X, header=None).values,
+                          obs=pd.read_csv(prtb_obs, index_col=0),
+                          var=pd.read_csv(prtb_var, index_col=0))
+        ctrl.obs['Treatment'] = 'Control'
+        prtb.obs['Treatment'] = 'Perturbed'
     
     performance = main(ctrl, label_col)
-    names = ['controls.svg', 'treated.svg', "combined.svg"]
-    ctrl.obs['Treatment'] = 'Control'
-    prtb.obs['Treatment'] = 'Perturbed'
+    names = [snakemake.output['ctrl_svg'], snakemake.output['prtb_svg'],
+             snakemake.output['comb_svg']]
     combined = utils.rbind_adata([ctrl, prtb])
     # add dakota style formatting
     for data, plotfile in zip([ctrl, prtb, combined], names):
-        fn = os.path.join(plot_dir, 'umap_' + plotfile)
+        fn = os.path.join(plot_dir, plotfile)
         plot_cells(data, int(performance['n_neighbors']), fn)
         plt.cla()
         plt.clf()
