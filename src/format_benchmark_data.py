@@ -26,7 +26,10 @@ if __name__ == '__main__':
             obs = pd.read_csv(obs, index_col=0)
             # flag for dataset
             bench = os.path.basename(x[:bench_regex.search(x).end() - 1])
-            obs['benchmark'] = os.path.basename(os.path.splitext(x)[0])
+            obs['benchmark'] = bench
+            obs['index'] = obs.apply(lambda x: '-'.join([x.benchmark, x.name]),
+                                     axis=1)
+            obs.set_index('index', inplace=True)
 
             if len(genes) == 0:
                 genes = set(count.index.values)
@@ -62,7 +65,7 @@ if __name__ == '__main__':
         for each in adatas:
             bench = each.obs['benchmark'][0]
             out_adata = dutils.filter_cells(combined, 'benchmark',
-                                            lambda x: x == bench)
+                                            lambda x: x == bench).copy()
             out_adata.write_csvs(dirname=os.path.join(
                                             snakemake.params['outdir'], bench),
                                  skip_data=False)
