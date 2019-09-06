@@ -36,12 +36,12 @@ def main(andata, label_col):
     return performance
 
 
-def plot_cells(andata, n, fn):
-    andata.obs['Population'] = andata.obs['Population'].astype('category')
+def plot_cells(andata, n, fn, color, shape):
+    andata.obs[color] = andata.obs[color].astype('category')
     sc.pp.pca(andata)
     sc.pp.neighbors(andata, n_neighbors=n)
     sc.tl.umap(andata, min_dist=0)
-    utils.plot_umap(andata, color='Population', shape='Treatment')
+    utils.plot_umap(andata, color=color, shape=shape)
     plt.savefig(fn)
     plt.cla()
     plt.clf()
@@ -91,6 +91,7 @@ if __name__ == '__main__':
         prtb = utils.rbind_adata(adatas)
         ctrl.obs['Mixture'] = 'No'
         prtb.obs['Mixture'] = 'Yes'
+        shape = 'Mixture'
     
     else:
         prtb = sc.AnnData(X=pd.read_csv(prtb_X, header=None).values,
@@ -98,15 +99,18 @@ if __name__ == '__main__':
                           var=pd.read_csv(prtb_var, index_col=0))
         ctrl.obs['Treatment'] = 'Control'
         prtb.obs['Treatment'] = 'Perturbed'
+        shape = 'Treatment'
     
     performance = main(ctrl, label_col)
     names = [snakemake.output['ctrl_svg'], snakemake.output['prtb_svg'],
              snakemake.output['comb_svg']]
     combined = utils.rbind_adata([ctrl, prtb])
+    if not os.path.exists(plot_dir):
+        os.makedirs(plot_dir)
     # add dakota style formatting
     for data, plotfile in zip([ctrl, prtb, combined], names):
         fn = os.path.join(plot_dir, plotfile)
-        plot_cells(data, int(performance['n_neighbors']), fn)
+        plot_cells(data, int(performance['n_neighbors']), fn, label_col, shape)
         plt.cla()
         plt.clf()
         plt.close()
