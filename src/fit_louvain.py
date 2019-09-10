@@ -33,6 +33,7 @@ def main(andata, label_col):
                 performance = measures.copy()
                 performance['n_neighbors'] = n
                 performance['resolution'] = r
+                score = measures['adjusted.rand']
     return performance
 
 
@@ -109,8 +110,8 @@ if __name__ == '__main__':
         os.makedirs(plot_dir)
     # add dakota style formatting
     for data, plotfile in zip([ctrl, prtb, combined], names):
-        fn = os.path.join(plot_dir, plotfile)
-        plot_cells(data, int(performance['n_neighbors']), fn, label_col, shape)
+        plot_cells(data, int(performance['n_neighbors']), plotfile,
+                   label_col, shape)
         plt.cla()
         plt.clf()
         plt.close()
