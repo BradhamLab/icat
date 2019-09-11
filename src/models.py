@@ -282,7 +282,7 @@ class icat():
             print("Warning: `weight_threshold` only pertains to `ncfs` method. "
                   "Changing the value will have no affect on outcome.")
         if value is None:
-            value = 1
+            value = 0
         self._weight_threshold = value
 
     @property
@@ -374,6 +374,21 @@ class icat():
         self._use_X = value
 
     def cluster(self, controls, perturbed):
+        """
+        Cluster cells in control and experimental conditions.
+        
+        Parameters
+        ----------
+        controls : sc.AnnData
+            Annotated dataframe of control cells.
+        perturbed : sc.AnnData
+            Annotated dataframe of treated/perturbed cells.
+        
+        Returns
+        -------
+        sc.AnnData
+            Annotated dataframe of combined cells in NCFS space. 
+        """
         if not isinstance(controls, sc.AnnData):
             raise ValueError("Expected AnnData object for `controls`.")
         if self.treatment_col not in controls.obs.columns:
