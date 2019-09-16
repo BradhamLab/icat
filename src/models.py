@@ -204,36 +204,20 @@ class icat():
     Model to Identify Clusters Across Treatments. 
     """
 
-    def __init__(self, method='ncfs', clustering='louvain',
-                 treatment_col='treatment', method_kws=None, cluster_kws=None,
-                 cluster_col=None, weight_threshold=None, neighbor_kws=None,
-                 sslouvain_kws=None, pca_kws=None, use_X='X'):
-        self.method = method
+    def __init__(self, clustering='louvain', treatment_col='treatment',
+                 ncfs_kws=None, cluster_kws=None, cluster_col=None,
+                 weight_threshold=None, neighbor_kws=None,
+                 sslouvain_kws=None, pca_kws=None):
         self.clustering = clustering
         self.treatment_col = treatment_col
-        self.method_kws = method_kws
+        self.ncfs_kws = ncfs_kws
         self.cluster_kws = cluster_kws
         self.cluster_col = cluster_col
         self.weight_threshold = weight_threshold
         self.neighbor_kws = neighbor_kws
         self.sslouvain_kws = sslouvain_kws
         self.pca_kws = pca_kws
-        self.use_X = use_X
     
-    @property
-    def method(self):
-        return self._method
-    
-    @method.setter
-    def method(self, value):
-        if not isinstance(value, str):
-            raise ValueError("Expected string for `method` parameter." 
-                             "Received {}".format(value))
-        value = value.lower()
-        if value not in ['ncfs', 'lda', 'qda']:
-            raise ValueError("Unsupported method: {}".format(value))
-        self._method = value
-
     @property
     def clustering(self):
         return self._clustering
@@ -257,20 +241,17 @@ class icat():
         self._treatment_col = value
 
     @property
-    def method_kws(self):
-        return self._method_kws
+    def ncfs_kws(self):
+        return self._ncfs_kws
     
-    @method_kws.setter
-    def method_kws(self, value):
-        default_kws = {'ncfs': utils.get_default_kwargs(NCFS.NCFS, ['self']),
-                       'lda': utils.get_default_kwargs(LDA, ['self']),
-                       'qda': utils.get_default_kwargs(QDA, ['self'])}
+    @ncfs_kws.setter
+    def ncfs_kws(self, value):
+        default_kws = utils.get_default_kwargs(NCFS.NCFS, ['self'])
         if value is not None:
-            value = utils.check_kws(default_kws[self.method], value,
-                                'method.' + self.method)
+            value = utils.check_kws(default_kws, value, 'ncfs')
         else:
-            value = default_kws[self.method]
-        self._method_kws = value
+            value = default_kws
+        self._ncfs_kws = value
     
     @property
     def weight_threshold(self):
@@ -278,11 +259,11 @@ class icat():
     
     @weight_threshold.setter
     def weight_threshold(self, value):
-        if self.method != 'ncfs' and value is not None:
-            print("Warning: `weight_threshold` only pertains to `ncfs` method. "
-                  "Changing the value will have no affect on outcome.")
         if value is None:
             value = 0
+        elif not isinstance(value, (float, int, np.float, np.integer)):
+            raise ValueError("Expected numerical value for `weight_threshold`."
+                             "Received: {}".format(value))
         self._weight_threshold = value
 
     @property
@@ -291,7 +272,8 @@ class icat():
 
     @neighbor_kws.setter
     def neighbor_kws(self, value):
-        default_kws = utils.get_default_kwargs(sc.pp.neighbors, ['adata', 'copy'])
+        default_kws = utils.get_default_kwargs(sc.pp.neighbors,
+                                               ['adata', 'copy'])
         if value is not None:
             value = utils.check_kws(default_kws, value, 'neighbor_kws')
         else:
@@ -360,19 +342,6 @@ class icat():
             value = default_kws
         self._pca_kws = value
 
-    @property
-    def use_X(self):
-        return self._use_X
-
-    @use_X.setter
-    def use_X(self, value):
-        if not isinstance(value, str):
-            raise ValueError("Expected string for `use_X`. Got {}".\
-                             format(type(value)))
-        if value not in ['X', 'pca']:
-            raise ValueError("Expected `X` or `pca`. Got {}".format(value))
-        self._use_X = value
-
     def cluster(self, controls, perturbed):
         """
         Cluster cells in control and experimental conditions.
@@ -405,18 +374,29 @@ class icat():
                 perturbed = utils.rbind_adata(perturbed)
             else:
                 raise ValueError("Unexpected input type for `perturbed`: "
-                                "{}. Expected list of sc.AnnData objects or "
-                                "a single sc.AnnData object".\
-                                format(type(perturbed)))
+                                 "{}. Expected list of sc.AnnData objects or "
+                                 "a single sc.AnnData object".\
+                                 format(type(perturbed)))
         if utils.check_matching_genes(controls, perturbed):
             raise ValueError("Gene columns do not match between control and"
                                 " perturbed cells.")
         if self.treatment_col not in perturbed.obs.columns:
             raise ValueError("Expected {} column in perturbed data.".format(
                                 self.treatment_col))
+        # change numeric indices to strings
+        for each in [controls, perturbed]:
+            if isinstance(each.obs.index, pd.RangeIndex):
+                print("WARNING: Numeric index used for cell ids. "
+                      "Converting to strings.")
+                each.obs.index = each.obs.index.map(str)
+            if isinstance(each.var.index, pd.RangeIndex):
+                print("WARNING: Numeric index used for gene ids. "
+                      "Converting to strings.")
+                each.var.index = each.var.index.map(str)
         # scale perturbed data using control data
         scaler = preprocessing.MinMaxScaler()
         scaler.fit(controls.X)
+        # 
         sc.pp.pca(controls, **self.pca_kws)
         sc.pp.neighbors(controls, **self.neighbor_kws)
         sc.tl.umap(controls, min_dist=0.0)
@@ -436,68 +416,40 @@ class icat():
                 raise ValueError("Expected labelled cells by passing "\
                                  "`cluster_col`={}. ".format(self.cluster_col) +
                                  "Received atleast one unannotated cell.")
-        if self.method == 'ncfs':
-            model = NCFS.NCFS(**self.method_kws)
-        elif self.method == 'lda':
-            model = LDA(**self.method_kws)
-        else:
-            model = QDA(**self.method_kws)
+        # instantiate ncfs model
+        model = NCFS.NCFS(**self.ncfs_kws)
+
         # scale genes between 0 and 1 -- TODO: change to option 
         fit_X = scaler.transform(controls.X).astype(np.float64)
-        perturb_X = scaler.transform(perturbed.X).astype(np.float64)
-        if self.use_X == 'pca':
-            pca_model = PCA(n_components=self.pca_kws['n_comps'],
-                            svd_solver=self.pca_kws['svd_solver'],
-                            random_state=self.pca_kws['random_state'])
-            fit_X = pca_model.fit_transform(controls.X)
-            perturb_X = pca_model.transform(perturb_X)
-        
+        # combine control and perturbed data
+        combined = utils.rbind_adata([controls, perturbed])
+        # fit gene weights using control dataset
         model.fit(fit_X, np.array(controls.obs[self.cluster_col].values))
-        X_ = model.transform(np.vstack((fit_X, perturb_X)))
-        if self.method == 'ncfs':
-            selected = np.where(model.coef_**2 > self.weight_threshold)[0]
-            if len(selected) == 0:
-                print('WARNING: No feature weights met threshold criteria. '
-                      'All genes will be used. Try lowering threshold value for'
-                      ' future runs.')
-                selected = np.arange(len(model.coef_))
-            X_ = X_[:, selected]
-            controls.var['ncfs.weights'] = model.coef_
-            var_ = controls.var.iloc[selected, :]
-            # var_['ncfs.weights'] = model.coef_[selected]
-            # var_['status'] = 'stable'
-            # var_['status'][var_['ncfs.weights']\
-            #                > self.weight_threshold] = 'marker'
-        elif self.method == 'lda':
-            var_ = pd.DataFrame(['LDA.{}'.format(i + 1)\
-                               for i in range(X_.shape[1])],
-                               columns=['Dimension'])
-        else:
-            var_ = pd.DataFrame(['QDA.{}'.format(i + 1)\
-                    for i in range(X_.shape[1])],
-                    columns=['Dimension'])
-        obs_ = pd.concat([controls.obs, perturbed.obs], axis=0, sort=False)
-        if not obs_.index.is_unique:
-            print("WARNING: control and perturbed datasets contain overlapping" 
-                  " cell ids. Index will be reset.")
-            obs_.reset_index(drop=False)
-        combined = sc.AnnData(X=X_,
-                              obs=obs_,
-                              var=var_)
+        # apply learned weights across gene expression matrix
+        combined.X = model.transform(combined.X)
+        # subset to most informative genes
+        selected = combined.var.index.values[
+                       np.where(model.coef_**2 > self.weight_threshold)[0]]
+        if len(selected) == 0:
+            print('WARNING: No feature weights met threshold criteria. '
+                  'All genes will be used. Try lowering threshold value for'
+                  ' future runs.')
+            selected = combined.var.index.values
+        combined = combined[:, selected].copy() # copy to be safe
+        # add ncfs weights to gene metadata 
+        combined.var['ncfs.weights'] = model.coef_
+        # create neighbor graph for control+perturbed combined data
+        sc.pp.pca(combined, **self.pca_kws)
         sc.pp.neighbors(combined, **self.neighbor_kws)
         sc.tl.umap(combined, min_dist=0.0)
-        # if combined.shape[1] > 10:
-        #     A_ = combined.uns['neighbors']['connectivities']
-        # else:
-        #     A_ = neighbors.kneighbors_graph(X_,
-        #                                     self.neighbor_kws['n_neighbors'],
-        #                                     mode='distance')
+        # grab connectivities of cells
         A_ = combined.uns['neighbors']['connectivities']
+        # instantiate semi-supervised Louvain model
         ss_model = ssLouvain.ssLouvain(**self.sslouvain_kws)
-        y_ = np.hstack([controls.obs[self.cluster_col].values,
-                        np.array([np.nan]*perturbed.shape[0])])
+        y_ = combined.obs[self.cluster_col]
+        # cluster cells
         ss_model.fit(A_, y_)
-
+        # store new cluster labels in cell metadata
         combined.obs['sslouvain'] = ss_model.labels_
         return combined
 
@@ -510,7 +462,7 @@ if __name__ == '__main__':
     controls = data_model.simulate()
     perturbed = simulate.perturb(controls)
     perturbed.obs['treatment'] = 'ayo'
-    model = icat(method='ncfs', method_kws={'reg': 3, 'sigma': 2},
+    model = icat(ncfs_kws={'reg': 3, 'sigma': 2},
                  weight_threshold=0,
                  neighbor_kws={'n_neighbors': 100},
                  sslouvain_kws={'immutable': True, 'precluster': False})
