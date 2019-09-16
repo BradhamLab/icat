@@ -17,13 +17,13 @@ if __name__ == '__main__':
         # lines in CelSeq benchmark data
         lines = ['H1975', 'H2228', 'HCC827']
         # cell mixtures are mixtures of 9 cells
-        line_to_mixture = {lines[0]:'900',
-                           lines[1]:'090',
-                           lines[2]:'009'}
+        line_to_mixture = {lines[0]:'9,0,0',
+                           lines[1]:'0,9,0',
+                           lines[2]:'0,0,9'}
         bench_regex = re.compile('^(.*?)\.')
-        for x, obs in zip(snakemake.input['counts'], snakemake.input['meta']):
+        for x, meta in zip(snakemake.input['counts'], snakemake.input['meta']):
             count = pd.read_csv(x, index_col=0)
-            obs = pd.read_csv(obs, index_col=0)
+            obs = pd.read_csv(meta, index_col=0)
             # flag for dataset
             bench = os.path.basename(x[:bench_regex.search(x).end() - 1])
             obs['benchmark'] = bench
@@ -51,8 +51,8 @@ if __name__ == '__main__':
                 adata.obs['n_cells'] = adata.obs[lines].apply(lambda x: sum(x),
                                                               axis=1)
                 adata.obs['cell_line'] = adata.obs[lines].apply(lambda x:
-                                                   ''.join([str(y) for y in x]),
-                                                   axis=1)
+                                                  ','.join([str(y) for y in x]),
+                                                  axis=1)
                 adata = dutils.filter_cells(adata, 'n_cells', lambda x: x == 9)
             # convert cell lines to mixture id of pure cell line
             else:
@@ -60,8 +60,22 @@ if __name__ == '__main__':
                                                              line_to_mixture[x])
             adatas[i] = adata
         combined = utils.rbind_adata(adatas)
+        sc.pp.filter_genes(combined, min_cells=3)
         # normalize data
         sc.pp.normalize_total(combined)
+        # log transform counts to detected highly variable genes
+        logged = combined.copy()
+        logged.X = np.log(logged.X + 1)
+        sc.pp.highly_variable_genes(logged, flavor='seurat')
+        # plot highly variable genes
+        sc.settings.figdir = snakemake.params['plotdir']
+        sc.pl.highly_variable_genes(logged, show=False, save='.svg')
+        # copy logged.var to combined.var
+        combined.var = logged.var
+        variable_genes = logged.var.index[
+                             np.where(logged.var['highly_variable'])[0]]
+        combined = combined[:, variable_genes]
+        combined.obs['cell_line'] = combined.obs['cell_line'].astype('category')
         for each in adatas:
             bench = each.obs['benchmark'][0]
             out_adata = dutils.filter_cells(combined, 'benchmark',
