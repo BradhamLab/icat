@@ -92,6 +92,8 @@ if __name__ == '__main__':
         prtb = utils.rbind_adata(adatas)
         ctrl.obs['Mixture'] = 'No'
         prtb.obs['Mixture'] = 'Yes'
+        sc.pp.log1p(ctrl)
+        sc.pp.log1p(prtb)
         shape = 'Mixture'
     
     else:
