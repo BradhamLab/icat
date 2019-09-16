@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from scanpy import api as sc
 from icat.src import models, utils
+import json
 
 
 
@@ -11,6 +12,7 @@ if __name__ == '__main__':
     except NameError:
         snakemake = None
     if snakemake is not None:
+        fit_json = snakemake.input['json']
         all_X = sorted(snakemake.input['X'])
         all_obs = sorted(snakemake.input['obs'])
         ctrl_X = None
@@ -31,4 +33,16 @@ if __name__ == '__main__':
                                                           index_col=0)))
         prtb_combined = utils.rbind_adata(prtb_adatas)
         # 
+        icat_kws = {'method_kws': {'sigma': 2, 'reg': 1,
+                                   'kernel': 'exponential'},
+                    'neighbor_kws': {'n_neighbors': None},
+                    'cluster_kws': {'resolution': None},
+                    'weight_threshold': 1.0,
+                    'treatment_col': 'benchmark'}
+        with open(fit_json, 'r') as f:
+            fit_data = json.load(f)
+        icat_kws['neighbor_kws']['n_neighbors'] = fit_data['n_neighbors']
+        icat_model = models.icat(**icat_kws)
+        combined = icat_model.cluster(ctrl_adata, prtb_combined)
+        combined.obs.to_csv(snakemake.output)
         
