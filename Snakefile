@@ -125,13 +125,15 @@ rule format_benchmark_data:
                 for bench in BENCHMARK],
         meta=['data/raw/BenchData/{bench}.metadata.csv'.format(bench=bench)\
               for bench in BENCHMARK]
+    params:
+        outdir='data/processed/BenchData/',
+        plotdir='figures/benchmark/'
     output:
         X=['data/processed/BenchData/{bench}/X.csv'.format(bench=bench)
            for bench in BENCHMARK],
         obs=['data/processed/BenchData/{bench}/obs.csv'.format(bench=bench)
-             for bench in BENCHMARK]
-    params:
-        outdir='data/processed/BenchData/'
+             for bench in BENCHMARK],
+        gene_svg='figures/benchmark/filter_genes_dispersion.svg'
     script:
         'src/format_benchmark_data.py'
 
@@ -159,7 +161,8 @@ rule benchmark_icat:
         X=['data/processed/BenchData/{bench}/X.csv'.format(bench=bench)\
            for bench in BENCHMARK],
         obs=['data/processed/BenchData/{bench}/obs.csv'.format(bench=bench)\
-             for bench in BENCHMARK]
+             for bench in BENCHMARK],
+        json='data/interim/fits/benchmark/isolated_fits.json'
     params:
         control_id='sc_celseq2'
     output:
