@@ -82,7 +82,7 @@ def create_count_matrix(matrix_file, barcode_file, genes):
     return matrix
 
 
-def main(data_dir, outfile):
+def main(data_dir, outdir):
     """
     Create an annotated dataframe object from the Kang 2018 dataset.
     
@@ -112,8 +112,7 @@ def main(data_dir, outfile):
     counts.fillna(value=0)
     anno_df = sc.AnnData(X=counts, obs=cells,
                          var=genes.loc[counts.columns.values, :])
-    with open(outfile, 'wb') as f:
-        pkl.dump(anno_df, f)
+    anno_df.write_csvs(dirname=outdir, skip_data=False)
 
 
 if __name__ == "__main__":
@@ -122,7 +121,7 @@ if __name__ == "__main__":
     except NameError:
         snakemake = None
     if snakemake is not None:
-        main(snakemake.params[0], snakemake.output[0])
+        main(snakemake.params['datadir'], snakemake.params['outdir'])
 
 
     
