@@ -26,20 +26,20 @@ rule all:
             for exp in EXPERIMENTS],
         ['data/results/clustered/scanorama/{exp}/obs.csv'.format(exp=exp)\
             for exp in EXPERIMENTS],
-        'data/processed/Wang/X.csv'
+        'data/processed/Kang/X.csv'
         # ['data/processed/BenchData/{bench}/X.csv'.format(bench=bench)\
         #     for bench in BENCHMARK]
 
-# ---------------------------- Process Wang Data -------------------------------
+# ---------------------------- Process Kang Data -------------------------------
 
-rule format_wang_data:
+rule format_kang_data:
     params:
-        datadir='data/raw/Wang/',
-        outdir='data/processed/Wang/'
+        datadir='data/raw/Kang/',
+        outdir='data/processed/Kang/'
     output:
-        'data/processed/Wang/X.csv',
-        'data/processed/Wang/obs.csv',
-        'data/processed/Wang/var.csv'
+        'data/processed/Kang/X.csv',
+        'data/processed/Kang/obs.csv',
+        'data/processed/Kang/var.csv'
     script:
         'src/generate_kang_et_al.py'
 
