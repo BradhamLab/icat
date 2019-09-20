@@ -61,7 +61,7 @@ def evaluate_icat(control, treated, label_col, icat_kws, plot_dir):
 
 
 if __name__ == '__main__':
-    icat_kws = {'method_kws': {'sigma': 2, 'reg': 3},
+    icat_kws = {'ncfs_icat': {'sigma': 2, 'reg': 3},
                 'neighbor_kws': {'n_neighbors': None},
                 'cluster_kws': {'resolution': None}}
     try:

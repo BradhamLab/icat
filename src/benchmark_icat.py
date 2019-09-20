@@ -33,8 +33,8 @@ if __name__ == '__main__':
                                                           index_col=0)))
         prtb_combined = utils.rbind_adata(prtb_adatas)
         # 
-        icat_kws = {'method_kws': {'sigma': 2, 'reg': 1,
-                                   'kernel': 'exponential'},
+        icat_kws = {'ncfs_kws': {'sigma': 2, 'reg': 1,
+                                 'kernel': 'exponential'},
                     'neighbor_kws': {'n_neighbors': None},
                     'cluster_kws': {'resolution': None},
                     'weight_threshold': 1.0,
