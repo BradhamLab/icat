@@ -1,6 +1,8 @@
 from scanpy import api as sc
 import numpy as np
 import pandas as pd
+from downstream.src.analysis import utils
+import os
 
 if __name__ == '__main__':
     try:
@@ -21,9 +23,18 @@ if __name__ == '__main__':
         # plot highly variable genes
         sc.settings.figdir = snakemake.params['plotdir']
         sc.pl.highly_variable_genes(logged, show=False, save='.svg')
-        # copy logged.var to combined.var
+        # copy logged.var to counts.var
         adata.var = logged.var
         variable_genes = logged.var.index[
                                 np.where(logged.var['highly_variable'])[0]]
         adata = adata[:, variable_genes]
-        adata.write_csvs(dirname=snakemake.params['outdir'], skip_data=False)
+        # separate control and perturbed cells
+        ctrls = utils.filter_cells(adata, 'stim', lambda x: x == 'ctrl').copy()
+        prtbd = utils.filter_cells(adata, 'stim', lambda x: x != 'ctrl').copy()
+        # write data to csvs
+        ctrls.write_csvs(dirname=os.path.join(snakemake.params['outdir'], 
+                                              'controls'),
+                        skip_data=False)
+        prtbd.write_csvs(dirname=os.path.join(snakemake.params['outdir'], 
+                                              'treated'),
+                         skip_data=False)
