@@ -106,6 +106,7 @@ def main(data_dir, outdir):
     shared = set(count_mats[0].index.values)\
              .intersection(count_mats[1].index.values)
     count_mats[0] = count_mats[0].rename(index={x:x+'1' for x in shared})
+    
     # combine count matrices, verify unique index ids, sort gene names. 
     counts = pd.concat(count_mats, axis=0, verify_integrity=True,
                        sort=True)
