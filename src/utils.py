@@ -120,8 +120,14 @@ def rbind_adata(adata_lists):
 
 def performance(adata, true_col, pred_col):
     """Measure the performance of a clustering partition."""
-    known = adata.obs[true_col].values.astype(str)
-    pred = adata.obs[pred_col].values.astype(str)
+    if isinstance(adata, sc.AnnData):
+        obs = adata.obs
+    elif isinstance(adata, pd.DataFrame):
+        obs = adata
+    else:
+        raise TypeError("Unsupported type: {}".format(type(adata)))
+    known = obs[true_col].values.astype(str)
+    pred = obs[pred_col].values.astype(str)
     mi = metrics.adjusted_mutual_info_score(known, pred, 
                                             average_method='arithmetic')
     homog = metrics.homogeneity_score(known, pred)
