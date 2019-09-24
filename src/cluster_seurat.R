@@ -9,9 +9,16 @@ suppressPackageStartupMessages({
 
 create_seurat <- function(X, obs) {
   X_data = as.data.frame(t(read.csv(X, header=FALSE)))
-  obs_data = read.csv(obs, row.names=1, check.names=FALSE, stringsAsFactors=FALSE)
+  obs_data = read.csv(obs, row.names=1, check.names=FALSE,
+                      stringsAsFactors=FALSE)
+  # hack, fix this
+  drop <- c('poor_quality', 'traj', 'cell_line_demuxlet',
+            'demuxlet_cls')
+  if (sum(drop %in% colnames(obs_data) > 0)) {
+    obs_data <- obs_data[, !(colnames(obs_data) %in% drop)]
+  }
   # force to population
-  obs_data$Population <- as.factor(obs_data$Population)
+  # obs_data$Population <- as.factor(obs_data$Population)
   row.names(obs_data) <- colnames(X_data)
   data <- Seurat::CreateSeuratObject(raw.data=X_data, meta.data=obs_data)
   data <- Seurat::NormalizeData(data)
@@ -24,7 +31,7 @@ rename_cells <- function(seurat_obj, prefix) {
   return(Seurat::RenameCells(seurat_obj, new.names=ids))
 }
 
-cluster_across_treatments <- function(ctrl, prtb, k) {
+cluster_across_treatments <- function(ctrl, prtb, k, treatment='treatment') {
   # rename cells, add treatment column
   ctrl <- rename_cells(ctrl, 'ctrl')
   ctrl@meta.data$treatment <- rep('ctrl', ncol(ctrl@raw.data))
@@ -33,13 +40,14 @@ cluster_across_treatments <- function(ctrl, prtb, k) {
   combined <- Seurat::RunCCA(object=ctrl, object2=prtb)
   combined <- Seurat::RunPCA(combined)
   combined <- Seurat::CalcVarExpRatio(object=combined, reduction.type='pca',
-                                      grouping.var='treatment')
+                                      grouping.var=treatment)
   kept <- Seurat::SubsetData(combined, subset.name='var.ratio.pca',
                              accept.low=0.5)
   discarded <- Seurat::SubsetData(combined, subset.name='var.ratio.pca',
                                   accept.high=0.5)
   kept <- Seurat::AlignSubspace(kept, reduction.type='cca',
-                                grouping.var='treatment', dims.align=1:20)
+                                grouping.var=treatment, dims.align=1:20)
+  print('Clustering cells...')
   kept <- Seurat::FindClusters(kept, reduction.type='cca.aligned', k.param=k,
                                dims.use=1:20)
   metadata <- combined@meta.data
@@ -52,7 +60,8 @@ cluster_across_treatments <- function(ctrl, prtb, k) {
   return(combined@meta.data)
 }
 
-main <- function(X_ctrl, obs_ctrl, X_prtb, obs_prtb, fit_json, out_csv) {
+main <- function(X_ctrl, obs_ctrl, X_prtb, obs_prtb, fit_json, out_csv,
+                 treatment='treatment') {
   ctrl <- create_seurat(X_ctrl, obs_ctrl)
   prtb <- create_seurat(X_prtb, obs_prtb)
   k <- fromJSON(file=fit_json)$n_neighbors
@@ -69,7 +78,8 @@ if (exists('snakemake')) {
        snakemake@input[['prtb_X']],
        snakemake@input[['prtb_obs']],
        snakemake@input[['json']],
-       snakemake@output[['csv']])
+       snakemake@output[['csv']],
+       snakemake@params[['name']])
 }
 
 
