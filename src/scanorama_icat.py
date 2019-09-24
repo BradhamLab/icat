@@ -26,12 +26,8 @@ if __name__ == '__main__':
         mixed = dutils.filter_cells(integrated, snakemake.params['treat_col'],
                                       lambda x: x not in\
                                                snakemake.params['treat_values'])
-        icat_kws = {'ncfs_kws': {'sigma': 2, 'reg': 1,
-                                 'kernel': 'exponential'},
-                    'neighbor_kws': {'n_neighbors': None},
-                    'cluster_kws': {'resolution': None},
-                    'weight_threshold': 1.0,
-                    'treatment_col': 'benchmark'}
+        with open(snakemake.input['ncfs'], 'r') as f:
+            icat_kws = json.load(f) 
         with open(snakemake.input['json'], 'r') as f:
             fit_data = json.load(f)
         icat_kws['neighbor_kws']['n_neighbors'] = fit_data['n_neighbors']
