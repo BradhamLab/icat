@@ -38,22 +38,20 @@ if __name__ == '__main__':
     except NameError:
         snakemake = None
     if snakemake is not None:
-        ctrl = sc.AnnData(X=pd.read_csv(snakemake.input['ctrl_X'],
-                                        header=None).values,
-                          obs=pd.read_csv(snakemake.input['ctrl_obs'],
-                                          index_col=0),
-                          var=pd.read_csv(snakemake.input['ctrl_var'],
-                                          index_col=0))
-        prtb = sc.AnnData(X=pd.read_csv(snakemake.input['prtb_X'],
-                                        header=None).values,
-                          obs=pd.read_csv(snakemake.input['prtb_obs'],
-                                          index_col=0),
-                          var=pd.read_csv(snakemake.input['prtb_var'],
-                                          index_col=0))
+        all_X = sorted(snakemake.input['X'])
+        all_obs = sorted(snakemake.input['obs'])
+        all_var = sorted(snakemake.input['var'])
+        adatas = []
+        for i, each in all_X:
+            adata = sc.AnnData(X=np.loadtxt(each, delimiter=','),
+                               obs=pd.read_csv(all_obs[i], index_col=0),
+                               var=pd.read_csv(all_var[i], index_col=0))
+            if snakemake.params['control_id'] in each:
+                adatas = [adata] + adatas
+            else:
+                adatas.append(adata)
         with open(snakemake.input['json'], 'r') as f:
             fit_data = json.load(f)
         k = fit_data['n_neighbors']
-        out = main([ctrl, prtb], k)
+        out = main(adatas, k)
         out.write_csvs(dirname=snakemake.params['outdir'], skip_data=False)
-
-
