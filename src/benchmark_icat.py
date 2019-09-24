@@ -44,5 +44,6 @@ if __name__ == '__main__':
         icat_kws['neighbor_kws']['n_neighbors'] = fit_data['n_neighbors']
         icat_model = models.icat(**icat_kws)
         combined = icat_model.cluster(ctrl_adata, prtb_combined)
-        combined.obs.to_csv(snakemake.output)
+        combined.write_csvs(dirname=snakemake.params['outdir'],
+                            skip_data=False)
         
