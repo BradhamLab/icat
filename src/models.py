@@ -427,6 +427,8 @@ class icat():
         model.fit(fit_X, np.array(controls.obs[self.cluster_col].values))
         # apply learned weights across gene expression matrix
         combined.X = model.transform(combined.X)
+        # save genes weights
+        combined.var['ncfs.weights'] = model.coef_
         # subset to most informative genes
         selected = combined.var.index.values[
                        np.where(model.coef_**2 > self.weight_threshold)[0]]
@@ -436,8 +438,6 @@ class icat():
                   ' future runs.')
             selected = combined.var.index.values
         combined = combined[:, selected].copy() # copy to be safe
-        # add ncfs weights to gene metadata 
-        combined.var['ncfs.weights'] = model.coef_
         # create neighbor graph for control+perturbed combined data
         sc.pp.pca(combined, **self.pca_kws)
         sc.pp.neighbors(combined, **self.neighbor_kws)
