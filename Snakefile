@@ -60,6 +60,8 @@ rule format_benchmark_data:
            for bench in BENCHMARK],
         obs=['data/processed/BenchData/{bench}/obs.csv'.format(bench=bench)
              for bench in BENCHMARK],
+        var=['data/processed/BenchData/{bench}/var.csv'.format(bench=bench)
+             for bench in BENCHMARK], 
         gene_svg='figures/benchmark/filter_genes_dispersion.svg'
     script:
         'src/format_benchmark_data.py'
@@ -92,9 +94,9 @@ rule move_benchmark_isolated:
         var='data/processed/BenchData/isolated/var.csv'
     shell:
         """
-        mv {input.X} {output.X};
-        mv {input.obs} {output.obs};
-        mv {input.var} {output.var} 
+        cp {input.X} {output.X};
+        cp {input.obs} {output.obs};
+        cp {input.var} {output.var} 
         """
     
 # ---------------------------- Generate Simulated Data -------------------------
@@ -228,7 +230,8 @@ rule benchmark_icat:
            for bench in BENCHMARK],
         obs=['data/processed/BenchData/{bench}/obs.csv'.format(bench=bench)\
              for bench in BENCHMARK],
-        json='data/interim/fits/benchmark/isolated_fits.json'
+        json='data/interim/fits/benchmark/isolated_fits.json',
+        ncfs='data/external/benchmark_ncfs_params.json'
     params:
         control_id='sc_celseq2',
         outdir='data/results/benchmark/icat/'
@@ -255,33 +258,34 @@ rule benchmark_seurat:
 
 rule benchmark_scanorama:
     input:
-        ctrl_X='data/processed/BenchData/isolated/X.csv',
-        ctrl_obs='data/processed/BenchData/isolated/obs.csv',
-        ctrl_var='data/processed/BenchData/isolated/var.csv',
-        prtb_X='data/processed/BenchData/mixed/X.csv',
-        prtb_obs='data/processed/BenchData/mixed/obs.csv',
-        prtb_var='data/processed/BenchData/mixed/var.csv',
+        X=['data/processed/BenchData/{bench}/X.csv'.format(bench=bench)\
+           for bench in BENCHMARK],
+        obs=['data/processed/BenchData/{bench}/obs.csv'.format(bench=bench)\
+             for bench in BENCHMARK],
+        var=['data/processed/BenchData/{bench}/var.csv'.format(bench=bench)\
+             for bench in BENCHMARK],
         json='data/interim/fits/benchmark/isolated_fits.json'
+    params:
+        control_id='sc_celseq2',
+        outdir='data/results/benchmark/scanorama/'
     output:
         X='data/results/benchmark/scanorama/X.csv',
         obs='data/results/benchmark/scanorama/obs.csv',
         var='data/results/benchmark/scanorama/var.csv'
-    params:
-        name='benchmark',
-        outdir='data/results/benchmark/scanorama/'
     script:
-        'src/evaluate_scanorama.py'
-
+        'src/run_scanorama.py'
+        
 rule benchmark_scanorama_icat:
     input:
         X='data/results/benchmark/scanorama/X.csv',
         obs='data/results/benchmark/scanorama/obs.csv',
         var='data/results/benchmark/scanorama/var.csv',
-        json='data/interim/fits/benchmark/isolated_fits.json'
+        json='data/interim/fits/benchmark/isolated_fits.json',
+        ncfs='data/external/benchmark_ncfs_params.json'
     output:
-        'data/results/benchmark/icat_scan/X.csv',
-        'data/results/benchmark/icat_scan/obs.csv',
-        'data/results/benchmark/icat_scan/var.csv'
+        X='data/results/benchmark/icat_scan/X.csv',
+        obs='data/results/benchmark/icat_scan/obs.csv',
+        var='data/results/benchmark/icat_scan/var.csv'
     params:
         outdir='data/results/benchmark/icat_scan/',
         treat_col='benchmark',
@@ -294,7 +298,7 @@ rule summarize_benchmark:
         icat='data/results/benchmark/icat/obs.csv',
         seurat='data/results/benchmark/seurat/clustered.csv',
         scanorama='data/results/benchmark/scanorama/obs.csv',
-        icat_scan='data/results/benchmark/icat_scan/obs.csv'
+        icat_scan='data/results/benchmark/icat_scan/obs.csv',
     params:
         identity='cell_line'
     output:
