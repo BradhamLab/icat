@@ -1,9 +1,10 @@
 import pandas as pd
 import numpy as np
-import 
+from scanpy import api as sc
 from downstream.src.analysis import utils as dutils
 from icat.src import utils
 from icat.src import models
+import json
 
 if __name__ == '__main__':
     try:
@@ -17,10 +18,12 @@ if __name__ == '__main__':
                                                 index_col=0),
                                 var=pd.read_csv(snakemake.input['var'],
                                                 index_col=0))
-        isolated = utils.filter_cells(integrated, snakemake.params['treat_col'],
+        integrated.var.index = integrated.var.index.astype(str)
+        integrated.obs.index = integrated.obs.index.astype(str)
+        isolated = dutils.filter_cells(integrated, snakemake.params['treat_col'],
                                       lambda x: x not in\
                                                snakemake.params['treat_values'])
-        mixed = utils.filter_cells(integrated, snakemake.params['treat_col'],
+        mixed = dutils.filter_cells(integrated, snakemake.params['treat_col'],
                                       lambda x: x not in\
                                                snakemake.params['treat_values'])
         icat_kws = {'ncfs_kws': {'sigma': 2, 'reg': 1,
@@ -34,5 +37,9 @@ if __name__ == '__main__':
         icat_kws['neighbor_kws']['n_neighbors'] = fit_data['n_neighbors']
         icat_model = models.icat(**icat_kws)
         out = icat_model.cluster(isolated, mixed)
+        out.obs.rename(columns={'sslouvain': 'scanorama.sslouvain'},
+                       inplace=True)
+        out.write_csvs(dirname=snakemake.params['outdir'],
+                       skip_data=False)
         
         
