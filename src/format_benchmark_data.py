@@ -64,18 +64,17 @@ if __name__ == '__main__':
         # normalize data
         sc.pp.normalize_total(combined)
         # log transform counts to detected highly variable genes
-        logged = combined.copy()
-        logged.X = np.log(logged.X + 1)
-        sc.pp.highly_variable_genes(logged, flavor='seurat')
+        sc.pp.log1p(combined)
+        sc.pp.highly_variable_genes(combined, flavor='seurat')
         # plot highly variable genes
         sc.settings.figdir = snakemake.params['plotdir']
-        sc.pl.highly_variable_genes(logged, show=False, save='.svg')
-        # copy logged.var to combined.var
-        combined.var = logged.var
-        variable_genes = logged.var.index[
-                             np.where(logged.var['highly_variable'])[0]]
+        sc.pl.highly_variable_genes(combined, show=False, save='.svg')
+        # subset to highly variable genes
+        variable_genes = combined.var.index[
+                             np.where(combined.var['highly_variable'])[0]]
         combined = combined[:, variable_genes]
         combined.obs['cell_line'] = combined.obs['cell_line'].astype('category')
+        # write data
         for each in adatas:
             bench = each.obs['benchmark'][0]
             out_adata = dutils.filter_cells(combined, 'benchmark',

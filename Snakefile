@@ -27,8 +27,9 @@ rule all:
             for exp in EXPERIMENTS],
         ['data/results/simulated/scanorama/{exp}/obs.csv'.format(exp=exp)\
             for exp in EXPERIMENTS],
-        'data/processed/Kang/X.csv'
-        # ['data/processed/BenchData/{bench}/X.csv'.format(bench=bench)\
+        'data/processed/Kang/X.csv',
+        'data/results/benchmark/results.csv'
+        # ['data/processed/benchmark/{bench}/X.csv'.format(bench=bench)\
         #     for bench in BENCHMARK]
 
 # ---------------------------- Process Kang Data -------------------------------
@@ -46,21 +47,23 @@ rule format_kang_data:
 
 # --------------------------- Process Benchmark Data ---------------------------
 
+# normalize across cells, subset to highly variable genes, and ln(X +1)
+# transform cells
 rule format_benchmark_data:
     input:
-        counts=['data/raw/BenchData/{bench}.count.csv'.format(bench=bench)\
+        counts=['data/raw/benchmark/{bench}.count.csv'.format(bench=bench)\
                 for bench in BENCHMARK],
-        meta=['data/raw/BenchData/{bench}.metadata.csv'.format(bench=bench)\
+        meta=['data/raw/benchmark/{bench}.metadata.csv'.format(bench=bench)\
               for bench in BENCHMARK]
     params:
-        outdir='data/processed/BenchData/',
+        outdir='data/processed/benchmark/',
         plotdir='figures/benchmark/'
     output:
-        X=['data/processed/BenchData/{bench}/X.csv'.format(bench=bench)
+        X=['data/processed/benchmark/{bench}/X.csv'.format(bench=bench)
            for bench in BENCHMARK],
-        obs=['data/processed/BenchData/{bench}/obs.csv'.format(bench=bench)
+        obs=['data/processed/benchmark/{bench}/obs.csv'.format(bench=bench)
              for bench in BENCHMARK],
-        var=['data/processed/BenchData/{bench}/var.csv'.format(bench=bench)
+        var=['data/processed/benchmark/{bench}/var.csv'.format(bench=bench)
              for bench in BENCHMARK], 
         gene_svg='figures/benchmark/filter_genes_dispersion.svg'
     script:
@@ -68,30 +71,30 @@ rule format_benchmark_data:
 
 rule concatenate_benchmark_mixtures:
     input:
-        X=['data/processed/BenchData/{mix}/X.csv'.format(mix=mix)
+        X=['data/processed/benchmark/{mix}/X.csv'.format(mix=mix)
            for mix in MIXES],
-        obs=['data/processed/BenchData/{mix}/obs.csv'.format(mix=mix)
+        obs=['data/processed/benchmark/{mix}/obs.csv'.format(mix=mix)
              for mix in MIXES],
-        var=['data/processed/BenchData/{mix}/var.csv'.format(mix=mix)
+        var=['data/processed/benchmark/{mix}/var.csv'.format(mix=mix)
              for mix in MIXES]
     params:
-        outdir='data/processed/BenchData/mixed/'
+        outdir='data/processed/benchmark/mixed/'
     output:
-        X='data/processed/BenchData/mixed/X.csv',
-        obs='data/processed/BenchData/mixed/obs.csv',
-        var='data/processed/BenchData/mixed/var.csv'
+        X='data/processed/benchmark/mixed/X.csv',
+        obs='data/processed/benchmark/mixed/obs.csv',
+        var='data/processed/benchmark/mixed/var.csv'
     script:
         "src/concatenate_mixtures.py"
 
 rule move_benchmark_isolated:
     input:
-        X='data/processed/BenchData/sc_celseq2/X.csv',
-        obs='data/processed/BenchData/sc_celseq2/obs.csv',
-        var='data/processed/BenchData/sc_celseq2/var.csv'
+        X='data/processed/benchmark/sc_celseq2/X.csv',
+        obs='data/processed/benchmark/sc_celseq2/obs.csv',
+        var='data/processed/benchmark/sc_celseq2/var.csv'
     output:
-        X='data/processed/BenchData/isolated/X.csv',
-        obs='data/processed/BenchData/isolated/obs.csv',
-        var='data/processed/BenchData/isolated/var.csv'
+        X='data/processed/benchmark/isolated/X.csv',
+        obs='data/processed/benchmark/isolated/obs.csv',
+        var='data/processed/benchmark/isolated/var.csv'
     shell:
         """
         cp {input.X} {output.X};
@@ -207,11 +210,11 @@ rule summarize_simulated:
 
 rule fit_benchmark_data:
     input:
-        ctrl_X='data/processed/BenchData/sc_celseq2/X.csv',
-        ctrl_obs='data/processed/BenchData/sc_celseq2/obs.csv',
-        prtb_X = ['data/processed/BenchData/{}/X.csv'.format(x)\
+        ctrl_X='data/processed/benchmark/sc_celseq2/X.csv',
+        ctrl_obs='data/processed/benchmark/sc_celseq2/obs.csv',
+        prtb_X = ['data/processed/benchmark/{}/X.csv'.format(x)\
                   for x in ['cellmix1', 'cellmix2', 'cellmix3', 'cellmix4']],
-        prtb_obs = ['data/processed/BenchData/{}/obs.csv'.format(x)\
+        prtb_obs = ['data/processed/benchmark/{}/obs.csv'.format(x)\
                     for x in ['cellmix1', 'cellmix2', 'cellmix3', 'cellmix4']]
     params:
         label='cell_line',
@@ -226,9 +229,9 @@ rule fit_benchmark_data:
 
 rule benchmark_icat:
     input:
-        X=['data/processed/BenchData/{bench}/X.csv'.format(bench=bench)\
+        X=['data/processed/benchmark/{bench}/X.csv'.format(bench=bench)\
            for bench in BENCHMARK],
-        obs=['data/processed/BenchData/{bench}/obs.csv'.format(bench=bench)\
+        obs=['data/processed/benchmark/{bench}/obs.csv'.format(bench=bench)\
              for bench in BENCHMARK],
         json='data/interim/fits/benchmark/isolated_fits.json',
         ncfs='data/external/benchmark_ncfs_params.json'
@@ -244,10 +247,10 @@ rule benchmark_icat:
 
 rule benchmark_seurat:
     input:
-        ctrl_X='data/processed/BenchData/isolated/X.csv',
-        ctrl_obs='data/processed/BenchData/isolated/obs.csv',
-        prtb_X='data/processed/BenchData/mixed/X.csv',
-        prtb_obs='data/processed/BenchData/mixed/obs.csv',
+        ctrl_X='data/processed/benchmark/isolated/X.csv',
+        ctrl_obs='data/processed/benchmark/isolated/obs.csv',
+        prtb_X='data/processed/benchmark/mixed/X.csv',
+        prtb_obs='data/processed/benchmark/mixed/obs.csv',
         json='data/interim/fits/benchmark/isolated_fits.json'
     params:
         name='benchmark'
@@ -258,11 +261,11 @@ rule benchmark_seurat:
 
 rule benchmark_scanorama:
     input:
-        X=['data/processed/BenchData/{bench}/X.csv'.format(bench=bench)\
+        X=['data/processed/benchmark/{bench}/X.csv'.format(bench=bench)\
            for bench in BENCHMARK],
-        obs=['data/processed/BenchData/{bench}/obs.csv'.format(bench=bench)\
+        obs=['data/processed/benchmark/{bench}/obs.csv'.format(bench=bench)\
              for bench in BENCHMARK],
-        var=['data/processed/BenchData/{bench}/var.csv'.format(bench=bench)\
+        var=['data/processed/benchmark/{bench}/var.csv'.format(bench=bench)\
              for bench in BENCHMARK],
         json='data/interim/fits/benchmark/isolated_fits.json'
     params:
@@ -306,6 +309,28 @@ rule summarize_benchmark:
     script:
         'src/summarize_benchmark.py'
 
+
+# create plots/figures
+rule plot_benchmark:
+    input:
+        results='data/results/benchmark/results.csv',
+        labels=['data/results/benchmark/icat/obs.csv',
+                'data/results/benchmark/seurat/clustered.csv',
+                'data/results/benchmark/scanorama/obs.csv',
+                'data/results/benchmark/icat_scn/obs.csv'],
+        Xs=['data/results/benchmark/icat/X.csv',
+            'data/results/benchmark/seurat/clustered.csv',
+            'data/results/benchmark/scanorama/X.csv',
+            'data/results/benchmark/icat_scan/X.csv'],
+        fit='data/interim/fits/benchmark/isolated_fits.json'
+    output:
+        icat='reports/figures/benchmark/icat_umap.svg',
+        seurat='reports/figures/benchmark/seurat_umap.svg',
+        scanorama='reports/figures/benchmark/scanorama_umap.svg',
+        icat_scan='reports/figures/benchmark/icat_scan_umap.svg',
+        metrics='reports/figures/benchmark/metrics.svg'
+    output:
+        'src/plot_performance.py'
 
 # ---------------------------- Analyze Kang Data -------------------------------
 
