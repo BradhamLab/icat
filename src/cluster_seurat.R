@@ -11,12 +11,8 @@ create_seurat <- function(X, obs) {
   X_data = as.data.frame(t(read.csv(X, header=FALSE)))
   obs_data = read.csv(obs, row.names=1, check.names=FALSE,
                       stringsAsFactors=FALSE)
-  # hack, fix this
-  drop <- c('poor_quality', 'traj', 'cell_line_demuxlet',
-            'demuxlet_cls')
-  if (sum(drop %in% colnames(obs_data) > 0)) {
-    obs_data <- obs_data[, !(colnames(obs_data) %in% drop)]
-  }
+  # drop columns with NA b/c tibble binding in Seurat breaks
+  obs_data <- obs_data[ , colSums(is.na(obs_data)) < 1]
   # force to population
   # obs_data$Population <- as.factor(obs_data$Population)
   row.names(obs_data) <- colnames(X_data)
