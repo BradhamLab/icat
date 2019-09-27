@@ -17,9 +17,9 @@ if __name__ == '__main__':
         # lines in CelSeq benchmark data
         lines = ['H1975', 'H2228', 'HCC827']
         # cell mixtures are mixtures of 9 cells
-        line_to_mixture = {lines[0]:'9,0,0',
-                           lines[1]:'0,9,0',
-                           lines[2]:'0,0,9'}
+        line_to_mixture = {lines[0]:[9,0,0],
+                           lines[1]:[0,9,0],
+                           lines[2]:[0,0,9]}
         bench_regex = re.compile('^(.*?)\.')
         for x, meta in zip(snakemake.input['counts'], snakemake.input['meta']):
             count = pd.read_csv(x, index_col=0)
@@ -50,14 +50,21 @@ if __name__ == '__main__':
             if all([x in adata.obs.columns for x in lines]):
                 adata.obs['n_cells'] = adata.obs[lines].apply(lambda x: sum(x),
                                                               axis=1)
-                adata.obs['cell_line'] = adata.obs[lines].apply(lambda x:
+                adata.obs['mixture'] = adata.obs[lines].apply(lambda x:
                                                   ','.join([str(y) for y in x]),
                                                   axis=1)
                 adata = dutils.filter_cells(adata, 'n_cells', lambda x: x == 9)
             # convert cell lines to mixture id of pure cell line
             else:
-                adata.obs['cell_line'] = adata.obs['cell_line'].apply(lambda x:
-                                                             line_to_mixture[x])
+                adata.obs['mixture'] = adata.obs['mixture'].apply(lambda x:
+                                    ','.join([str(y) for y in line_to_mixture[x]]))
+                adata.obs[lines[0]] = None
+                adata.obs[lines[1]] = None
+                adata.obs[lines[2]] = None 
+                # Look, the for loop was the cleanest way to do this
+                for x in adata.obs.index.values:
+                    cell_type = adata.obs.loc[x, 'mixture']
+                    adata.obs.loc[x, lines] = line_to_mixture[cell_type] 
             adatas[i] = adata
         combined = utils.rbind_adata(adatas)
         sc.pp.filter_genes(combined, min_cells=3)
@@ -73,7 +80,7 @@ if __name__ == '__main__':
         variable_genes = combined.var.index[
                              np.where(combined.var['highly_variable'])[0]]
         combined = combined[:, variable_genes]
-        combined.obs['cell_line'] = combined.obs['cell_line'].astype('category')
+        combined.obs['mixture'] = combined.obs['mixture'].astype('category')
         # write data
         for each in adatas:
             bench = each.obs['benchmark'][0]
