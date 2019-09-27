@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import os
 import colorcet as cc
+from downstream.src.visualization import visualize
 
 try:
     loc = os.path.dirname(os.path.abspath(__file__))
@@ -16,19 +17,19 @@ try:
 except:
     pass
 
-def main(andata, label_col):
-    sc.pp.pca(andata)
+def main(adata, label_col):
+    sc.pp.pca(adata)
     performance = dict()
-    n_max = int(0.60 * andata.shape[0])
+    n_max = int(0.60 * adata.shape[0])
     n_min = 3
     score = -np.inf
     resolutions = [1]
     for n in range(n_min, n_max + 1):
         for r in resolutions:
-            sc.pp.neighbors(andata, n_neighbors=n)
-            sc.tl.umap(andata, min_dist=0.0)
-            sc.tl.louvain(andata, resolution=r, key_added='louvain')
-            measures = utils.performance(andata, label_col, 'louvain')
+            sc.pp.neighbors(adata, n_neighbors=n)
+            sc.tl.umap(adata, min_dist=0.0)
+            sc.tl.louvain(adata, resolution=r, key_added='louvain')
+            measures = utils.performance(adata, label_col, 'louvain')
             if score < measures['adjusted.rand']:
                 performance = measures.copy()
                 performance['n_neighbors'] = n
@@ -37,12 +38,14 @@ def main(andata, label_col):
     return performance
 
 
-def plot_cells(andata, n, fn, color, shape):
-    andata.obs[color] = andata.obs[color].astype('category')
-    sc.pp.pca(andata)
-    sc.pp.neighbors(andata, n_neighbors=n)
-    sc.tl.umap(andata, min_dist=0)
-    utils.plot_umap(andata, color=color, shape=shape)
+def plot_cells(adata, n, fn, color, shape):
+    adata.obs[color] = adata.obs[color].astype('category')
+    sc.pp.pca(adata)
+    sc.pp.neighbors(adata, n_neighbors=n)
+    sc.tl.umap(adata, min_dist=0)
+    adata.obs['umap1'] = adata.obsm['X_umap'][:, 0]
+    adata.obs['umap2'] = adata.obsm['X_umap'][:, 1]
+    visualize.plot_umap(adata, color_col=color, shape_col=shape)
     plt.savefig(fn)
     plt.cla()
     plt.clf()
