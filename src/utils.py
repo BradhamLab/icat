@@ -145,7 +145,7 @@ def performance(adata, true_col, pred_col):
 def plot_umap(adata, color, shape, ax=None):
     if ax is None:
         __, ax = plt.subplots(figsize=(10, 8))
-    colors =plt.rcParams['axes.prop_cycle'].by_key()['color']
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     pallete = {}
     adata.obs[color] = adata.obs[color].astype(str)
     for i, each in enumerate(adata.obs[color].unique()):
