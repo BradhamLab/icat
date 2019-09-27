@@ -10,12 +10,19 @@ if __name__ == '__main__':
         keys = ['icat', 'seurat', 'scanorama', 'icat_scan']
         columns = ['sslouvain', 'cluster', 'scanorama.louvain',
                    'scanorama.sslouvain']
+        labels = snakemake.params['identity']
         performances = {}
         for i, each in enumerate(keys):
             data = pd.read_csv(snakemake.input[each], index_col=0)
             # print(data.columns)
             performances[each] = utils.performance(data,
-                                                   snakemake.params['identity'],
+                                                   labels,
                                                    columns[i])
+            # subset seurat down to non-discarded cells
+            if each == 'seurat':
+                subset = data[data[columns[i]] != 'unknown']
+                performances[each + '.aligned'] = utils.performance(subset,
+                                                                    labels,
+                                                                    columns[i])
         out = pd.DataFrame(performances).T
         out.to_csv(snakemake.output['csv'])
