@@ -56,14 +56,14 @@ if __name__ == '__main__':
                 adata = dutils.filter_cells(adata, 'n_cells', lambda x: x == 9)
             # convert cell lines to mixture id of pure cell line
             else:
-                adata.obs['mixture'] = adata.obs['mixture'].apply(lambda x:
+                adata.obs['mixture'] = adata.obs['cell_line'].apply(lambda x:
                                     ','.join([str(y) for y in line_to_mixture[x]]))
                 adata.obs[lines[0]] = None
                 adata.obs[lines[1]] = None
                 adata.obs[lines[2]] = None 
-                # Look, the for loop was the cleanest way to do this
+                # if you know how to apply for multipel column assignment, lmk
                 for x in adata.obs.index.values:
-                    cell_type = adata.obs.loc[x, 'mixture']
+                    cell_type = adata.obs.loc[x, 'cell_line']
                     adata.obs.loc[x, lines] = line_to_mixture[cell_type] 
             adatas[i] = adata
         combined = utils.rbind_adata(adatas)
