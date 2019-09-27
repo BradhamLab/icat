@@ -217,7 +217,7 @@ rule fit_benchmark_data:
         prtb_obs = ['data/processed/benchmark/{}/obs.csv'.format(x)\
                     for x in ['cellmix1', 'cellmix2', 'cellmix3', 'cellmix4']]
     params:
-        label='cell_line',
+        label='mixture',
         plotdir='figures/benchmark/'
     output:
         json='data/interim/fits/benchmark/isolated_fits.json',
@@ -303,7 +303,7 @@ rule summarize_benchmark:
         scanorama='data/results/benchmark/scanorama/obs.csv',
         icat_scan='data/results/benchmark/icat_scan/obs.csv',
     params:
-        identity='cell_line'
+        identity='mixture'
     output:
         csv='data/results/benchmark/results.csv'
     script:
@@ -323,6 +323,8 @@ rule plot_benchmark:
             'data/results/benchmark/scanorama/X.csv',
             'data/results/benchmark/icat_scan/X.csv'],
         fit='data/interim/fits/benchmark/isolated_fits.json'
+    # params:
+    #     methods:['icat', 'seurat', 'scanorama', 'icat_scan']
     output:
         icat='reports/figures/benchmark/icat_umap.svg',
         seurat='reports/figures/benchmark/seurat_umap.svg',
