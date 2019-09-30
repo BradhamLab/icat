@@ -33,7 +33,7 @@ figure.subplot.right: 0.95
 figure.subplot.bottom: 0.07
 figure.subplot.wspace: 0.25
 figure.subplot.hspace: 0.25
-figure.figsize: 8.0, 6.0
+figure.figsize: 12.0, 8.0
 
 # boxplot params
 boxplot.flierprops.linewidth: 2.0
