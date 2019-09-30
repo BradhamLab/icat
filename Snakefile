@@ -317,21 +317,29 @@ rule plot_benchmark:
         labels=['data/results/benchmark/icat/obs.csv',
                 'data/results/benchmark/seurat/clustered.csv',
                 'data/results/benchmark/scanorama/obs.csv',
-                'data/results/benchmark/icat_scn/obs.csv'],
+                'data/results/benchmark/icat_scan/obs.csv'],
         Xs=['data/results/benchmark/icat/X.csv',
-            'data/results/benchmark/seurat/clustered.csv',
+            'data/results/benchmark/icat/X.csv', # not going to use the X data
             'data/results/benchmark/scanorama/X.csv',
             'data/results/benchmark/icat_scan/X.csv'],
         fit='data/interim/fits/benchmark/isolated_fits.json'
-    # params:
-    #     methods:['icat', 'seurat', 'scanorama', 'icat_scan']
+    params:
+        methods=['icat', 'seurat', 'scanorama', 'icat_scan'],
+        plotdir='reports/figures/benchmark/',
+        label='mixture',
+        treatment='benchmark',
+        xlabel='Cell Mixture'
     output:
-        icat='reports/figures/benchmark/icat_umap.svg',
-        seurat='reports/figures/benchmark/seurat_umap.svg',
-        scanorama='reports/figures/benchmark/scanorama_umap.svg',
-        icat_scan='reports/figures/benchmark/icat_scan_umap.svg',
-        metrics='reports/figures/benchmark/metrics.svg'
-    output:
+        metrics='reports/figures/benchmark/metrics.svg',
+        method_plots=['reports/figures/benchmark/{method}/{plot}'.format(
+                      method=method, plot=plot) for method, plot in\
+                      itertools.product(['icat', 'seurat', 'scanorama',
+                                         'icat_scan'],
+                                        ['known_cells_umap.svg',
+                                         'cluster_umap.svg',
+                                         'treatment_umap.svg',
+                                         'cluster_distribution.svg'])]
+    script:
         'src/plot_performance.py'
 
 # ---------------------------- Analyze Kang Data -------------------------------
