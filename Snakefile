@@ -338,6 +338,7 @@ rule plot_benchmark:
                                         ['known_cells_umap.svg',
                                          'cluster_umap.svg',
                                          'treatment_umap.svg',
+                                         'cell_type_distribution.svg',
                                          'cluster_distribution.svg'])]
     script:
         'src/plot_performance.py'
