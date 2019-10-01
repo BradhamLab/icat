@@ -22,10 +22,12 @@ if __name__ == '__main__':
         integrated.obs.index = integrated.obs.index.astype(str)
         isolated = dutils.filter_cells(integrated, snakemake.params['treat_col'],
                                       lambda x: x not in\
-                                               snakemake.params['treat_values'])
+                                            snakemake.params['treat_values']).\
+                                            copy()
         mixed = dutils.filter_cells(integrated, snakemake.params['treat_col'],
-                                      lambda x: x not in\
-                                               snakemake.params['treat_values'])
+                                      lambda x: x in\
+                                             snakemake.params['treat_values']).\
+                                             copy()
         with open(snakemake.input['ncfs'], 'r') as f:
             icat_kws = json.load(f) 
         with open(snakemake.input['json'], 'r') as f:
