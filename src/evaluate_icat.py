@@ -61,9 +61,6 @@ def evaluate_icat(control, treated, label_col, icat_kws, plot_dir):
 
 
 if __name__ == '__main__':
-    icat_kws = {'ncfs_icat': {'sigma': 2, 'reg': 3},
-                'neighbor_kws': {'n_neighbors': None},
-                'cluster_kws': {'resolution': None}}
     try:
         snakemake
     except NameError:
@@ -76,10 +73,13 @@ if __name__ == '__main__':
         prtb_obs = snakemake.input['prtb_obs']
         prtb_var = snakemake.input['prtb_var']
         fit_json = snakemake.input['json']
+        ncfs_json = snakemake.input['ncfs']
         name = snakemake.params['name']
         plot_dir = snakemake.params['plotdir']
         out_csv = snakemake.output['csv']
         out_dir = snakemake.params['outdir']
+    with open(ncfs_json, 'r') as f:
+        icat_kws = json.load(f)
     if not os.path.exists(plot_dir):
         os.mkdir(plot_dir)
     control_data = sc.AnnData(X=pd.read_csv(ctrl_X, header=None).values,
