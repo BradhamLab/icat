@@ -162,7 +162,7 @@ if __name__ == "__main__":
             # rename cluster column to be consistent between methods
             col_name = label_dictionary[method]
             obs.rename(columns={col_name: 'Cluster'}, inplace=True)
-            # obs['Cluster'] = obs['Cluster'].astype('category')
+            obs['Cluster'] = obs['Cluster'].astype(str)
             # create AnnData object
             adata = sc.AnnData(X=X, obs=obs)
             # check to see if UMAP projection is already saved in obs data
