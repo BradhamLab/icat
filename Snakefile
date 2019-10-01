@@ -128,12 +128,12 @@ rule fit_simulated:
         prtb_var='data/processed/simulated/{exp}/Treated/var.csv'
     params:
         label='Population',
-        plotdir='figures/simulated/{exp}/'
+        plotdir='reports/figures/simulated/{exp}/'
     output:
         json='data/interim/fits/{exp}Controls_fits.json',
-        ctrl_svg='figures/simulated/{exp}/umap_controls.svg',
-        prtb_svg='figures/simulated/{exp}/umap_treated.svg',
-        comb_svg='figures/simulated/{exp}/umap_combined.svg'
+        ctrl_svg='reports/figures/simulated/{exp}/umap_controls.svg',
+        prtb_svg='reports/figures/simulated/{exp}/umap_treated.svg',
+        comb_svg='reports/figures/simulated/{exp}/umap_combined.svg'
     script:
         'src/fit_louvain.py'
 
@@ -145,17 +145,18 @@ rule simulated_icat:
         prtb_X='data/processed/simulated/{exp}/Treated/X.csv',
         prtb_obs='data/processed/simulated/{exp}/Treated/obs.csv',
         prtb_var='data/processed/simulated/{exp}/Treated/var.csv',
-        json='data/interim/fits/{exp}Controls_fits.json'
+        json='data/interim/fits/{exp}Controls_fits.json',
+        ncfs='data/external/simulated_ncfs_params.jsonsimulated/'
     params:
         name='{exp}',
-        plotdir='figures/simulated/{exp}/',
+        plotdir='reports/figures/simulated/{exp}/icat',
         outdir='data/results/simulated/icat/{exp}',
     output:
         csv='data/results/simulated/icat/{exp}/performance.csv',
         obs='data/results/simulated/icat/{exp}/obs.csv',
-        p1='figures/simulated/{exp}/umap_louvain.svg',
-        p2='figures/simulated/{exp}/umap_ncfs-louvain.svg',
-        p3='figures/simulated/{exp}/umap_sslouvain.svg'
+        p1='reports/figures/simulated/icat/{exp}/umap_louvain.svg',
+        p2='reports/figures/simulated/icat/{exp}/umap_ncfs-louvain.svg',
+        p3='reports/figures/simulated/icat/{exp}/umap_sslouvain.svg'
     script:
         'src/evaluate_icat.py'
 
@@ -191,6 +192,25 @@ rule simulated_scanorama:
         outdir='data/results/simulated/scanorama/{exp}/'
     script:
         'src/evaluate_scanorama.py'
+
+rule simulated_scanorama_icat:
+    input:
+        X='data/results/simulated/scanorama/{exp}/X.csv',
+        obs='data/results/simulated/scanorama/{exp}/obs.csv',
+        var='data/results/simulated/scanorama/{exp}/var.csv',
+        json='data/interim/fits/{exp}Controls_fits.json',
+        ncfs='data/external/benchmark_ncfs_params.json'
+    output:
+        X='data/results/simulated/icat_scan/{exp}/X.csv',
+        obs='data/results/simulated/icat_scan/{exp}/obs.csv',
+        var='data/results/simulated/icat_scan/{exp}/var.csv'
+    params:
+        outdir='data/results/benchmark/icat_scan/',
+        treat_col='benchmark',
+        treat_values = MIXES
+    script:
+        'src/scanorama_icat.py'
+
 
 rule summarize_simulated:
     input:
