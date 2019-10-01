@@ -12,7 +12,7 @@ from downstream.src.visualization import visualize
 
 try:
     loc = os.path.dirname(os.path.abspath(__file__))
-    plt.style.use(os.path.join(loc, 'configs/icat.mplstyle'))
+    plt.style.use(os.path.join(loc, 'configs/figures.mplstyle'))
     plt.rc('axes', prop_cycle=cycler('color', cc.glasbey_light))
 except:
     pass
@@ -39,12 +39,13 @@ def main(adata, label_col):
 
 
 def plot_cells(adata, n, fn, color, shape):
-    adata.obs[color] = adata.obs[color].astype('category')
+    adata.obs[color] = adata.obs[color].astype(str).astype('category')
+    print(adata.obs[color])
     sc.pp.pca(adata)
     sc.pp.neighbors(adata, n_neighbors=n)
     sc.tl.umap(adata, min_dist=0)
-    adata.obs['umap1'] = adata.obsm['X_umap'][:, 0]
-    adata.obs['umap2'] = adata.obsm['X_umap'][:, 1]
+    adata.obs['UMAP1'] = adata.obsm['X_umap'][:, 0]
+    adata.obs['UMAP2'] = adata.obsm['X_umap'][:, 1]
     visualize.plot_umap(adata, color_col=color, shape_col=shape)
     plt.savefig(fn)
     plt.cla()
