@@ -1,19 +1,26 @@
-from matplotlib import pyplot as plt
-import matplotlib as mpl
-import pandas as pd
-from scanpy import api as sc
-import numpy as np
-from cycler import cycler
+import itertools
 import json
-from downstream.src.visualization import visualize
 import os
-import colorcet as cc
 
+import colorcet as cc
+import matplotlib as mpl
+import numpy as np
+import pandas as pd
+from cycler import cycler
+from matplotlib import pyplot as plt
+from scanpy import api as sc
+
+from downstream.src.visualization import visualize
+
+loc = os.path.dirname(os.path.abspath(__file__))
+plt.style.use(os.path.join(loc, 'configs/figures.mplstyle'))
 plt.rc('axes', prop_cycle=cycler('color', cc.glasbey_dark))
+
 
 method_dictionary = {
     'icat': 'icat',
-    'seurat': 'Seurat 2.3',
+    'seurat': 'Seurat 2.3 - All',
+    'seurat.aligned': 'Seurat 2.3 - Aligned',
     'scanorama': 'scanorama',
     'icat_scan': 'scanorama + icat'
 }
@@ -33,7 +40,6 @@ metric_dictionary = {
     'homogeneity': 'Homogeneity'
 }
 
-
 def stacked_barplot(df, label, cluster, xlabel=''):
     """[summary]
     
@@ -48,7 +54,6 @@ def stacked_barplot(df, label, cluster, xlabel=''):
     xlabel : str
         Description of group plotted along the x-axis.
     """
-
     counts = df.groupby([cluster, label]).size().unstack().fillna(0)
     cluster_totals = counts.sum(axis=0)
     # percentages of cells belonging to each cluster for each known label 
@@ -66,15 +71,37 @@ def stacked_barplot(df, label, cluster, xlabel=''):
                 width=0.85, bottom=totals, label=each)
         # update cumulate percentage for starting points
         totals += new_percentages
-    plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    legend_cols = int(np.ceil(len(clusters) / 20))
+    plt.legend(loc='center left', bbox_to_anchor=(1, 0.5),
+               ncol=legend_cols)
     plt.xticks(xticks, labels, rotation=90)
     plt.xlabel(xlabel, fontsize=24, labelpad=5)
     plt.ylabel("Percentage of Cells", fontsize=24)
     yticks, __ = plt.yticks()
     ylabels = [str(y) + "%" for y in yticks]
     plt.yticks(yticks, ylabels)
+    plt.ylim(0, 100)
     plt.tight_layout()
 
+def flip(items, ncol):
+    """[summary]
+
+    Taken from here:
+    https://stackoverflow.com/questions/10101141/matplotlib-legend-add-items-across-columns-instead-of-down
+    
+    Parameters
+    ----------
+    items : [type]
+        [description]
+    ncol : [type]
+        [description]
+    
+    Returns
+    -------
+    [type]
+        [description]
+    """
+    return itertools.chain(*[items[i::ncol] for i in range(ncol)])
 
 def plot_performance(df):
     """
@@ -91,15 +118,19 @@ def plot_performance(df):
     indices = indices + indices * width
     colors = cycler(color=plt.rcParams['axes.prop_cycle'].by_key()['color'])
     starts = indices - width * df.shape[1] / 2
-    for method, color in zip(df.columns, colors()):
+    for method, color in zip(sorted(df.columns), colors()):
         plt.bar(starts + width, df[method], width, color=color['color'],
                 label=method_dictionary[method])
         starts = starts + width
     indices = indices + width / 2
     plt.xticks(indices, labels=[metric_dictionary[x] for x in df.index.values])
     plt.title("Method Performance", loc='left')
-    plt.legend()
     ax = plt.gca()
+    handles, labels = ax.get_legend_handles_labels()
+    legend_cols = int(np.ceil(performance.shape[1] / 2))
+    plt.legend(flip(handles, legend_cols), flip(labels, legend_cols),
+               loc='upper center', bbox_to_anchor=(0.5, -0.05),
+               ncol=legend_cols)
     ax.spines['right'].set_color('none')
     ax.spines['top'].set_color('none')
     plt.tight_layout()
@@ -131,6 +162,7 @@ if __name__ == "__main__":
             # rename cluster column to be consistent between methods
             col_name = label_dictionary[method]
             obs.rename(columns={col_name: 'Cluster'}, inplace=True)
+            # obs['Cluster'] = obs['Cluster'].astype('category')
             # create AnnData object
             adata = sc.AnnData(X=X, obs=obs)
             # check to see if UMAP projection is already saved in obs data
@@ -159,19 +191,14 @@ if __name__ == "__main__":
                             xlabel=snakemake.params['xlabel'])
             plt.savefig(os.path.join(plotdir, 'cluster_distribution.svg'))
             close_plot()
-            # # plot_distributin of known cluster labels between clusters
-            # stacked_barplot(adata.obs, 'Cluster', snakemake.params['label'],
-            #                 xlabel='Cluster')
-            # plt.savefig(os.path.join(plotdir, 'cell_type_distribution.svg'))
-            # close_plot()
-            
-
-            
-            
-            
+            # plot_distributin of known cluster labels between clusters
+            stacked_barplot(adata.obs, 'Cluster', snakemake.params['label'],
+                            xlabel='Cluster')
+            plt.savefig(os.path.join(plotdir, 'cell_type_distribution.svg'))
+            close_plot()
+                  
         # plot performance across metrics
         performance = pd.read_csv(snakemake.input['results'], index_col=0).T
         plot_performance(performance)
         plt.savefig(snakemake.output['metrics'])
         close_plot()
-            
