@@ -47,6 +47,8 @@ def main(configs, sims=1, reps=1):
             simmed, controls = run_simulation(control_params, v, sims, reps,
                                               controls=controls)
             exp_key = "{}.Perturbation{}".format(exp, k)
+            # keep experiment keys to combine perturbations if need be
+            experiment_keys.append(exp_key)
             datasets[exp_key] = simmed
             flattened =  dict(utils.flatten_dict(control_params),
                               **utils.flatten_dict({'perturbation': v}))
