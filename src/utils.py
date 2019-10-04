@@ -170,8 +170,10 @@ def parse_sim(name):
     exp_re = re.compile('^Experiment*[0-9]')
     sim_re = re.compile('Sim*[0-9]')
     rep_re = re.compile('Rep*[0-9]')
+    pert_re = re.compile('Perturbation*[0-9]')
     
     out = {'Experiment': exp_re.search(name).group(),
+           'Perturbation': pert_re.search(name).group(),
            'Sim': sim_re.search(name).group(),
            'Rep': rep_re.search(name).group()}
     return out
