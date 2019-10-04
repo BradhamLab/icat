@@ -40,7 +40,6 @@ def main(adata, label_col):
 
 def plot_cells(adata, n, fn, color, shape):
     adata.obs[color] = adata.obs[color].astype(str).astype('category')
-    print(adata.obs[color])
     sc.pp.pca(adata)
     sc.pp.neighbors(adata, n_neighbors=n)
     sc.tl.umap(adata, min_dist=0)
