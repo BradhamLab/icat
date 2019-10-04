@@ -10,6 +10,8 @@ from cycler import cycler
 from matplotlib import pyplot as plt
 from sklearn import metrics
 
+from downstream.src.visualization import visualize
+
 try: 
     import colorcet as cc
 except ImportError:
@@ -19,7 +21,7 @@ from scanpy import api as sc
 
 try:
     loc = os.path.dirname(os.path.abspath(__file__))
-    plt.style.use(os.path.join(loc, 'configs/icat.mplstyle'))
+    plt.style.use(os.path.join(loc, 'configs/figures.mplstyle'))
     plt.rc('axes', prop_cycle=cycler('color', cc.glasbey_light))
 except:
     pass
@@ -40,19 +42,21 @@ def evaluate_icat(control, treated, label_col, icat_kws, plot_dir):
     sc.tl.pca(combined)
     sc.pp.neighbors(combined, n_neighbors=n_neighbors)
     sc.tl.umap(combined, min_dist=0.0)
-    sc.tl.louvain(combined, key_added='louvain')
+    sc.tl.louvain(combined, key_added='Louvain')
     icat = models.icat(**icat_kws)
     icat_clustered = icat.cluster(control, treated)
-    sc.tl.louvain(icat_clustered, key_added='ncfs-louvain')
+    icat_clustered.obs.rename(columns={'sslouvain': 'NCFS-SSLouvain'},
+                              inplace=True)
+    sc.tl.louvain(icat_clustered, key_added='NCFS-Louvain')
     measures = []
     # mutual information, homogeneity score, completeness score
     # rand, fowlkes mallows
     for data, col in zip([combined, icat_clustered, icat_clustered],
-                         ['louvain', 'ncfs-louvain', 'sslouvain']):
+                         ['Louvain', 'NCFS-Louvain', 'NCFS-SSLouvain']):
         split_perf = utils.performance(data, label_col, col)
         split_perf['method'] = col
         measures.append(split_perf)
-        utils.plot_umap(data, col, 'Population')
+        visualize.plot_umap(data, color_col=col, shape_col='Population')
         plt.savefig(os.path.join(plot_dir, 'umap_' + col + '.svg'))
         plt.cla()
         plt.clf()
@@ -90,8 +94,12 @@ if __name__ == '__main__':
                               var=pd.read_csv(prtb_var, index_col=0))
     with open(fit_json, 'r') as f:
         fit_data = json.load(f)
-    control_data.obs['Population'] = control_data.obs['Population'].astype(str)
-    perturb_data.obs['Population'] = control_data.obs['Population'].astype(str)
+    # AnnData objects sometimes misbehave with non-string values
+    for each in [control_data, perturb_data]:
+        each.obs['Population'] = each.obs['Population'].astype(str)
+        each.obs.index = each.obs.index.astype(str)
+        each.var.index = each.var.index.astype(str)
+        each.var.columns = each.var.columns.astype(str)
     icat_kws['neighbor_kws']['n_neighbors'] = fit_data['n_neighbors']
     icat_kws['cluster_kws']['resolution'] = fit_data['resolution']
     perf, adata = evaluate_icat(control_data, perturb_data, 'Population',
@@ -104,6 +112,7 @@ if __name__ == '__main__':
             df['base.' + key] = value
     parsed_name = utils.parse_sim(name)
     df['Experiment'] = parsed_name['Experiment']
+    df['Perturbation'] = parsed_name['Perturbation']
     df['Sim'] = parsed_name['Sim']
     df['Rep'] = parsed_name['Rep']
     df.to_csv(out_csv)
