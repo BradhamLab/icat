@@ -708,6 +708,8 @@ class Experiment(object):
                 self.perturb_kwargs['percent_perturb'] = None
             for __ in range(replications):
                 treated = perturb(controls, **self.perturb_kwargs)
+                controls.obs['Treatment'] = 'Control'
+                treated.obs['Treatment'] = 'Perturbed'
                 sim_out.append({'controls': controls, 'treated': treated})
             out.append(sim_out)
         return out
