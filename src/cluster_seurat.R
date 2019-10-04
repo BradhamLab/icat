@@ -7,12 +7,16 @@ suppressPackageStartupMessages({
 })
 
 
-create_seurat <- function(X, obs) {
+create_seurat <- function(X, obs, label_col) {
   X_data = as.data.frame(t(read.csv(X, header=FALSE)))
   obs_data = read.csv(obs, row.names=1, check.names=FALSE,
                       stringsAsFactors=FALSE)
   # drop columns with NA b/c tibble binding in Seurat breaks
-  obs_data <- obs_data[ , colSums(is.na(obs_data)) < 1]
+  keep_cols <- which(colSums(is.na(obs_data)) == 0)
+  obs_data <- data.frame(obs_data[ , keep_cols],
+                         row.names=row.names(obs_data))
+  names(obs_data) <- names(keep_cols)
+  obs_data[label_col] <- as.factor(obs_data[label_col])
   # force to population
   # obs_data$Population <- as.factor(obs_data$Population)
   row.names(obs_data) <- colnames(X_data)
@@ -57,9 +61,9 @@ cluster_across_treatments <- function(ctrl, prtb, k, treatment='treatment') {
 }
 
 main <- function(X_ctrl, obs_ctrl, X_prtb, obs_prtb, fit_json, out_csv,
-                 treatment='treatment') {
-  ctrl <- create_seurat(X_ctrl, obs_ctrl)
-  prtb <- create_seurat(X_prtb, obs_prtb)
+                 label_col) {
+  ctrl <- create_seurat(X_ctrl, obs_ctrl, label_col)
+  prtb <- create_seurat(X_prtb, obs_prtb, label_col)
   k <- fromJSON(file=fit_json)$n_neighbors
   clustered <- cluster_across_treatments(ctrl, prtb, k)
   write.csv(clustered, out_csv)
@@ -75,7 +79,7 @@ if (exists('snakemake')) {
        snakemake@input[['prtb_obs']],
        snakemake@input[['json']],
        snakemake@output[['csv']],
-       snakemake@params[['name']])
+       snakemake@params[['label']])
 }
 
 
