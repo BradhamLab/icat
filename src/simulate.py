@@ -317,7 +317,8 @@ class SingleCellDataset():
         for marker genes are not taken into consideration.
         """
         # data frame to track cell annotations
-        obs = pd.DataFrame(index=range(self.samples), columns=["Population"])
+        obs = pd.DataFrame(index=range(self.samples),
+                           columns=["Population"])
         # data frame to track gene annotations
         var = pd.DataFrame(index=range(self.genes),
                            columns=['Pop.{}.Marker'.format(i + 1) for i in\
@@ -335,7 +336,7 @@ class SingleCellDataset():
         n_markers[n_markers == 0] = 1
         # distribution to sample expression shifts from 
         gamma = stats.gamma(a=2, scale=2)
-        possible_markers = np.arange(self.genes)
+        possible_markers = var.index.values
         for i, n in enumerate(n_markers):
             # pick marker genes and shift their expression in population i
             markers = np.random.choice(possible_markers, n)
@@ -354,6 +355,9 @@ class SingleCellDataset():
                                     self.populations, self.pop_sizes,
                                     percentile=self.percentile)
         obs['Population'] = labels
+        # rename obs and var rows for clarity
+        obs.rename(index={i:'cell-{}'.format(i + 1) for i in obs.index}, inplace=True)
+        var.rename(index={i:'gene-{}'.format(i + 1) for i in var.index}, inplace=True)
         return sc.AnnData(X=X, obs=obs, var=var)
 
 def dispersions(size, a=1, b=5):
@@ -376,15 +380,15 @@ def dispersions(size, a=1, b=5):
     """
     return np.random.choice(range(a, b), size=size)
 
-def population_markers(andata):
-    marker_cols = [x for x in andata.var.columns if 'Marker' in x]
-    markers = {i + 1: andata.var[andata.var[x]].index.values\
+def population_markers(adata):
+    marker_cols = [x for x in adata.var.columns if 'Marker' in x]
+    markers = {i + 1: adata.var[adata.var[x]].index.values\
                for i, x in enumerate(marker_cols)}
     return markers
 
 # TODO: add option to simulate untargetted populations/ add treatment
 # specific populations
-def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
+def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
             percent_perturb=None, pop_sizes=None, percentile=0.5):
     r"""
     Perturb a simulated single-cell dataset.
@@ -404,14 +408,14 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
 
     Parameters
     ----------
-    andata : sc.AnnData
+    adata : sc.AnnData
         Simulated annotated dataframe to be perturbed. Output from
         SingleCellDataset.simulate().
     samples : int, optional
         Number of perturbed cells to simulate, by default 200.
     pop_targets : list-like, optional
         Populations to simulate, by default None, and all populations present in
-        `andata` will be simulated.
+        `adata` will be simulated.
     gene_targets : list-like, optional
         Genes to perturb, by default None, and targets will be randomly chosen.
     percent_perturb : float, optional
@@ -446,17 +450,17 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
         Raised if provided gene targets are not contained in the provided
         annotated dataframe.
     """
-    # check pop_targets in andata
+    # check pop_targets in adata
     if pop_targets is None:
-        pop_targets = andata.obs['Population'].unique()
-        pop_ratios = andata.obs['Population'].value_counts().values
+        pop_targets = adata.obs['Population'].unique()
+        pop_ratios = adata.obs['Population'].value_counts().values
         pop_ratios = pop_ratios / pop_ratios.sum()
     else:
         pop_targets = utils.check_np_castable(pop_targets, 'pop_targets')
-        if not set(pop_targets).issubset(andata.obs['Population']):
-            diff = set(pop_targets).difference(andata.obs['Population'])
+        if not set(pop_targets).issubset(adata.obs['Population']):
+            diff = set(pop_targets).difference(adata.obs['Population'])
             raise ValueError("Undefined populations: {}".format(diff))
-    # check population sizes, if none, match with ratio in andata
+    # check population sizes, if none, match with ratio in adata
     if pop_sizes is None:
         try:
             pop_ratios
@@ -475,32 +479,35 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
             raise ValueError('Population sizes do not sum to number of samples.')
     # determine which genes to perturb
     if gene_targets is not None:
-        if not set(gene_targets).issubset(range(andata.shape[1])):
+        if not set(gene_targets).issubset(adata.var.index):
             raise ValueError("Unrecognized gene targets: {}".format(
-                          set(gene_targets).difference(range(andata.shape[1]))))
+                          set(gene_targets).difference(adata.var.index)))
         gene_targets = utils.check_np_castable(gene_targets, 'gene_targets')
             
     if percent_perturb is not None and gene_targets is not None:
-        n_genes = int(percent_perturb * andata.shape[1])
+        n_genes = int(percent_perturb * adata.shape[1])
         if len(gene_targets) < n_genes:
             n_genes -= len(gene_targets)
-            markers = population_markers(andata)
+            markers = population_markers(adata)
             ignore_genes = gene_targets
             for x in markers.values():
                 ignore_genes = np.hstack((ignore_genes, x))
-            p_genes = list(set(range(andata.shape[1])).difference(ignore_genes))
+            p_genes = list(set(adata.var.index).difference(ignore_genes))
             targets = np.random.choice(p_genes, n_genes)
             gene_targets = np.hstack((targets, gene_targets))
     elif gene_targets is None:
         if percent_perturb is None:
             percent_perturb = 0.2
-        gene_targets = np.random.choice(range(andata.shape[1]),
-                                        int(andata.shape[1] * percent_perturb))
-    markers = population_markers(andata)
-    disp_ = andata.var['Base.Dispersion'].values.reshape((-1, 1))
-    exp_shifts = np.ones((andata.shape[1], 1))
-    exp_shifts[gene_targets, 0] = stats.gamma(a=2, scale=2).\
-                                        rvs(size=gene_targets.size)
+        gene_targets = np.random.choice(adata.var.index,
+                                        int(adata.shape[1] * percent_perturb))
+    markers = population_markers(adata)
+    disp_ = adata.var['Base.Dispersion'].values.reshape((-1, 1))
+    var_ = adata.var.copy()
+    var_['Perturbation.Shift'] = np.ones((adata.shape[1], 1))
+    var_.loc[gene_targets, 'Perturbation.Shift'] = stats.gamma(a=2, scale=2).\
+                                                   rvs(size=gene_targets.size)
+    # log population identity in perturbed data
+    # if marker gene is modified, populations is considered perturbed
     populations = []
     for i, each in enumerate(pop_targets):
         markers_i = markers[each]
@@ -510,17 +517,17 @@ def perturb(andata, samples=200, pop_targets=None, gene_targets=None,
             name = str(each)
         populations += [name] * pop_sizes[i]
     obs_ = pd.DataFrame(populations, columns=['Population'])
-    var_ = andata.var.copy()
-    var_['Perturbation.Shift'] = exp_shifts
     pop_columns = ['Pop.{}.Mu'.format(x) for x in pop_targets]
     # calculate control median of averages to ensure equal dropout rates between
     # datasets.
-    # control_median_ = np.median(andata.var[pop_columns].values\
-    #                 * np.ones((andata.shape[1], len(pop_targets)))\
+    # control_median_ = np.median(adata.var[pop_columns].values\
+    #                 * np.ones((adata.shape[1], len(pop_targets)))\
     #                 * disp_)
-    mus = andata.var[pop_columns].values \
-        * np.ones((andata.shape[1], len(pop_columns))) \
-        * exp_shifts
+    # calculate average expression values for each gene in eac population
+    # in perturbed dataset
+    mus = adata.var[pop_columns].values \
+        * np.ones((adata.shape[1], len(pop_columns))) \
+        * var_['Perturbation.Shift'].values.reshape(-1, 1)
     X_, __ = simulate_counts(samples, mus, disp_, len(pop_targets), pop_sizes,
                              percentile=percentile)
     return sc.AnnData(X=X_, obs=obs_, var=var_)
@@ -570,7 +577,7 @@ class Experiment(object):
     @perturb_kwargs.setter
     def perturb_kwargs(self, value):
         """Set perturb_kwargs attribute."""
-        default_kws = utils.get_default_kwargs(perturb, ['andata'])
+        default_kws = utils.get_default_kwargs(perturb, ['adata'])
         if value is not None:
             value = utils.check_kws(default_kws, value, 'perturb_kwargs')
         else:
@@ -580,8 +587,6 @@ class Experiment(object):
 
     def simulate_controls(self):
         adata = SingleCellDataset(**self.control_kwargs).simulate()
-        adata.obs.index = adata.obs.index.astype(int)
-        adata.var.index = adata.var.index.astype(int)
         return adata
 
     def new_population(self, adata, n_cells, perturbed=False, pop_id=None):
@@ -695,7 +700,7 @@ class Experiment(object):
                     self.perturb_kwargs['gene_targets'] += list(markers[each])
             else:
                 markers = np.hstack([x for x in markers.values()])
-                possible = set(range(controls.shape[1])).difference(markers)
+                possible = set(controls.var.index).difference(markers)
                 try:
                     p = self.perturb_kwargs['percent_perturb']
                 except KeyError:
