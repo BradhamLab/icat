@@ -23,9 +23,11 @@ def get_simulation_ids(exp_json, sims, reps):
         exp_configs = json.load(f)
     for key, value in exp_configs.items():
         for perturbation in value['perturbations']:
-            exp_pert = "{}.Perturbation{}".format(key, perturbation)
+            exp = key
+            if not value['combine_perturbations']:
+                exp = "{}.Perturbation{}".format(key, perturbation)
             for sim in range(sims):
                 for rep in range(reps):
-                    experiments.append('{}Sim{}Rep{}'.format(exp_pert, sim +1,
-                                                            rep + 1))
+                    experiments.append('{}Sim{}Rep{}'.format(exp, sim + 1,
+                                                             rep + 1))
     return experiments
