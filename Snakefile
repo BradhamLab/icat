@@ -7,15 +7,13 @@ from icat.src import snakemake_utils as utils
 configfile: './snakemake-config.yaml'
 
 FILES = ['X.csv', 'obs.csv', 'var.csv']
-CONDITIONS = ['Controls', 'Treated']
 EXPERIMENTS = utils.get_simulation_ids(config['simulations']['json'],
                                        config['simulations']['sims'],
                                        config['simulations']['reps'])
 
-SIMULATED = ["data/processed/simulated/{exp}/{treat}/{out}".\
-             format(exp=exp, treat=treat, out=out)\
-             for exp, treat, out in itertools.product(EXPERIMENTS,
-                                                      CONDITIONS, FILES)]
+SIMULATED = ["data/processed/simulated/{exp}/{out}".\
+             format(exp=exp, out=out)\
+             for exp, out in itertools.product(EXPERIMENTS, FILES)]
 BENCHMARK = ['cellmix1', 'cellmix2', 'cellmix3', 'cellmix4', 'sc_celseq2']
 MIXES = BENCHMARK[:-1]
 
@@ -117,7 +115,6 @@ rule simulate_data:
         "src/generate_simulated_datasets.py"
 
 # ---------------------- Fit and Analyze Simulated Data ------------------------
-
 rule fit_simulated:
     input:
         ctrl_X='data/processed/simulated/{exp}/Controls/X.csv',
@@ -211,7 +208,6 @@ rule simulated_scanorama_icat:
     script:
         'src/scanorama_icat.py'
 
-
 rule summarize_simulated:
     input:
         perf='data/results/simulated/icat/{exp}/performance.csv',
@@ -227,7 +223,6 @@ rule summarize_simulated:
         'src/summarize_simulated.py'
     
 # ------------------------ Analyze Benchmark Data ------------------------------
-
 rule fit_benchmark_data:
     input:
         ctrl_X='data/processed/benchmark/sc_celseq2/X.csv',

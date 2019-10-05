@@ -1,6 +1,5 @@
 import json
 import os
-import pickle as pkl
 
 import pandas as pd
 
@@ -32,6 +31,7 @@ def run_simulation(c_params, p_params, sims, reps, controls=None):
         # perturbations
         if controls is None:
             controls = experiment.simulate_controls()
+        print(sims, reps)
         return (experiment.run(simulations=sims, replications=reps,
                                controls=controls, pop_targets=pop_targets),
                 controls)
@@ -43,12 +43,13 @@ def main(configs, sims=1, reps=1):
         control_params = params['controls']
         perturbations = params['perturbations']
         controls = None
+        perturbation_keys = []
         for k, v in perturbations.items():
             simmed, controls = run_simulation(control_params, v, sims, reps,
                                               controls=controls)
             exp_key = "{}.Perturbation{}".format(exp, k)
+            perturbation_keys.append(exp_key)
             # keep experiment keys to combine perturbations if need be
-            experiment_keys.append(exp_key)
             datasets[exp_key] = simmed
             flattened =  dict(utils.flatten_dict(control_params),
                               **utils.flatten_dict({'perturbation': v}))
@@ -57,7 +58,26 @@ def main(configs, sims=1, reps=1):
                     v = ';'.join([str(x) for x in v])
                 flattened[k] = v
             csv_dict[exp_key] = flattened  # TODO: look at this with change
-        # parameters defining control space
+        if params['combine_perturbations']:
+            # change experiment key from Experiment{Y}.Perturbation{X} to
+            # Experiment{Y} given joining of perturbations
+            exp_key = perturbation_keys[0].split('.')[0]
+            sim_rep_data = [[[None] for i in range(reps)] for j in range(sims)]
+            for sim in range(sims):
+                for rep in range(reps):
+                    adatas = []
+                    # combine perturbations across the same simulations + replications
+                    for pert in perturbation_keys:
+                        adata = datasets[pert][sim][rep]
+                        # rename treatment from Perturbed to Perturbed{X}
+                        label = pert.split('.')[-1]
+                        adata.obs['Treatment'].replace('Perturbed', label, inplace=True)
+                        adatas.append(adata)
+                    sim_rep_data[sim][rep] = utils.rbind_adata(adatas)
+            # remove uncombined data from dataset dict, add combined with new key
+            for each in perturbation_keys:
+                datasets.pop(each)
+                datasets[exp_key] = sim_rep_data
 
     return datasets, pd.DataFrame(csv_dict).T
     
@@ -83,15 +103,14 @@ if __name__ == '__main__':
     datasets, sim_data = main(configs, sims, reps)
     sim_data.to_csv(out_csv)
     for each in datasets.keys():
-        for n_sim in range(len(datasets[each])):
+        for n_sim in range(sims):
             replicates = datasets[each][n_sim]
-            for n_rep in range(len(replicates)):
-                data = [replicates[n_rep]['controls'],
-                        replicates[n_rep]['treated']]
+            for n_rep in range(reps):
+                data = replicates[n_rep]
                 exp_dir = os.path.join(out_dir,
                                        "{}Sim{}Rep{}".format(each, n_sim + 1,
                                                              n_rep + 1))
-                for i, x in enumerate(['Controls', 'Treated']):
-                    write_dir = os.path.join(exp_dir, x)
-                    data[i].write_csvs(dirname=write_dir, skip_data=False)
+                if not os.path.exists(exp_dir):
+                    os.makedirs(exp_dir)
+                data.write_csvs(dirname=exp_dir, skip_data=False)
                     
