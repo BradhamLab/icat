@@ -710,7 +710,8 @@ class Experiment(object):
                 treated = perturb(controls, **self.perturb_kwargs)
                 controls.obs['Treatment'] = 'Control'
                 treated.obs['Treatment'] = 'Perturbed'
-                sim_out.append({'controls': controls, 'treated': treated})
+                combined = utils.rbind_adata([controls, treated])
+                sim_out.append(combined)
             out.append(sim_out)
         return out
 
