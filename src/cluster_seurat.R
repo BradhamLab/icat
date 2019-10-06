@@ -1,5 +1,7 @@
 if (exists("snakemake")) {
-  .libPaths(c("/projectnb/bradham/RPackages", .libPaths()))
+  # .libPaths(c("/projectnb/bradham/RPackages", .libPaths()))
+  .libPaths(c(snakemake@params[['seurat']],
+            .libPaths()))
 }
 suppressPackageStartupMessages({
   library(Seurat)
@@ -60,10 +62,13 @@ cluster_across_treatments <- function(ctrl, prtb, k, treatment='treatment') {
   return(combined@meta.data)
 }
 
-main <- function(X_ctrl, obs_ctrl, X_prtb, obs_prtb, fit_json, out_csv,
-                 label_col) {
-  ctrl <- create_seurat(X_ctrl, obs_ctrl, label_col)
-  prtb <- create_seurat(X_prtb, obs_prtb, label_col)
+main <- function(X, obs, fit_json, out_csv, treatment, control, label_col) {
+  data <- create_seurat(X, obs, label_col)
+  # separate controls and treated
+  control_cells <- row.names(data@meta.data[ , treatment] == control)
+  treated_cells <- row.names(data@meta.data[ , treatment] != control)
+  ctrl <- Seurat::SubsetData(data, cells=control_cells)
+  prtb <- Seurat::SubsetData(data, cells=treated_cells)
   k <- fromJSON(file=fit_json)$n_neighbors
   clustered <- cluster_across_treatments(ctrl, prtb, k)
   write.csv(clustered, out_csv)
@@ -73,12 +78,12 @@ if (exists('snakemake')) {
   # snakemake likely only being run on scc, add location to user pkgs
   print(sessionInfo())
   print(.libPaths())
-  main(snakemake@input[['ctrl_X']],
-       snakemake@input[['ctrl_obs']],
-       snakemake@input[['prtb_X']],
-       snakemake@input[['prtb_obs']],
+  main(snakemake@input[['X']],
+       snakemake@input[['obs']],
        snakemake@input[['json']],
        snakemake@output[['csv']],
+       snakemake@params[['treatment']],
+       snakemake@params[['controls']],
        snakemake@params[['label']])
 }
 
