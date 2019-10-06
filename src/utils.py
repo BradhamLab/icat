@@ -176,7 +176,7 @@ def parse_sim(name):
     # if no match, return empty string
     for name, regex in zip(['Experiment', 'Perturbation', 'Sim', 'REp'],
                             [exp_re, pert_re, sim_re, rep_re]):
-        match = exp_re.search(name)
+        match = regex.search(name)
         if match is not None:
             out[name] = match.group()
         else:
