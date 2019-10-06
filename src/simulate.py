@@ -516,7 +516,9 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
         else:
             name = str(each)
         populations += [name] * pop_sizes[i]
-    obs_ = pd.DataFrame(populations, columns=['Population'])
+    obs_ = pd.DataFrame(populations, columns=['Population'],
+                        index=["cell-{}".format(i + 1) for i in\
+                               range(len(populations))])
     pop_columns = ['Pop.{}.Mu'.format(x) for x in pop_targets]
     # calculate control median of averages to ensure equal dropout rates between
     # datasets.
