@@ -117,20 +117,16 @@ rule simulate_data:
 # ---------------------- Fit and Analyze Simulated Data ------------------------
 rule fit_simulated:
     input:
-        ctrl_X='data/processed/simulated/{exp}/Controls/X.csv',
-        ctrl_obs='data/processed/simulated/{exp}/Controls/obs.csv',
-        ctrl_var='data/processed/simulated/{exp}/Controls/var.csv',
-        prtb_X='data/processed/simulated/{exp}/Treated/X.csv',
-        prtb_obs='data/processed/simulated/{exp}/Treated/obs.csv',
-        prtb_var='data/processed/simulated/{exp}/Treated/var.csv'
+        X='data/processed/simulated/{exp}/X.csv',
+        obs='data/processed/simulated/{exp}/obs.csv',
+        var='data/processed/simulated/{exp}/var.csv',
     params:
+        treatment='Treatment',
+        control='Control',
         label='Population',
         plotdir='reports/figures/simulated/{exp}/'
     output:
-        json='data/interim/fits/simulated/{exp}Controls_fit.json',
-        ctrl_svg='reports/figures/simulated/{exp}/umap_controls.svg',
-        prtb_svg='reports/figures/simulated/{exp}/umap_treated.svg',
-        comb_svg='reports/figures/simulated/{exp}/umap_combined.svg'
+        json='data/interim/fits/simulated/{exp}_fit.json'
     script:
         'src/fit_louvain.py'
 

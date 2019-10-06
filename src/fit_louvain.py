@@ -9,6 +9,7 @@ import numpy as np
 import os
 import colorcet as cc
 from downstream.src.visualization import visualize
+from downstream.src.analysis import utils as dutils
 
 try:
     loc = os.path.dirname(os.path.abspath(__file__))
@@ -52,73 +53,34 @@ def plot_cells(adata, n, fn, color, shape):
     plt.close()
 
 if __name__ == '__main__':
-    # ctrl = '../data/processed/simulated/Experiment1Sim1Rep1-Controls.pkl'
-    # prtb = '../data/processed/simulated/Experiment1Sim1Rep1-Treated.pkl'
-    # label_col = 'Population'
-    # out = '../data/interim/Experiment1Sim1Rep1-Controls_fits.json'
-    # out = '../figures/simulated/Experiment1Sim1Rep1/'
     try:
         snakemake
     except NameError:
         snakemake = None
     if snakemake is not None:
-        ctrl_X = snakemake.input['ctrl_X']
-        ctrl_obs = snakemake.input['ctrl_obs']
-        try:
-            ctrl_var = snakemake.input['ctrl_var']
-        except AttributeError:
-            ctrl_var = None
-        prtb_X = snakemake.input['prtb_X']
-        prtb_obs = snakemake.input['prtb_obs']
-        try:
-            prtb_var = snakemake.input['prtb_var']
-        except AttributeError:
-            prtb_var = None
-        label_col = snakemake.params['label']
-        plot_dir = snakemake.params['plotdir']
-        out_json = snakemake.output['json']
-        
-    sc.settings.figdir = plot_dir
-    if ctrl_var is not None:
-        ctrl = sc.AnnData(X=pd.read_csv(ctrl_X, header=None).values,
-                          obs=pd.read_csv(ctrl_obs, index_col=0),
-                          var=pd.read_csv(ctrl_var, index_col=0))
-    else:
-        ctrl = sc.AnnData(X=pd.read_csv(ctrl_X, header=None).values,
-                          obs=pd.read_csv(ctrl_obs, index_col=0))
-    if isinstance(prtb_X, list):
-        adatas = []
-        for x, obs in zip(sorted(prtb_X), sorted(prtb_obs)):
-            adata = sc.AnnData(X=np.loadtxt(x, delimiter=','),
-                               obs=pd.read_csv(obs, index_col=0))
-            adatas.append(adata)
-        prtb = utils.rbind_adata(adatas)
-        ctrl.obs['Mixture'] = 'No'
-        prtb.obs['Mixture'] = 'Yes'
-        sc.pp.log1p(ctrl)
-        sc.pp.log1p(prtb)
-        shape = 'Mixture'
-    
-    else:
-        prtb = sc.AnnData(X=pd.read_csv(prtb_X, header=None).values,
-                          obs=pd.read_csv(prtb_obs, index_col=0),
-                          var=pd.read_csv(prtb_var, index_col=0))
-        ctrl.obs['Treatment'] = 'Control'
-        prtb.obs['Treatment'] = 'Perturbed'
-        shape = 'Treatment'
-    
-    performance = main(ctrl, label_col)
-    names = [snakemake.output['ctrl_svg'], snakemake.output['prtb_svg'],
-             snakemake.output['comb_svg']]
-    combined = utils.rbind_adata([ctrl, prtb])
-    if not os.path.exists(plot_dir):
-        os.makedirs(plot_dir)
-    # add dakota style formatting
-    for data, plotfile in zip([ctrl, prtb, combined], names):
-        plot_cells(data, int(performance['n_neighbors']), plotfile,
-                   label_col, shape)
-        plt.cla()
-        plt.clf()
-        plt.close()
-    with open(out_json, 'w') as f:
-        json.dump(performance, f)
+        X = np.loadtxt(snakemake.input['X'], delimiter=',')
+        print(X.shape)
+        obs = pd.read_csv(snakemake.input['obs'], index_col=0)
+        print(obs.shape)
+        var = pd.read_csv(snakemake.input['var'], index_col=0)
+        print(var.shape)
+        adata = sc.AnnData(X=X, obs=obs, var=var)
+        separated = {y: dutils.filter_cells(adata,
+                                            snakemake.params['treatment'],
+                                            lambda x: x==y).copy()\
+                    for y in adata.obs[snakemake.params['treatment']].unique()}
+        separated['combined'] = adata
+        performance = main(separated[snakemake.params['control']],
+                           snakemake.params['label'])
+        fit_data = main(separated[snakemake.params['control']],
+                        snakemake.params['label'])
+        if not os.path.exists(snakemake.params['plotdir']):
+            os.makedirs(snakemake.params['plotdir'])
+        # add dakota style formatting
+        for treatment, data in separated.items():
+            plotfile = os.path.join(snakemake.params['plotdir'],
+                                    "umap_{}.svg".format(treatment))
+            plot_cells(data, int(performance['n_neighbors']), plotfile,
+                       snakemake.params['label'], snakemake.params['treatment'])
+        with open(snakemake.output['json'], 'w') as f:
+            json.dump(fit_data, f)
