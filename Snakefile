@@ -119,7 +119,7 @@ rule fit_simulated:
     input:
         X='data/processed/simulated/{exp}/X.csv',
         obs='data/processed/simulated/{exp}/obs.csv',
-        var='data/processed/simulated/{exp}/var.csv',
+        var='data/processed/simulated/{exp}/var.csv'
     params:
         treatment='Treatment',
         control='Control',
@@ -132,16 +132,15 @@ rule fit_simulated:
 
 rule simulated_icat:
     input:
-        ctrl_X='data/processed/simulated/{exp}/Controls/X.csv',
-        ctrl_obs='data/processed/simulated/{exp}/Controls/obs.csv',
-        ctrl_var='data/processed/simulated/{exp}/Controls/var.csv',
-        prtb_X='data/processed/simulated/{exp}/Treated/X.csv',
-        prtb_obs='data/processed/simulated/{exp}/Treated/obs.csv',
-        prtb_var='data/processed/simulated/{exp}/Treated/var.csv',
-        json='data/interim/fits/simulated/{exp}Controls_fit.json',
+        X='data/processed/simulated/{exp}/X.csv',
+        obs='data/processed/simulated/{exp}/obs.csv',
+        var='data/processed/simulated/{exp}/var.csv',
+        json='data/interim/fits/simulated/{exp}_fit.json',
         ncfs='data/external/simulated_ncfs_params.json'
     params:
         name='{exp}',
+        treatment='Treatment',
+        control='Control',
         plotdir='reports/figures/simulated/{exp}/icat/',
         outdir='data/results/simulated/icat/{exp}/',
     output:
@@ -155,13 +154,14 @@ rule simulated_icat:
 
 rule simulated_seurat:
     input:
-        ctrl_X='data/processed/simulated/{exp}/Controls/X.csv',
-        ctrl_obs='data/processed/simulated/{exp}/Controls/obs.csv',
-        prtb_X='data/processed/simulated/{exp}/Treated/X.csv',
-        prtb_obs='data/processed/simulated/{exp}/Treated/obs.csv',
-        json='data/interim/fits/simulated/{exp}Controls_fit.json'
+        X='data/processed/simulated/{exp}/X.csv',
+        obs='data/processed/simulated/{exp}/obs.csv',
+        json='data/interim/fits/simulated/{exp}_fit.json'
     params:
-        label='Population'
+        treatment='Treatment',
+        control='Control',
+        label='Population',
+        seurat=config['libraries']['seurat2.3.3']
     output:
         csv='data/results/simulated/seurat/{exp}/clustered.csv'
     script:
