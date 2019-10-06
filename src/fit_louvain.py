@@ -59,11 +59,8 @@ if __name__ == '__main__':
         snakemake = None
     if snakemake is not None:
         X = np.loadtxt(snakemake.input['X'], delimiter=',')
-        print(X.shape)
         obs = pd.read_csv(snakemake.input['obs'], index_col=0)
-        print(obs.shape)
         var = pd.read_csv(snakemake.input['var'], index_col=0)
-        print(var.shape)
         adata = sc.AnnData(X=X, obs=obs, var=var)
         separated = {y: dutils.filter_cells(adata,
                                             snakemake.params['treatment'],
