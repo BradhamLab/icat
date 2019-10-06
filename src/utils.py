@@ -171,9 +171,14 @@ def parse_sim(name):
     sim_re = re.compile('Sim*[0-9]')
     rep_re = re.compile('Rep*[0-9]')
     pert_re = re.compile('Perturbation*[0-9]')
-    
-    out = {'Experiment': exp_re.search(name).group(),
-           'Perturbation': pert_re.search(name).group(),
-           'Sim': sim_re.search(name).group(),
-           'Rep': rep_re.search(name).group()}
+    out = {}
+    # scan name for experiment, perturbation, sim, and rep ids
+    # if no match, return empty string
+    for name, regex in zip(['Experiment', 'Perturbation', 'Sim', 'REp'],
+                            [exp_re, pert_re, sim_re, rep_re]):
+        match = exp_re.search(name)
+        if match is not None:
+            out[name] = match.group()
+        else:
+            out[name] = ''
     return out
