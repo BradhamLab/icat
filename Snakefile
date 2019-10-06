@@ -169,19 +169,17 @@ rule simulated_seurat:
 
 rule simulated_scanorama:
     input:
-        X=['data/processed/simulated/{exp}/Controls/X.csv',
-           'data/processed/simulated/{exp}/Treated/X.csv'],
-        obs=['data/processed/simulated/{exp}/Controls/obs.csv',
-             'data/processed/simulated/{exp}/Treated/obs.csv'],
-        var=['data/processed/simulated/{exp}/Controls/var.csv',
-             'data/processed/simulated/{exp}/Treated/var.csv'],
-        json='data/interim/fits/simulated/{exp}Controls_fit.json'
+        X='data/processed/simulated/{exp}/X.csv',
+        obs='data/processed/simulated/{exp}/obs.csv',
+        var='data/processed/simulated/{exp}/var.csv',
+        json='data/interim/fits/simulated/{exp}_fit.json'
     output:
         X='data/results/simulated/scanorama/{exp}/X.csv',
         obs='data/results/simulated/scanorama/{exp}/obs.csv',
         var='data/results/simulated/scanorama/{exp}/var.csv'
     params:
-        control_id='Controls',
+        treatment='Treatment',
+        controls='Control',
         outdir='data/results/simulated/scanorama/{exp}/'
     script:
         'src/run_scanorama.py'
@@ -198,7 +196,7 @@ rule simulated_scanorama_icat:
         obs='data/results/simulated/icat_scan/{exp}/obs.csv',
         var='data/results/simulated/icat_scan/{exp}/var.csv'
     params:
-        outdir='data/results/benchmark/icat_scan/',
+        outdir='data/results/benchmark/icat_scan/{exp}/',
         treat_col='Treatment',
         treat_values = MIXES
     script:

@@ -5,6 +5,8 @@ import numpy as np
 import scanorama
 from icat.src import utils
 
+from downstream.src.analysis import utils as dutils
+
 
 def run_scanorama(adatas, k):
     integrated_X = scanorama.integrate_scanpy(adatas)
@@ -25,15 +27,14 @@ if __name__ == '__main__':
     except NameError:
         snakemake = None
     if snakemake is not None:
-        all_X = sorted(snakemake.input['X'])
-        all_obs = sorted(snakemake.input['obs'])
-        all_var = sorted(snakemake.input['var'])
+        adata = sc.AnnData(X=np.loadtxt(snakemake.input['X'], delimiter=','),
+                           obs=pd.read_csv(snakemake.input['obs'], index_col=0),
+                           var=pd.read_csv(snakemake.input['var'], index_col=0))
         adatas = []
-        for i, each in enumerate(all_X):
-            adata = sc.AnnData(X=np.loadtxt(each, delimiter=','),
-                               obs=pd.read_csv(all_obs[i], index_col=0),
-                               var=pd.read_csv(all_var[i], index_col=0))
-            if snakemake.params['control_id'] in each:
+        for each in enumerate(adata.obs[snakemake.params['treatment']].unique()):
+            subset = dutils.filter_cells(adata, snakemake.params['treatment'],
+                                         lambda x: x == each).copy()
+            if snakemake.params['controls'] == each:
                 adatas = [adata] + adatas
             else:
                 adatas.append(adata)
