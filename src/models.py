@@ -11,7 +11,7 @@ from scipy import stats
 
 from ncfs_expanded import NCFS
 from scanpy import api as sc
-from ssLouvain import ssLouvain
+from sslouvain import ssLouvain
 import pomegranate as pmg
 
 from icat.src import utils
@@ -438,8 +438,10 @@ class icat():
                   ' future runs.')
             selected = combined.var.index.values
         combined = combined[:, selected].copy() # copy to be safe
-        # create neighbor graph for control+perturbed combined data
-        sc.pp.pca(combined, **self.pca_kws)
+        # create neighbor graph for control+perturbed combined data -- perform
+        # pca if more than n_components remain in selected data
+        if self.pca_kws['n_comps'] < combined.shape[1]:
+            sc.pp.pca(combined, **self.pca_kws)
         sc.pp.neighbors(combined, **self.neighbor_kws)
         sc.tl.umap(combined, min_dist=0.0)
         # grab connectivities of cells
