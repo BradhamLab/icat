@@ -25,8 +25,8 @@ rule all:
             for exp in EXPERIMENTS],
         ['data/results/simulated/scanorama/{exp}/obs.csv'.format(exp=exp)\
             for exp in EXPERIMENTS],
-        'data/processed/Kang/X.csv',
-        'data/results/benchmark/results.csv'
+        # 'data/processed/Kang/X.csv',
+        # 'data/results/benchmark/results.csv'
         # ['data/processed/benchmark/{bench}/X.csv'.format(bench=bench)\
         #     for bench in BENCHMARK]
 
@@ -189,16 +189,16 @@ rule simulated_scanorama_icat:
         X='data/results/simulated/scanorama/{exp}/X.csv',
         obs='data/results/simulated/scanorama/{exp}/obs.csv',
         var='data/results/simulated/scanorama/{exp}/var.csv',
-        json='data/interim/fits/simulated/{exp}Controls_fit.json',
-        ncfs='data/external/benchmark_ncfs_params.json'
+        json='data/interim/fits/simulated/{exp}_fit.json',
+        ncfs='data/external/simulated_ncfs_params.json'
     output:
         X='data/results/simulated/icat_scan/{exp}/X.csv',
         obs='data/results/simulated/icat_scan/{exp}/obs.csv',
         var='data/results/simulated/icat_scan/{exp}/var.csv'
     params:
-        outdir='data/results/benchmark/icat_scan/{exp}/',
-        treat_col='Treatment',
-        treat_values = MIXES
+        outdir='data/results/simulated/icat_scan/{exp}/',
+        treatment='Treatment',
+        controls = 'Control'
     script:
         'src/scanorama_icat.py'
 
