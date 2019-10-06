@@ -18,23 +18,20 @@ if __name__ == '__main__':
                                                 index_col=0),
                                 var=pd.read_csv(snakemake.input['var'],
                                                 index_col=0))
-        integrated.var.index = integrated.var.index.astype(str)
-        integrated.obs.index = integrated.obs.index.astype(str)
-        isolated = dutils.filter_cells(integrated, snakemake.params['treat_col'],
-                                      lambda x: x not in\
-                                            snakemake.params['treat_values']).\
-                                            copy()
-        mixed = dutils.filter_cells(integrated, snakemake.params['treat_col'],
-                                      lambda x: x in\
-                                             snakemake.params['treat_values']).\
-                                             copy()
+        ctrls = dutils.filter_cells(integrated, snakemake.params['treatment'],
+                              lambda x: x == snakemake.params['controls']).\
+                              copy()
+        prtb = dutils.filter_cells(integrated, snakemake.params['treatment'],
+                              lambda x: x != snakemake.params['controls']).\
+                              copy()
         with open(snakemake.input['ncfs'], 'r') as f:
-            icat_kws = json.load(f) 
+            icat_kws = json.load(f)
+            icat_kws['weight_threshold'] = 0.0
         with open(snakemake.input['json'], 'r') as f:
             fit_data = json.load(f)
         icat_kws['neighbor_kws']['n_neighbors'] = fit_data['n_neighbors']
         icat_model = models.icat(**icat_kws)
-        out = icat_model.cluster(isolated, mixed)
+        out = icat_model.cluster(ctrls, prtb)
         out.obs.rename(columns={'sslouvain': 'scanorama.sslouvain'},
                        inplace=True)
         out.write_csvs(dirname=snakemake.params['outdir'],
