@@ -1,0 +1,6 @@
+{"ncfs_kws": {"sigma": 3, "reg": 2, 
+              "kernel": "exponential"},
+ "treatment_col": "Treatment",
+ "cluster_kws": {"resolution": 1},
+ "weight_threshold": 1.0,
+ "neighbor_kws": {"n_neighbors": null}}
