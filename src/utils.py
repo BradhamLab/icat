@@ -112,9 +112,10 @@ def rbind_adata(adata_lists):
                           var=pd.concat([each.var[col] for each, col\
                                         in zip(adata_lists, df_cols)], axis=1))
     if not combined.obs.index.is_unique:
-        print("WARNING: control and perturbed datasets contain overlapping" 
+        print("WARNING: Datasets contain overlapping" 
               " cell ids. Index will be reset.")
-        combined.obs.reset_index()
+        combined.obs.index = ['cell-{}'.format(i + 1)\
+                              for i in range(combined.shape[0])]
     return combined
 
 
