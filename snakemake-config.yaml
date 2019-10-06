@@ -2,3 +2,5 @@ simulations:
   json: "data/external/paper_experiments.json"
   sims: 1
   reps: 3
+libraries:
+  seurat2.3.3: "/home/dakota/Code/R"
