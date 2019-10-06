@@ -73,7 +73,10 @@ def main(configs, sims=1, reps=1):
                         label = pert.split('.')[-1]
                         adata.obs['Treatment'].replace('Perturbed', label, inplace=True)
                         adatas.append(adata)
-                    sim_rep_data[sim][rep] = utils.rbind_adata(adatas)
+                    adata = utils.rbind_adata(adatas)
+                    adata.obs.index = ['cell-{}'.format(i + 1)\
+                                       for i in range(adata.shape[0])]
+                    sim_rep_data[sim][rep] = adata
             # remove uncombined data from dataset dict, add combined with new key
             for each in perturbation_keys:
                 datasets.pop(each)
