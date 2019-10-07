@@ -1,4 +1,6 @@
-{"ncfs_kws": {"sigma": 3, "reg": 2, 
+{"ncfs_kws": {"sigma": 2, "reg": 3,
+              "metric": "cityblock",
+              "alpha": 0.1, "eta": 0.001,
               "kernel": "exponential"},
  "treatment_col": "Treatment",
  "cluster_kws": {"resolution": 1},
