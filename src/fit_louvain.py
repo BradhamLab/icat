@@ -23,7 +23,7 @@ def main(adata, label_col):
     performance = dict()
     n_max = int(0.6 * adata.shape[0])
     if n_max > 50:
-        n_max = 0
+        n_max = 50
     n_min = 3
     score = -np.inf
     resolutions = [1]
