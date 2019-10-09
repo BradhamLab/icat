@@ -42,4 +42,5 @@ if __name__ == '__main__':
             fit_data = json.load(f)
         k = fit_data['n_neighbors']
         out = run_scanorama(adatas, k)
+        out.var.index = ['scan-{}'.format(i + 1) for i in range(out.shape[1])]
         out.write_csvs(dirname=snakemake.params['outdir'], skip_data=False)
