@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from scanpy import api as sc
 from icat.src import models, utils
+from downstream.src.analysis import utils as dutils
 import json
 
 if __name__ == '__main__':
@@ -11,22 +12,14 @@ if __name__ == '__main__':
         snakemake = None
     if snakemake is not None:
         fit_json = snakemake.input['json']
-        all_X = sorted(snakemake.input['X'])
-        all_obs = sorted(snakemake.input['obs'])
-        prtb_adatas = []
-        # separate control dataset from mixed cells
-        for i, each in enumerate(all_X):
-            if snakemake.params['control_id'] in each:
-                # load in control data
-                ctrl_adata = sc.AnnData(X=np.loadtxt(each, delimiter=','),
-                                        obs=pd.read_csv(all_obs[i], index_col=0))
-            else:
-                # load in mixed data
-                prtb_adatas.append(sc.AnnData(X=np.loadtxt(each, delimiter=','),
-                                              obs=pd.read_csv(all_obs[i],
-                                                              index_col=0)))
+        adata = sc.AnnData(X=np.loadtxt(snakemake.input['X'], delimiter=','),
+                           obs=pd.read_csv(snakemake.input['obs'], index_col=0),
+                           var=pd.read_csv(snakemake.input['var'], index_col=0))
+        ctrls = dutils.filter_cells(adata, snakemake.params['treatment'],
+                                    lambda x: x == snakemake.params['control'])
+        prtbs = dutils.filter_cells(adata, snakemake.params['treatment'],
+                                    lambda x: x != snakemake.params['control'])
         # combine adatas
-        prtb_combined = utils.rbind_adata(prtb_adatas)
         with open(snakemake.input['ncfs'], 'r') as f:
             icat_kws = json.load(f)
         with open(fit_json, 'r') as f:
@@ -34,7 +27,7 @@ if __name__ == '__main__':
         icat_kws['neighbor_kws']['n_neighbors'] = fit_data['n_neighbors']
         # cluster data using icat
         icat_model = models.icat(**icat_kws)
-        combined = icat_model.cluster(ctrl_adata, prtb_combined)
+        combined = icat_model.cluster(ctrls, prtbs)
         combined.write_csvs(dirname=snakemake.params['outdir'],
                             skip_data=False)
         
