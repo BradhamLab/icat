@@ -10,31 +10,22 @@ if __name__ == '__main__':
     except NameError:
         snakemake = None
     if snakemake is not None:
-        adata = sc.Adata(X=np.loadtxt(snakemake.input['X'], delimiter=','),
-                         obs=pd.read_csv(snakemake.input['obs'], index_col=0),
-                         var=pd.read_csv(snakemake.input['var'], index_col=0))
+        adata = sc.AnnData(X=np.loadtxt(snakemake.input['X'], delimiter=','),
+                           obs=pd.read_csv(snakemake.input['obs'], index_col=0),
+                           var=pd.read_csv(snakemake.input['var'], index_col=0))
         sc.pp.filter_genes(adata, min_cells=3)
         # normalize data
         sc.pp.normalize_total(adata)
         # log transform counts to detected highly variable genes
-        logged = adata.copy()
-        logged.X = np.log(logged.X + 1)
-        sc.pp.highly_variable_genes(logged, flavor='seurat')
+        sc.pp.log1p(adata)
+        sc.pp.highly_variable_genes(adata, flavor='seurat')
         # plot highly variable genes
         sc.settings.figdir = snakemake.params['plotdir']
-        sc.pl.highly_variable_genes(logged, show=False, save='.svg')
-        # copy logged.var to counts.var
-        adata.var = logged.var
-        variable_genes = logged.var.index[
-                                np.where(logged.var['highly_variable'])[0]]
+        sc.pl.highly_variable_genes(adata, show=False, save='.svg')
+        # subset to variable genes
+        variable_genes = adata.var.index[
+                                np.where(adata.var['highly_variable'])[0]]
         adata = adata[:, variable_genes]
-        # separate control and perturbed cells
-        ctrls = utils.filter_cells(adata, 'stim', lambda x: x == 'ctrl').copy()
-        prtbd = utils.filter_cells(adata, 'stim', lambda x: x != 'ctrl').copy()
         # write data to csvs
-        ctrls.write_csvs(dirname=os.path.join(snakemake.params['outdir'], 
-                                              'controls'),
-                        skip_data=False)
-        prtbd.write_csvs(dirname=os.path.join(snakemake.params['outdir'], 
-                                              'treated'),
+        ctrls.write_csvs(dirname=snakemake.params['outdir'],
                          skip_data=False)
