@@ -175,11 +175,11 @@ def parse_sim(name):
     out = {}
     # scan name for experiment, perturbation, sim, and rep ids
     # if no match, return empty string
-    for name, regex in zip(['Experiment', 'Perturbation', 'Sim', 'REp'],
-                            [exp_re, pert_re, sim_re, rep_re]):
+    for x, regex in zip(['Experiment', 'Perturbation', 'Sim', 'Rep'],
+                        [exp_re, pert_re, sim_re, rep_re]):
         match = regex.search(name)
         if match is not None:
-            out[name] = match.group()
+            out[x] = match.group()
         else:
-            out[name] = ''
+            out[x] = ''
     return out
