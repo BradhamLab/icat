@@ -23,9 +23,14 @@ create_seurat <- function(X, obs, label_col) {
   # obs_data$Population <- as.factor(obs_data$Population)
   row.names(obs_data) <- colnames(X_data)
   data <- Seurat::CreateSeuratObject(raw.data=X_data, meta.data=obs_data)
+  return(data)
+}
+
+preprocess_data <- function(data) {
   data <- Seurat::NormalizeData(data)
   data <- Seurat::ScaleData(data)
   data <- Seurat::FindVariableGenes(object=data, do.plot=FALSE)
+  return(data)
 }
 
 rename_cells <- function(seurat_obj, prefix) {
@@ -69,6 +74,8 @@ main <- function(X, obs, fit_json, out_csv, treatment, control, label_col) {
   treated_cells <- row.names(data@meta.data[ , treatment] != control)
   ctrl <- Seurat::SubsetData(data, cells=control_cells)
   prtb <- Seurat::SubsetData(data, cells=treated_cells)
+  ctrl <- preprocess_data(ctrl)
+  prtb <- preprocess_data(prtb)
   k <- fromJSON(file=fit_json)$n_neighbors
   clustered <- cluster_across_treatments(ctrl, prtb, k)
   write.csv(clustered, out_csv)
