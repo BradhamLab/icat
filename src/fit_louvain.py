@@ -21,12 +21,16 @@ except:
 def main(adata, label_col):
     sc.pp.pca(adata)
     performance = dict()
-    n_max = int(0.60 * adata.shape[0])
+    n_max = int(0.6 * adata.shape[0])
+    if n_max > 50:
+        n_max = 50
     n_min = 3
     score = -np.inf
     resolutions = [1]
+    print(n_max)
     for n in range(n_min, n_max + 1):
         for r in resolutions:
+            print(r, n)
             sc.pp.neighbors(adata, n_neighbors=n)
             sc.tl.umap(adata, min_dist=0.0)
             sc.tl.louvain(adata, resolution=r, key_added='louvain')
@@ -36,6 +40,7 @@ def main(adata, label_col):
                 performance['n_neighbors'] = n
                 performance['resolution'] = r
                 score = measures['adjusted.rand']
+    print('done')
     return performance
 
 
@@ -67,17 +72,15 @@ if __name__ == '__main__':
                                             lambda x: x==y).copy()\
                     for y in adata.obs[snakemake.params['treatment']].unique()}
         separated['combined'] = adata
-        performance = main(separated[snakemake.params['control']],
-                           snakemake.params['label'])
-        fit_data = main(separated[snakemake.params['control']],
-                        snakemake.params['label'])
+        controls = separated[snakemake.params['control']]
+        fit_data = main(controls, snakemake.params['label'])
         if not os.path.exists(snakemake.params['plotdir']):
             os.makedirs(snakemake.params['plotdir'])
         # add dakota style formatting
         for treatment, data in separated.items():
             plotfile = os.path.join(snakemake.params['plotdir'],
                                     "umap_{}.svg".format(treatment))
-            plot_cells(data, int(performance['n_neighbors']), plotfile,
+            plot_cells(data, int(fit_data['n_neighbors']), plotfile,
                        snakemake.params['label'], snakemake.params['treatment'])
         with open(snakemake.output['json'], 'w') as f:
             json.dump(fit_data, f)
