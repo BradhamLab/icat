@@ -82,13 +82,8 @@ if __name__ == '__main__':
         combined = combined[:, variable_genes]
         combined.obs['mixture'] = combined.obs['mixture'].astype('category')
         # write data
-        for each in adatas:
-            bench = each.obs['benchmark'][0]
-            out_adata = dutils.filter_cells(combined, 'benchmark',
-                                            lambda x: x == bench).copy()
-            out_adata.write_csvs(dirname=os.path.join(
-                                            snakemake.params['outdir'], bench),
-                                 skip_data=False)
+        combined.write_csvs(dirname=snakemake.params['outdir'],
+                            skip_data=False)
         
                                         
         
