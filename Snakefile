@@ -10,6 +10,8 @@ FILES = ['X.csv', 'obs.csv', 'var.csv']
 EXPERIMENTS = utils.get_simulation_ids(config['simulations']['json'],
                                        config['simulations']['sims'],
                                        config['simulations']['reps'])
+METHODS = ['icat', 'seurat', 'scanorama', 'icat_scan']
+METHODS = ['icat', 'seurat', 'scanorama']
 
 SIMULATED = ["data/processed/simulated/{exp}/{out}".\
              format(exp=exp, out=out)\
@@ -20,11 +22,15 @@ MIXES = BENCHMARK[:-1]
 rule all:
     input:
         ['data/results/simulated/icat/{exp}/performance.csv'.format(exp=exp)\
-            for exp in EXPERIMENTS],
-        ['data/results/simulated/seurat/{exp}/clustered.csv'.format(exp=exp)\
-            for exp in EXPERIMENTS],
+          for exp in EXPERIMENTS],
+        ['data/results/simulated/seurat/{exp}/obs.csv'.format(exp=exp)\
+          for exp in EXPERIMENTS],
         ['data/results/simulated/scanorama/{exp}/obs.csv'.format(exp=exp)\
-            for exp in EXPERIMENTS],
+          for exp in EXPERIMENTS],
+        ['data/results/simulated/{method}/{exp}/results.csv'.format(
+          method=method, exp=exp) for method, exp in\
+          itertools.product(METHODS, EXPERIMENTS)],
+        'data/results/simulated/final/results.csv'
         # 'data/processed/Kang/X.csv',
         # 'data/results/benchmark/results.csv'
         # ['data/processed/benchmark/{bench}/X.csv'.format(bench=bench)\
@@ -127,7 +133,7 @@ rule simulated_seurat:
         label='Population',
         seurat=config['libraries']['seurat2.3.3']
     output:
-        csv='data/results/simulated/seurat/{exp}/clustered.csv'
+        csv='data/results/simulated/seurat/{exp}/obs.csv'
     script:
         'src/cluster_seurat.R'
 
@@ -165,6 +171,29 @@ rule simulated_scanorama_icat:
         controls = 'Control'
     script:
         'src/scanorama_icat.py'
+
+rule evaluate_methods_simulated:
+    input:
+        obs='data/results/simulated/{method}/{exp}/obs.csv'
+    output:
+        csv='data/results/simulated/{method}/{exp}/results.csv'
+    params:
+        exp='{exp}',
+        method='{method}',
+        identity='Population'
+    script:
+        'src/evaluate_clusters.py'
+
+rule combine_evaluations_simulated:
+    input:
+        csvs=expand('data/results/simulated/{method}/{exp}/results.csv',
+                    method=METHODS, exp=EXPERIMENTS)
+    output:
+        csv='data/results/simulated/final/results.csv'
+    script:
+        'src/concatenate_results.py'
+
+
 
 rule summarize_simulated:
     input:
