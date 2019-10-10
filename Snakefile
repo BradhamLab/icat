@@ -194,7 +194,6 @@ rule combine_evaluations_simulated:
         'src/concatenate_results.py'
 
 
-
 rule summarize_simulated:
     input:
         perf='data/results/simulated/icat/{exp}/performance.csv',
@@ -255,7 +254,7 @@ rule benchmark_seurat:
         label='mixture',
         seurat=config['libraries']['seurat2.3.3']
     output:
-        csv=protected('data/results/benchmark/seurat/clustered.csv')
+        csv=protected('data/results/benchmark/seurat/obs.csv')
     script:
         'src/cluster_seurat.R'
 
@@ -297,7 +296,7 @@ rule benchmark_scanorama_icat:
 rule summarize_benchmark:
     input:
         icat='data/results/benchmark/icat/obs.csv',
-        seurat='data/results/benchmark/seurat/clustered.csv',
+        seurat='data/results/benchmark/seurat/obs.csv',
         scanorama='data/results/benchmark/scanorama/obs.csv',
         icat_scan='data/results/benchmark/icat_scan/obs.csv',
     params:
