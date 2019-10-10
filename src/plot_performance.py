@@ -127,7 +127,7 @@ def plot_performance(df):
     plt.title("Method Performance", loc='left')
     ax = plt.gca()
     handles, labels = ax.get_legend_handles_labels()
-    legend_cols = int(np.ceil(performance.shape[1] / 2))
+    legend_cols = int(np.ceil(df.shape[1] / 2))
     plt.legend(flip(handles, legend_cols), flip(labels, legend_cols),
                loc='upper center', bbox_to_anchor=(0.5, -0.05),
                ncol=legend_cols)
