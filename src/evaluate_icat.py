@@ -73,6 +73,7 @@ if __name__ == '__main__':
         obs = pd.read_csv(snakemake.input['obs'], index_col=0)
         var = pd.read_csv(snakemake.input['var'], index_col=0)
         adata = sc.AnnData(X=X, obs=obs, var=var)
+        sc.pp.log1p(adata)
         # subset controls and treated
         ctrls = dutils.filter_cells(adata, snakemake.params['treatment'],
                                     lambda x: x == snakemake.params['control'])\
