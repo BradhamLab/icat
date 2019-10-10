@@ -15,8 +15,6 @@ if __name__ == '__main__':
         integrated = sc.AnnData(X=np.loadtxt(snakemake.input['X'],
                                              delimiter=','),
                                 obs=pd.read_csv(snakemake.input['obs'],
-                                                index_col=0),
-                                var=pd.read_csv(snakemake.input['var'],
                                                 index_col=0))
         ctrls = dutils.filter_cells(integrated, snakemake.params['treatment'],
                               lambda x: x == snakemake.params['controls']).\
