@@ -21,7 +21,7 @@ except:
 def main(adata, label_col):
     sc.pp.pca(adata)
     performance = dict()
-    n_max = int(0.6 * adata.shape[0])
+    n_max = int(0.5 * adata.shape[0])
     if n_max > 50:
         n_max = 50
     n_min = 3
@@ -67,6 +67,7 @@ if __name__ == '__main__':
         obs = pd.read_csv(snakemake.input['obs'], index_col=0)
         var = pd.read_csv(snakemake.input['var'], index_col=0)
         adata = sc.AnnData(X=X, obs=obs, var=var)
+        sc.pp.log1p(adata)
         separated = {y: dutils.filter_cells(adata,
                                             snakemake.params['treatment'],
                                             lambda x: x==y).copy()\
