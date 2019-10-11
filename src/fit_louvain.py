@@ -27,7 +27,6 @@ def main(adata, label_col):
     n_min = 3
     score = -np.inf
     resolutions = [1]
-    print(n_max)
     for n in range(n_min, n_max + 1):
         for r in resolutions:
             print(r, n)
