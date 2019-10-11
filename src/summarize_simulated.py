@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-import seaborn as sns
+import os
 
 if __name__ == "__main__":
     try:
@@ -17,9 +17,19 @@ if __name__ == "__main__":
                                             x['Perturbation'],
                                             x['Sim']),
                                          axis=1)
-        method_mean = results.groupby(['ExpID', 'method']).mean()
-        method_deviation = results.groupby(['ExpID', 'method']).std()
-
-        metrics = ['adjusted.mutual.info', 'homogeneity', 'completeness',
-                   'adjusted.rand', 'fowlkes.mallows']
-        g = sns.catplot(x='method', y=metrics, )
+        sim_mean = results.groupby(['ExpID', 'method']).mean()
+        sim_mean['id'] = sim_mean.apply(lambda x: x.name[0].split('Sim')[0],
+                                        axis=1)
+        by_exp = sim_mean.groupby(['id', 'method'])
+        method_mean = by_exp.mean()
+        method_deviation = by_exp.std()
+        # fill na with 0's b/c not sure what happens lmao
+        method_deviation.fillna(0, inplace=True)
+        for exp in method_mean['id']:
+            method_mean.loc[exp].to_csv(os.path.join(
+                                            snakemake.params['outdir']),
+                                            exp + '_scores.csv')
+            method_deviation.loc[exp].to_csv(os.path.join(
+                                                 snakemake.params['outdir']),
+                                                 exp + '_devs.csv')
+        
