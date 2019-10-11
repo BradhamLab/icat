@@ -14,7 +14,7 @@ from downstream.src.visualization import visualize
 
 loc = os.path.dirname(os.path.abspath(__file__))
 plt.style.use(os.path.join(loc, 'configs/figures.mplstyle'))
-plt.rc('axes', prop_cycle=cycler('color', cc.glasbey_dark))
+plt.rc('axes', prop_cycle=cycler('color', cc.glasbey_light))
 
 
 method_dictionary = {
@@ -103,31 +103,44 @@ def flip(items, ncol):
     """
     return itertools.chain(*[items[i::ncol] for i in range(ncol)])
 
-def plot_performance(df):
+def metric_plot(scores, errors=None):
     """
     Plot performance metrics across methods. 
     
     Parameters
     ----------
-    df : pd.DataFrame
+    scores : pd.DataFrame
         Performance data frame where each column is a different performance
         metric, and each row represents a different method.
     """
-    indices = np.arange(df.shape[0]).astype(float)
-    width = np.min(np.diff(indices)) / df.shape[1]
+    if errors is not None:
+        if not isinstance(errors, pd.DataFrame):
+            raise ValueError("Expected DataFrame for `errors` parameter")
+        if np.all(errors.index != scores.index):
+            raise ValueError("`scores` and `errors` dataframes should have the"
+                             " same index.")
+        if np.all(errors.columns != scores.columns):
+            raise ValueError("`scores` and `errors` dataframes should have the"
+                             " same columns.")
+    indices = np.arange(scores.shape[0]).astype(float)
+    width = np.min(np.diff(indices)) / scores.shape[1]
     indices = indices + indices * width
     colors = cycler(color=plt.rcParams['axes.prop_cycle'].by_key()['color'])
-    starts = indices - width * df.shape[1] / 2
-    for method, color in zip(sorted(df.columns), colors()):
-        plt.bar(starts + width, df[method], width, color=color['color'],
-                label=method_dictionary[method])
+    starts = indices - width * scores.shape[1] / 2
+    for method, color in zip(sorted(scores.columns), colors()):
+        yerr = None
+        if errors is not None:
+            yerr = errors[method]
+        plt.bar(starts + width, scores[method], width, color=color['color'],
+                label=method_dictionary[method],
+                yerr=yerr)
         starts = starts + width
     indices = indices + width / 2
-    plt.xticks(indices, labels=[metric_dictionary[x] for x in df.index.values])
+    plt.xticks(indices, labels=[metric_dictionary[x] for x in scores.index.values])
     plt.title("Method Performance", loc='left')
     ax = plt.gca()
     handles, labels = ax.get_legend_handles_labels()
-    legend_cols = int(np.ceil(df.shape[1] / 2))
+    legend_cols = int(np.ceil(scores.shape[1] / 2))
     plt.legend(flip(handles, legend_cols), flip(labels, legend_cols),
                loc='upper center', bbox_to_anchor=(0.5, -0.05),
                ncol=legend_cols)
@@ -199,6 +212,6 @@ if __name__ == "__main__":
                   
         # plot performance across metrics
         performance = pd.read_csv(snakemake.input['results'], index_col=0).T
-        plot_performance(performance)
+        metric_plot(performance)
         plt.savefig(snakemake.output['metrics'])
         close_plot()
