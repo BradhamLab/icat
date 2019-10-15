@@ -21,15 +21,15 @@ create_seurat <- function(X, obs, label_col) {
   obs_data[label_col] <- as.factor(obs_data[label_col])
   # force to population
   # obs_data$Population <- as.factor(obs_data$Population)
-  colnames(X) <- row.names(obs_data)
+  row.names(obs_data) <- colnames(X_data)
   data <- Seurat::CreateSeuratObject(raw.data=X_data, meta.data=obs_data)
   return(data)
 }
 
 preprocess_data <- function(data) {
-  # data <- Seurat::NormalizeData(data)
+  data <- Seurat::NormalizeData(data)
   data <- Seurat::ScaleData(data)
-  # data <- Seurat::FindVariableGenes(object=data, do.plot=FALSE)
+  data <- Seurat::FindVariableGenes(object=data, do.plot=FALSE)
   return(data)
 }
 
