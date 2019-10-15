@@ -48,7 +48,8 @@ if (exists('snakemake')) {
   k <- rjson::fromJSON(file=snakemake@input[['json']])$n_neighbors
   by_treatment <- split_and_preprocess(seurat, snakemake@params[['treatment']])
   integrated <- integrate_cells(by_treatment, k)
-  write.csv(t(as.matrix(integrated@assays$integrated@data)),
-            snakemake@output[['X']])
+  write.table(t(as.matrix(integrated@assays$integrated@data)),
+              snakemake@output[['X']], sep=',',
+              row.names=FALSE, col.names=FALSE)
   write.csv(integrated@meta.data, snakemake@output[['obs']])
 }
