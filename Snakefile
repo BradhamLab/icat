@@ -14,7 +14,7 @@ RUNS = ['Experiment1.Perturbation1Sim1Rep1',
 #                                 config['simulations']['sims'],
 #                                 config['simulations']['reps'])
 # EXPERIMENTS = utils.get_experiment_ids(RUNS) 
-EXPERIMENTS = ['Experiment1.Perturbation1']
+EXPERIMENTS = ['Experiment1Perturbation1']
 METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'icat_scan',
            'seurat_icat']
 # METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama']
@@ -36,7 +36,9 @@ rule all:
         ['data/results/simulated/{method}/{run}/results.csv'.format(
           method=method, run=run) for method, run in\
           itertools.product(METHODS, RUNS)],
-        'data/results/simulated/final/results.csv'
+        'data/results/simulated/final/results.csv',
+        ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
+               exp=exp) for exp in EXPERIMENTS]
         # 'data/processed/Kang/X.csv',
         # 'data/results/benchmark/results.csv'
         # ['data/processed/benchmark/{bench}/X.csv'.format(bench=bench)\
@@ -234,11 +236,17 @@ rule combine_evaluations_simulated:
 
 rule summarize_simulated:
     input:
-        csv='data/results/simulated/final/results.csv'
+        results='data/results/simulated/final/results.csv'
     output:
-        performance='data/results/simulated/performance.csv'
+        means=['data/results/simulated/final/{exp}/metric_means.csv'.format(
+               exp=exp) for exp in EXPERIMENTS],
+        devs=['data/results/simulated/final/{exp}/metric_stds.csv'.format(
+               exp=exp) for exp in EXPERIMENTS],
+        svgs=['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
+               exp=exp) for exp in EXPERIMENTS]
     params:
-        plotdir='reports/figures/simulated/{run}/'
+        plotdir='reports/figures/simulated/performance/',
+        outdir='data/results/simulated/final/'
     script:
         'src/summarize_simulated.py'
     
