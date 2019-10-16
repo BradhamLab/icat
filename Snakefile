@@ -166,12 +166,13 @@ rule simulated_seurat_icat:
     params:
         treatment='Treatment',
         controls='Control',
-        outdir='data/results/simulated/seurat_icat/{run}/'
+        outdir='data/results/simulated/seurat_icat/{run}/',
+        cluster='seurat.sslouvain'
     output:
         X='data/results/simulated/seurat_icat/{run}/X.csv',
         obs='data/results/simulated/seurat_icat/{run}/obs.csv',
     script:
-        'src/run_seurat_icat.py'
+        'src/scanorama_icat.py'
 
 rule simulated_scanorama:
     input:
@@ -204,7 +205,8 @@ rule simulated_scanorama_icat:
     params:
         outdir='data/results/simulated/icat_scan/{run}/',
         treatment='Treatment',
-        controls = 'Control'
+        controls ='Control',
+        cluster='scanorama.sslouvain'
     script:
         'src/scanorama_icat.py'
 
@@ -232,11 +234,7 @@ rule combine_evaluations_simulated:
 
 rule summarize_simulated:
     input:
-        perf='data/results/simulated/icat/{run}/performance.csv',
-        icat='data/results/simulated/icat/{run}/obs.csv',
-        gene='data/results/simulated/icat/{run}/var.csv',
-        seurat='data/results/simulated/seurat233/{run}/clustered.csv',
-        scanorama='data/results/simulated/scanorama/{run}/obs.csv',
+        csv='data/results/simulated/final/results.csv'
     output:
         performance='data/results/simulated/performance.csv'
     params:
