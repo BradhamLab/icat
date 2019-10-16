@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+from matplotlib import pyplot as plt
+from icat.src import plot_performance
 
 import os
 
@@ -9,6 +11,8 @@ if __name__ == "__main__":
     except NameError:
         snakemake = None
     if snakemake is not None:
+        if not os.path.exists(snakemake.params['plotdir']):
+            os.makedirs(snakemake.params['plotdir'])
         results = pd.read_csv(snakemake.input['results'], index_col=0)
         results[['Experiment', 'Perturbation', 'Sim', 'Rep']] =\
             results[['Experiment', 'Perturbation', 'Sim', 'Rep']].fillna('')
@@ -25,11 +29,15 @@ if __name__ == "__main__":
         method_deviation = by_exp.std()
         # fill na with 0's b/c not sure what happens lmao
         method_deviation.fillna(0, inplace=True)
-        for exp in method_mean['id']:
-            method_mean.loc[exp].to_csv(os.path.join(
-                                            snakemake.params['outdir']),
-                                            exp + '_scores.csv')
-            method_deviation.loc[exp].to_csv(os.path.join(
-                                                 snakemake.params['outdir']),
-                                                 exp + '_devs.csv')
+        for exp in method_mean.index.get_level_values('id').unique():
+            write_dir = os.path.join(snakemake.params['outdir'], exp)
+            method_mean.loc[exp].to_csv(os.path.join(write_dir,
+                                                    'metric_means.csv'))
+            method_deviation.loc[exp].to_csv(os.path.join(write_dir,
+                                                         'metric_stds.csv'))
+            plot_performance.metric_plot(method_mean.loc[exp].T,
+                                         method_deviation.loc[exp].T) 
+            plt.savefig(os.path.join(snakemake.params['plotdir'],
+                        exp + '_metrics.svg'))
+            plot_performance.close_plot()
         
