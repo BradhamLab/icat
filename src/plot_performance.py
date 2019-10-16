@@ -19,10 +19,12 @@ plt.rc('axes', prop_cycle=cycler('color', cc.glasbey_light))
 
 method_dictionary = {
     'icat': 'icat',
-    'seurat': 'Seurat 2.3 - All',
+    'seurat233': 'Seurat 2.3 - All',
     'seurat.aligned': 'Seurat 2.3 - Aligned',
+    'seurat311': 'Seurat 3.1',
     'scanorama': 'scanorama',
-    'icat_scan': 'scanorama + icat'
+    'icat_scan': 'scanorama + icat',
+    'seurat_icat': 'Seurat 3.1 + icat'
 }
 
 label_dictionary = {
