@@ -52,5 +52,7 @@ def get_experiment_ids(run_ids):
     sim_reg = re.compile('Sim*[0-9]')
     rep_reg = re.compile('Rep*[0-9]')
     for each in run_ids:
-        ids.add(rep_reg.sub('', sim_reg.sub('', each)))
+        new_id = rep_reg.sub('', sim_reg.sub('', each))
+        new_id = new_id.replace('Experiment.', 'Experiment')
+        ids.add(new_id)
     return list(ids)
