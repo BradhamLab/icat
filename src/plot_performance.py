@@ -29,9 +29,11 @@ method_dictionary = {
 
 label_dictionary = {
     'icat': 'sslouvain',
-    'seurat': 'cluster',
+    'seurat233': 'cluster',
     'scanorama': 'scanorama.louvain',
-    'icat_scan': 'scanorama.sslouvain'
+    'icat_scan': 'scanorama.sslouvain',
+    'seurat311': 'seurat_clusters',
+    'seurat_icat': 'seurat.sslouvain'
 }
 
 metric_dictionary = {
