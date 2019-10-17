@@ -11,11 +11,11 @@ from matplotlib import pyplot as plt
 from scanpy import api as sc
 
 from downstream.src.visualization import visualize
+from icat.src import utils
 
 loc = os.path.dirname(os.path.abspath(__file__))
 plt.style.use(os.path.join(loc, 'configs/figures.mplstyle'))
 plt.rc('axes', prop_cycle=cycler('color', cc.glasbey_light))
-
 
 method_dictionary = {
     'icat': 'icat',
@@ -25,15 +25,6 @@ method_dictionary = {
     'scanorama': 'scanorama',
     'icat_scan': 'scanorama + icat',
     'seurat_icat': 'Seurat 3.1 + icat'
-}
-
-label_dictionary = {
-    'icat': 'sslouvain',
-    'seurat233': 'cluster',
-    'scanorama': 'scanorama.louvain',
-    'icat_scan': 'scanorama.sslouvain',
-    'seurat311': 'seurat_clusters',
-    'seurat_icat': 'seurat.sslouvain'
 }
 
 metric_dictionary = {
@@ -82,7 +73,7 @@ def stacked_barplot(df, label, cluster, xlabel=''):
     plt.xlabel(xlabel, fontsize=24, labelpad=5)
     plt.ylabel("Percentage of Cells", fontsize=24)
     yticks, __ = plt.yticks()
-    ylabels = [str(y) + "%" for y in yticks]
+    ylabels = ["{:d}%".format(int(y)) for y in yticks]
     plt.yticks(yticks, ylabels)
     plt.ylim(0, 100)
     plt.tight_layout()
@@ -177,7 +168,7 @@ if __name__ == "__main__":
             X = np.loadtxt(X, delimiter=',')
             obs = pd.read_csv(obs, index_col=0)
             # rename cluster column to be consistent between methods
-            col_name = label_dictionary[method]
+            col_name = utils.label_dictionary[method]
             obs.rename(columns={col_name: 'Cluster'}, inplace=True)
             obs['Cluster'] = obs['Cluster'].astype(str)
             # create AnnData object

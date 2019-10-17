@@ -19,6 +19,15 @@ from sklearn import metrics
 # except ImportError:
 #     pass
 
+label_dictionary = {
+    'icat': 'sslouvain',
+    'seurat233': 'cluster',
+    'scanorama': 'scanorama.louvain',
+    'icat_scan': 'scanorama.sslouvain',
+    'seurat311': 'seurat_clusters',
+    'seurat_icat': 'seurat.sslouvain'
+}
+
 
 def check_kws(reference_dict, new_dict, name):
     if not isinstance(new_dict, dict):
