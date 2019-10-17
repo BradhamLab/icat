@@ -26,9 +26,11 @@ create_seurat <- function(X, obs) {
 
 split_and_preprocess <- function(data, treatment) {
   by_treatment <- Seurat::SplitObject(data, split.by=treatment)
-  # by_treatment <- lapply(by_treatment, function(x) {
-  #
-  # })
+  by_treatment <- lapply(by_treatment, function(x) {
+    x <- Seurat::NormalizeData(x)
+    x <- FindVariableFeatures(x, selection.method='vst', nfeatures=2000)
+    return(x)
+  })
 }
 
 integrate_cells <- function(by_treatment, k) {
@@ -38,8 +40,9 @@ integrate_cells <- function(by_treatment, k) {
   combined <- Seurat::ScaleData(combined, verbose=FALSE)
   combined <- Seurat::RunPCA(combined, npcs=50, verbose=FALSE)
   combined <- Seurat::RunUMAP(combined, reduction='pca', dims=1:50)
-  combined <- Seurat::FindNeighbors(combined, reduction='pca', dims=1:50)
-  combined <- Seurat::FindClusters(combined, k.param=k)
+  combined <- Seurat::FindNeighbors(combined, reduction='pca', dims=1:50,
+                                    k.param=k)
+  combined <- Seurat::FindClusters(combined)
   return(combined)
 }
 
