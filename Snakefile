@@ -141,7 +141,8 @@ rule simulated_seurat233:
         label='Population',
         seurat=config['libraries']['seurat2.3.3']
     output:
-        csv='data/results/simulated/seurat233/{run}/obs.csv'
+        X='data/results/simulated/seurat233/{run}/X.csv',
+        obs='data/results/simulated/seurat233/{run}/obs.csv'
     script:
         'src/run_seurat2-3-3.R'
 
@@ -212,6 +213,24 @@ rule simulated_scanorama_icat:
     script:
         'src/scanorama_icat.py'
 
+rule plot_simulated_runs:
+    input:
+        X='data/results/simulated/{method}/{run}/X.csv',
+        obs='data/results/simulated/{method}/{run}/obs.csv',
+        fit='data/interim/fits/simulated/{run}_fit.json',
+    output:
+        treatment='reports/figures/simulated/clusters/{run}/{method}/treatment_umap.svg',
+        known='reports/figures/simulated/clusters/{run}/{method}/known_types_umap.svg',
+        cluster='reports/figures/simulated/clusters/{run}/{method}/cluster_umap.svg',
+        known_bar='reports/figures/simulated/clusters/{run}/{method}/cluster_distribution.svg',
+        cluster_bar='reports/figures/simulated/clusters/{run}/{method}/cell_type_distribution.svg'
+    params:
+        treatment='Treatment',
+        label='Population',
+        plotdir='reports/figures/simulated/clusters/{run}/{method}/'
+    script:
+        'src/plot_simulated.py'
+
 rule evaluate_methods_simulated:
     input:
         obs='data/results/simulated/{method}/{run}/obs.csv'
@@ -232,7 +251,6 @@ rule combine_evaluations_simulated:
         csv='data/results/simulated/final/results.csv'
     script:
         'src/concatenate_results.py'
-
 
 rule summarize_simulated:
     input:
@@ -296,6 +314,7 @@ rule benchmark_seurat233:
         label='mixture',
         seurat=config['libraries']['seurat2.3.3']
     output:
+        X='data/results/benchmark/seurat233/X.csv',
         csv=protected('data/results/benchmark/seurat233/obs.csv')
     script:
         'src/cluster_seurat.R'
