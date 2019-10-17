@@ -56,27 +56,6 @@ rule format_kang_data:
         'data/processed/Kang/var.csv'
     script:
         'src/generate_kang_et_al.py'
-
-# --------------------------- Process Benchmark Data ---------------------------
-
-# normalize across cells, subset to highly variable genes, and ln(X +1)
-# transform cells
-rule format_benchmark_data:
-    input:
-        counts=['data/raw/benchmark/{bench}.count.csv'.format(bench=bench)\
-                for bench in BENCHMARK],
-        meta=['data/raw/benchmark/{bench}.metadata.csv'.format(bench=bench)\
-              for bench in BENCHMARK]
-    params:
-        outdir='data/processed/benchmark/',
-        plotdir='figures/benchmark/'
-    output:
-        X='data/processed/benchmark/X.csv',
-        obs='data/processed/benchmark/obs.csv',
-        var='data/processed/benchmark/var.csv',
-        gene_svg='figures/benchmark/filter_genes_dispersion.svg'
-    script:
-        'src/format_benchmark_data.py'
     
 # ---------------------------- Generate Simulated Data -------------------------
 rule simulate_data:
@@ -267,6 +246,43 @@ rule summarize_simulated:
         outdir='data/results/simulated/final/'
     script:
         'src/summarize_simulated.py'
+
+# --------------------------- Process Benchmark Data ---------------------------
+
+# normalize across cells, subset to highly variable genes, and ln(X +1)
+# transform cells
+rule format_benchmark_data:
+    input:
+        counts=['data/raw/benchmark/{bench}.count.csv'.format(bench=bench)\
+                for bench in BENCHMARK],
+        meta=['data/raw/benchmark/{bench}.metadata.csv'.format(bench=bench)\
+              for bench in BENCHMARK]
+    params:
+        outdir='data/processed/benchmark/',
+        plotdir='figures/benchmark/'
+    output:
+        X='data/processed/benchmark/X.csv',
+        obs='data/processed/benchmark/obs.csv',
+        var='data/processed/benchmark/var.csv',
+        gene_svg='figures/benchmark/filter_genes_dispersion.svg'
+    script:
+        'src/format_benchmark_data.py'
+
+# just combine separate csvs together, b/c Seurat forces it's own preprocessing
+rule combine_benchmark_data:
+    input:
+        counts=['data/raw/benchmark/{bench}.count.csv'.format(bench=bench)\
+                for bench in BENCHMARK],
+        meta=['data/raw/benchmark/{bench}.metadata.csv'.format(bench=bench)\
+              for bench in BENCHMARK]
+    params:
+        outdir='data/raw/benchmark/combined/',
+    output:
+        X='data/raw/benchmark/combined/X.csv',
+        obs='data/raw/benchmark/combined/obs.csv',
+        var='data/raw/benchmark/combined/var.csv',
+    script:
+        'src/combine_data.py'
     
 # ------------------------ Fit and Analyze Benchmark Data ----------------------
 rule fit_benchmark_data:
@@ -305,8 +321,8 @@ rule benchmark_icat:
 
 rule benchmark_seurat233:
     input:
-        X='data/processed/benchmark/X.csv',
-        obs='data/processed/benchmark/obs.csv',
+        X='data/raw/benchmark/combined/X.csv',
+        obs='data/raw/benchmark/combined/obs.csv',
         json='data/interim/fits/benchmark/isolated_fits.json'
     params:
         treatment='benchmark',
@@ -315,9 +331,40 @@ rule benchmark_seurat233:
         seurat=config['libraries']['seurat2.3.3']
     output:
         X='data/results/benchmark/seurat233/X.csv',
-        csv=protected('data/results/benchmark/seurat233/obs.csv')
+        obs='data/results/benchmark/seurat233/obs.csv'
     script:
-        'src/cluster_seurat.R'
+        'src/run_seurat2-3-3.R'
+
+rule benchmark_seurat311:
+    input:
+        X='data/raw/benchmark/combined/X.csv',
+        obs='data/raw/benchmark/combined/obs.csv',
+        json='data/interim/fits/benchmark/isolated_fits.json'
+    params:
+        treatment='benchmark',
+        seurat=config['libraries']['seurat3.1.1']
+    output:
+        X='data/results/benchmark/seurat311/X.csv',
+        obs='data/results/benchmark/seurat311/obs.csv',
+    script:
+        "src/run_seurat3-1-1.R"
+
+rule benchmark_seurat_icat:
+    input:
+        X='data/results/benchmark/seurat311/X.csv',
+        obs='data/results/benchmark/seurat311/obs.csv',
+        json='data/interim/fits/benchmark/isolated_fits.json',
+        ncfs='data/external/benchmark_ncfs_params.json'
+    params:
+        treatment='benchmark',
+        controls='sc_celseq2',
+        outdir='data/results/benchmark/seurat_icat/',
+        cluster='seurat.sslouvain'
+    output:
+        X='data/results/benchmark/seurat_icat/X.csv',
+        obs='data/results/benchmark/seurat_icat/obs.csv'
+    script:
+        'src/scanorama_icat.py'
 
 rule benchmark_scanorama:
     input:
@@ -346,24 +393,24 @@ rule benchmark_scanorama_icat:
     output:
         X=protected('data/results/benchmark/icat_scan/X.csv'),
         obs=protected('data/results/benchmark/icat_scan/obs.csv'),
-        var=protected('data/results/benchmark/icat_scan/var.csv')
+        var=protected('data/results/benchmark/icat_scan/var.csv'),
     params:
         outdir='data/results/benchmark/icat_scan/',
         treatment='benchmark',
-        controls='sc_celseq2'
+        controls='sc_celseq2',
+        cluster='scanorama.sslouvain'
     script:
         'src/scanorama_icat.py'
 
 rule summarize_benchmark:
     input:
-        icat='data/results/benchmark/icat/obs.csv',
-        seurat='data/results/benchmark/seurat233/obs.csv',
-        scanorama='data/results/benchmark/scanorama/obs.csv',
-        icat_scan='data/results/benchmark/icat_scan/obs.csv',
+        obs=['data/results/benchmark/{method}/obs.csv'.format(
+             method=method) for method in METHODS],
     params:
         identity='mixture'
     output:
-        csv='data/results/benchmark/results.csv'
+        csv='data/results/benchmark/results.csv',
+        svg='reports/figures/benchmark/metrics.svg'
     script:
         'src/summarize_benchmark.py'
 
