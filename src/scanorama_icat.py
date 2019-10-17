@@ -30,7 +30,7 @@ if __name__ == '__main__':
         icat_kws['neighbor_kws']['n_neighbors'] = fit_data['n_neighbors']
         icat_model = models.icat(**icat_kws)
         out = icat_model.cluster(ctrls, prtb)
-        out.obs.rename(columns={'sslouvain': 'scanorama.sslouvain'},
+        out.obs.rename(columns={'sslouvain': snakemake.params['cluster']},
                        inplace=True)
         out.write_csvs(dirname=snakemake.params['outdir'],
                        skip_data=False)
