@@ -20,7 +20,6 @@ create_seurat <- function(X, obs, label_col) {
   names(obs_data) <- names(keep_cols)
   obs_data[label_col] <- as.factor(obs_data[label_col])
   # force to population
-  # obs_data$Population <- as.factor(obs_data$Population)
   row.names(obs_data) <- colnames(X_data)
   data <- Seurat::CreateSeuratObject(raw.data=X_data, meta.data=obs_data)
   return(data)
@@ -64,10 +63,10 @@ cluster_across_treatments <- function(ctrl, prtb, k, treatment='treatment') {
   combined@meta.data[row.names(discarded@meta.data), 'cluster'] <- rep('unknown', nrow(discarded@meta.data))
   combined <- Seurat::RunUMAP(combined)
   combined@meta.data <- cbind(combined@meta.data, combined@dr$umap@cell.embeddings)
-  return(combined@meta.data)
+  return(combined)
 }
 
-main <- function(X, obs, fit_json, out_csv, treatment, control, label_col) {
+main <- function(X, obs, fit_json, out_X, out_obs, treatment, control, label_col) {
   data <- create_seurat(X, obs, label_col)
   # separate controls and treated
   control_cells <- row.names(data@meta.data[ , treatment] == control)
@@ -78,14 +77,17 @@ main <- function(X, obs, fit_json, out_csv, treatment, control, label_col) {
   prtb <- preprocess_data(prtb)
   k <- fromJSON(file=fit_json)$n_neighbors
   clustered <- cluster_across_treatments(ctrl, prtb, k)
-  write.csv(clustered, out_csv)
+  write.csv(clustered@meta.data, out_obs)
+  write.table(t(as.matrix(clustered@data)), out_X, sep=',', row.names=FALSE,
+              col.names=FALSE)
 }
 
 if (exists('snakemake')) {
   main(snakemake@input[['X']],
        snakemake@input[['obs']],
        snakemake@input[['json']],
-       snakemake@output[['csv']],
+       snakemake@output[['X']],
+       snakemake@output[['obs']],
        snakemake@params[['treatment']],
        snakemake@params[['controls']],
        snakemake@params[['label']])
