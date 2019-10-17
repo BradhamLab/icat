@@ -18,7 +18,7 @@ create_seurat <- function(X, obs, label_col) {
   obs_data <- data.frame(obs_data[ , keep_cols],
                          row.names=row.names(obs_data))
   names(obs_data) <- names(keep_cols)
-  obs_data[label_col] <- as.factor(obs_data[label_col])
+  # obs_data[label_col] <- as.factor(obs_data[label_col])
   # force to population
   row.names(obs_data) <- colnames(X_data)
   data <- Seurat::CreateSeuratObject(raw.data=X_data, meta.data=obs_data)
