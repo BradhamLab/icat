@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from cycler import cycler
 from matplotlib import pyplot as plt
+import seaborn as sns
 from scanpy import api as sc
 
 from downstream.src.visualization import visualize
@@ -77,6 +78,13 @@ def stacked_barplot(df, label, cluster, xlabel=''):
     plt.yticks(yticks, ylabels)
     plt.ylim(0, 100)
     plt.tight_layout()
+
+
+def trendplot(results, x, y, hue=None, style=None):
+    ax = sns.lineplot(x=x, y=y, hue=hue, style=style, data=results,
+                      markers=True, dashes=False)
+    return ax
+
 
 def flip(items, ncol):
     """[summary]
