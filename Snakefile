@@ -2,19 +2,23 @@
 import glob
 import os
 import itertools
-# from icat.src import snakemake_utils as utils
+from icat.src import snakemake_utils as utils
 
 configfile: './snakemake-config.yaml'
 
 FILES = ['X.csv', 'obs.csv', 'var.csv']
-RUNS = ['Experiment1.Perturbation1Sim1Rep1',
-        'Experiment1.Perturbation1Sim1Rep2',
-        'Experiment1.Perturbation1Sim1Rep3']
-# RUNS = utils.get_simulation_ids(config['simulations']['json'],
-#                                 config['simulations']['sims'],
-#                                 config['simulations']['reps'])
-# EXPERIMENTS = utils.get_experiment_ids(RUNS) 
-EXPERIMENTS = ['Experiment1Perturbation1']
+RUNS = utils.get_simulation_ids(config['simulations']['json'],
+                                config['simulations']['sims'],
+                                config['simulations']['reps'])
+EXPERIMENTS = utils.get_experiment_ids(RUNS)
+
+# debugging/test stuff
+# RUNS = ['Experiment1.Perturbation1Sim1Rep1',
+#         'Experiment1.Perturbation1Sim1Rep2',
+#         'Experiment1.Perturbation1Sim1Rep3']
+# EXPERIMENTS = ['Experiment1Perturbation1']
+
+
 METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'icat_scan',
            'seurat_icat']
 # METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama']
@@ -27,18 +31,23 @@ MIXES = BENCHMARK[:-1]
 
 rule all:
     input:
-        ['data/results/simulated/icat/{run}/performance.csv'.format(run=run)\
-          for run in RUNS],
-        ['data/results/simulated/seurat233/{run}/obs.csv'.format(run=run)\
-          for run in RUNS],
-        ['data/results/simulated/scanorama/{run}/obs.csv'.format(run=run)\
-          for run in RUNS],
-        ['data/results/simulated/{method}/{run}/results.csv'.format(
-          method=method, run=run) for method, run in\
-          itertools.product(METHODS, RUNS)],
         'data/results/simulated/final/results.csv',
         ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
-               exp=exp) for exp in EXPERIMENTS]
+               exp=exp) for exp in EXPERIMENTS],
+        'reports/figures/benchmark/metrics.svg',
+        
+        # ['data/results/simulated/icat/{run}/performance.csv'.format(run=run)\
+        #   for run in RUNS],
+        # ['data/results/simulated/seurat233/{run}/obs.csv'.format(run=run)\
+        #   for run in RUNS],
+        # ['data/results/simulated/scanorama/{run}/obs.csv'.format(run=run)\
+        #   for run in RUNS],
+        # ['data/results/simulated/{method}/{run}/results.csv'.format(
+        #   method=method, run=run) for method, run in\
+        #   itertools.product(METHODS, RUNS)],
+        # 'data/results/simulated/final/results.csv',
+        # ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
+        #        exp=exp) for exp in EXPERIMENTS]
         # 'data/processed/Kang/X.csv',
         # 'data/results/benchmark/results.csv'
         # ['data/processed/benchmark/{bench}/X.csv'.format(bench=bench)\
@@ -246,6 +255,15 @@ rule summarize_simulated:
         outdir='data/results/simulated/final/'
     script:
         'src/summarize_simulated.py'
+
+rule plot_increasing_perturbation:
+    input:
+        results='data/results/simulated/final/results.csv',
+        exp_params='data/external/paper_experiments.json'
+    params:
+        exp_id='2'
+    script:
+        'src/plot_increasing_perturbation'
 
 # --------------------------- Process Benchmark Data ---------------------------
 
