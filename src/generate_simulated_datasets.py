@@ -1,6 +1,7 @@
 import json
 import os
 
+import numpy as np
 import pandas as pd
 
 from icat.src import simulate
@@ -58,6 +59,7 @@ def main(configs, sims=1, reps=1):
                 if isinstance(v, list):
                     v = ';'.join([str(x) for x in v])
                 flattened[k] = v
+            flattened['dropout'] = np.sum(controls.X == 0) / controls.X.size
             csv_dict[exp_key] = flattened  # TODO: look at this with change
         # combine dataset across perturbations 
         if params['combine_perturbations']:
