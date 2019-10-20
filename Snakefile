@@ -142,6 +142,7 @@ rule simulated_seurat311:
     params:
         treatment='Treatment',
         seurat=config['libraries']['seurat3.1.1']
+        python=config['libraries']['conda_env']
     output:
         X='data/results/simulated/seurat311/{run}/X.csv',
         obs='data/results/simulated/seurat311/{run}/obs.csv',

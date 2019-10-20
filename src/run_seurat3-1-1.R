@@ -6,7 +6,14 @@ if (exists("snakemake")) {
 suppressPackageStartupMessages({
   library(Seurat)
   library(rjson)
+  library(reticulate)
 })
+
+if (exists("snakemake")) {
+  if (~is.null(snakemake@params[['python']])) {
+    reticulate::use_condaenv(snakemake@params[['python']])
+  }
+}
 
 create_seurat <- function(X, obs) {
   X_data = as.data.frame(t(read.csv(X, header=FALSE)))
