@@ -19,6 +19,15 @@ from sklearn import metrics
 # except ImportError:
 #     pass
 
+label_dictionary = {
+    'icat': 'sslouvain',
+    'seurat233': 'cluster',
+    'scanorama': 'scanorama.louvain',
+    'icat_scan': 'scanorama.sslouvain',
+    'seurat311': 'seurat_clusters',
+    'seurat_icat': 'seurat.sslouvain'
+}
+
 
 def check_kws(reference_dict, new_dict, name):
     if not isinstance(new_dict, dict):
@@ -175,11 +184,11 @@ def parse_sim(name):
     out = {}
     # scan name for experiment, perturbation, sim, and rep ids
     # if no match, return empty string
-    for name, regex in zip(['Experiment', 'Perturbation', 'Sim', 'Rep'],
-                            [exp_re, pert_re, sim_re, rep_re]):
+    for x, regex in zip(['Experiment', 'Perturbation', 'Sim', 'Rep'],
+                        [exp_re, pert_re, sim_re, rep_re]):
         match = regex.search(name)
         if match is not None:
-            out[name] = match.group()
+            out[x] = match.group()
         else:
-            out[name] = ''
+            out[x] = ''
     return out

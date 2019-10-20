@@ -1,4 +1,5 @@
 import json
+import re
 
 def get_simulation_ids(exp_json, sims, reps):
     """
@@ -31,3 +32,27 @@ def get_simulation_ids(exp_json, sims, reps):
                     experiments.append('{}Sim{}Rep{}'.format(exp, sim + 1,
                                                              rep + 1))
     return experiments
+
+def get_experiment_ids(run_ids):
+    """
+    Get the list of experiment ids from the list of simulation ids
+    
+    Parameters
+    ----------
+    run_ids : list
+        A list of individual simulation ids. Output from get_simulation_ids().
+    
+    Returns
+    -------
+    list
+        Experiment ids with Sim and Rep numbers ripped from the original
+        simulation id.
+    """
+    ids = set()
+    sim_reg = re.compile('Sim*[0-9]')
+    rep_reg = re.compile('Rep*[0-9]')
+    for each in run_ids:
+        new_id = rep_reg.sub('', sim_reg.sub('', each))
+        new_id = new_id.replace('Experiment.', 'Experiment')
+        ids.add(new_id)
+    return list(ids)

@@ -1,10 +1,12 @@
 import json
 import os
 
+import numpy as np
 import pandas as pd
 
 from icat.src import simulate
 from icat.src import utils
+from downstream.src.analysis import utils as dutils
 
 def parse_params(sim_params):
     if 'dispersion' in sim_params and sim_params['dispersion'] == 'random':
@@ -57,22 +59,32 @@ def main(configs, sims=1, reps=1):
                 if isinstance(v, list):
                     v = ';'.join([str(x) for x in v])
                 flattened[k] = v
+            flattened['dropout'] = np.sum(controls.X == 0) / controls.X.size
             csv_dict[exp_key] = flattened  # TODO: look at this with change
+        # combine dataset across perturbations 
         if params['combine_perturbations']:
             # change experiment key from Experiment{Y}.Perturbation{X} to
             # Experiment{Y} given joining of perturbations
             exp_key = perturbation_keys[0].split('.')[0]
             sim_rep_data = [[[None] for i in range(reps)] for j in range(sims)]
             for sim in range(sims):
+                # flag if controls from simulation have been merged yet
+                sim_merged = False
                 for rep in range(reps):
                     adatas = []
                     # combine perturbations across the same simulations + replications
                     for pert in perturbation_keys:
                         adata = datasets[pert][sim][rep]
+                        # remove controls if merged
+                        if sim_merged:
+                            adata = dutils.filter_cells(adata, 'Treatment',
+                                                     lambda x: x == 'Perturbed')
                         # rename treatment from Perturbed to Perturbed{X}
                         label = pert.split('.')[-1]
-                        adata.obs['Treatment'].replace('Perturbed', label, inplace=True)
+                        adata.obs['Treatment'].replace('Perturbed', label,
+                                                       inplace=True)
                         adatas.append(adata)
+                        sim_merged = True
                     adata = utils.rbind_adata(adatas)
                     adata.obs.index = ['cell-{}'.format(i + 1)\
                                        for i in range(adata.shape[0])]

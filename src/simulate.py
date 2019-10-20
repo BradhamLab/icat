@@ -47,7 +47,7 @@ class SingleCellDataset():
     """
     def __init__(self, samples=200, genes=1000, populations=2,
                  pop_sizes=None, p_marker=None, dispersion=1, scalar=100,
-                 percentile=0.5):
+                 percentile=50):
         """
         Parameters
         ----------
@@ -225,10 +225,12 @@ class SingleCellDataset():
     
     @percentile.setter
     def percentile(self, value):
-        if not isinstance(value, float):
-            raise ValueError("Expected float value for `percentile` parameter.")
-        if not 0 <= value <= 1:
-            raise ValueError("`percentile` must be a float between 0 and 1.")
+        try:
+            float(value)
+        except:
+            raise ValueError("Expected numerical value for `percentile`.")
+        if not 0 <= value <= 100:
+            raise ValueError("`percentile` must be a float between 0 and 100.")
         self._percentile = value
 
     def __repr__(self):
@@ -389,7 +391,7 @@ def population_markers(adata):
 # TODO: add option to simulate untargetted populations/ add treatment
 # specific populations
 def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
-            percent_perturb=None, pop_sizes=None, percentile=0.5):
+            percent_perturb=None, pop_sizes=None, percentile=50):
     r"""
     Perturb a simulated single-cell dataset.
 
@@ -585,6 +587,8 @@ class Experiment(object):
         else:
             value = default_kws
         self._pca_kws = value
+        if 'percentile' not in value and 'percentile' in self.control_kwargs:
+            value['percentile'] = self.control_kwargs['percentile']
         self._perturb_kwargs = value
 
     def simulate_controls(self):
@@ -801,7 +805,7 @@ def dropout_probability(mu, median_avg, beta_0=-1.5):
     return 1 - sigmoid(x)
 
 def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes,
-                    percentile=0.5):
+                    percentile=50):
     r"""
     Simulate counts across genes for a set number of samples.
     

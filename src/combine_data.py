@@ -68,19 +68,6 @@ if __name__ == '__main__':
             adatas[i] = adata
         combined = utils.rbind_adata(adatas)
         sc.pp.filter_genes(combined, min_cells=3)
-        # normalize data
-        sc.pp.normalize_total(combined)
-        # log transform counts to detected highly variable genes
-        sc.pp.log1p(combined)
-        sc.pp.highly_variable_genes(combined, flavor='seurat')
-        # plot highly variable genes
-        sc.settings.figdir = snakemake.params['plotdir']
-        sc.pl.highly_variable_genes(combined, show=False, save='.svg')
-        # subset to highly variable genes
-        variable_genes = combined.var.index[
-                             np.where(combined.var['highly_variable'])[0]]
-        combined = combined[:, variable_genes]
-        combined.obs['mixture'] = combined.obs['mixture'].astype('category')
         # write data
         combined.write_csvs(dirname=snakemake.params['outdir'],
                             skip_data=False)

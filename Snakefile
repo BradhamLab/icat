@@ -7,24 +7,47 @@ from icat.src import snakemake_utils as utils
 configfile: './snakemake-config.yaml'
 
 FILES = ['X.csv', 'obs.csv', 'var.csv']
-EXPERIMENTS = utils.get_simulation_ids(config['simulations']['json'],
-                                       config['simulations']['sims'],
-                                       config['simulations']['reps'])
+RUNS = utils.get_simulation_ids(config['simulations']['json'],
+                                config['simulations']['sims'],
+                                config['simulations']['reps'])
+EXPERIMENTS = utils.get_experiment_ids(RUNS)
 
-SIMULATED = ["data/processed/simulated/{exp}/{out}".\
-             format(exp=exp, out=out)\
-             for exp, out in itertools.product(EXPERIMENTS, FILES)]
+# debugging/test stuff
+# RUNS = ['Experiment1.Perturbation1Sim1Rep1',
+#         'Experiment1.Perturbation1Sim1Rep2',
+#         'Experiment1.Perturbation1Sim1Rep3']
+# EXPERIMENTS = ['Experiment1Perturbation1']
+
+
+METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'icat_scan',
+           'seurat_icat']
+# METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama']
+
+SIMULATED = ["data/processed/simulated/{run}/{out}".\
+             format(run=run, out=out)\
+             for run, out in itertools.product(RUNS, FILES)]
 BENCHMARK = ['cellmix1', 'cellmix2', 'cellmix3', 'cellmix4', 'sc_celseq2']
 MIXES = BENCHMARK[:-1]
 
 rule all:
     input:
-        ['data/results/simulated/icat/{exp}/performance.csv'.format(exp=exp)\
-            for exp in EXPERIMENTS],
-        ['data/results/simulated/seurat/{exp}/clustered.csv'.format(exp=exp)\
-            for exp in EXPERIMENTS],
-        ['data/results/simulated/scanorama/{exp}/obs.csv'.format(exp=exp)\
-            for exp in EXPERIMENTS],
+        'data/results/simulated/final/results.csv',
+        ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
+               exp=exp) for exp in EXPERIMENTS],
+        'reports/figures/benchmark/metrics.svg',
+        
+        # ['data/results/simulated/icat/{run}/performance.csv'.format(run=run)\
+        #   for run in RUNS],
+        # ['data/results/simulated/seurat233/{run}/obs.csv'.format(run=run)\
+        #   for run in RUNS],
+        # ['data/results/simulated/scanorama/{run}/obs.csv'.format(run=run)\
+        #   for run in RUNS],
+        # ['data/results/simulated/{method}/{run}/results.csv'.format(
+        #   method=method, run=run) for method, run in\
+        #   itertools.product(METHODS, RUNS)],
+        # 'data/results/simulated/final/results.csv',
+        # ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
+        #        exp=exp) for exp in EXPERIMENTS]
         # 'data/processed/Kang/X.csv',
         # 'data/results/benchmark/results.csv'
         # ['data/processed/benchmark/{bench}/X.csv'.format(bench=bench)\
@@ -42,63 +65,6 @@ rule format_kang_data:
         'data/processed/Kang/var.csv'
     script:
         'src/generate_kang_et_al.py'
-
-# --------------------------- Process Benchmark Data ---------------------------
-
-# normalize across cells, subset to highly variable genes, and ln(X +1)
-# transform cells
-rule format_benchmark_data:
-    input:
-        counts=['data/raw/benchmark/{bench}.count.csv'.format(bench=bench)\
-                for bench in BENCHMARK],
-        meta=['data/raw/benchmark/{bench}.metadata.csv'.format(bench=bench)\
-              for bench in BENCHMARK]
-    params:
-        outdir='data/processed/benchmark/',
-        plotdir='figures/benchmark/'
-    output:
-        X=['data/processed/benchmark/{bench}/X.csv'.format(bench=bench)
-           for bench in BENCHMARK],
-        obs=['data/processed/benchmark/{bench}/obs.csv'.format(bench=bench)
-             for bench in BENCHMARK],
-        var=['data/processed/benchmark/{bench}/var.csv'.format(bench=bench)
-             for bench in BENCHMARK], 
-        gene_svg='figures/benchmark/filter_genes_dispersion.svg'
-    script:
-        'src/format_benchmark_data.py'
-
-rule concatenate_benchmark_mixtures:
-    input:
-        X=['data/processed/benchmark/{mix}/X.csv'.format(mix=mix)
-           for mix in MIXES],
-        obs=['data/processed/benchmark/{mix}/obs.csv'.format(mix=mix)
-             for mix in MIXES],
-        var=['data/processed/benchmark/{mix}/var.csv'.format(mix=mix)
-             for mix in MIXES]
-    params:
-        outdir='data/processed/benchmark/mixed/'
-    output:
-        X='data/processed/benchmark/mixed/X.csv',
-        obs='data/processed/benchmark/mixed/obs.csv',
-        var='data/processed/benchmark/mixed/var.csv'
-    script:
-        "src/concatenate_mixtures.py"
-
-rule move_benchmark_isolated:
-    input:
-        X='data/processed/benchmark/sc_celseq2/X.csv',
-        obs='data/processed/benchmark/sc_celseq2/obs.csv',
-        var='data/processed/benchmark/sc_celseq2/var.csv'
-    output:
-        X='data/processed/benchmark/isolated/X.csv',
-        obs='data/processed/benchmark/isolated/obs.csv',
-        var='data/processed/benchmark/isolated/var.csv'
-    shell:
-        """
-        cp {input.X} {output.X};
-        cp {input.obs} {output.obs};
-        cp {input.var} {output.var} 
-        """
     
 # ---------------------------- Generate Simulated Data -------------------------
 rule simulate_data:
@@ -117,173 +83,321 @@ rule simulate_data:
 # ---------------------- Fit and Analyze Simulated Data ------------------------
 rule fit_simulated:
     input:
-        X='data/processed/simulated/{exp}/X.csv',
-        obs='data/processed/simulated/{exp}/obs.csv',
-        var='data/processed/simulated/{exp}/var.csv'
+        X='data/processed/simulated/{run}/X.csv',
+        obs='data/processed/simulated/{run}/obs.csv',
+        var='data/processed/simulated/{run}/var.csv'
     params:
         treatment='Treatment',
         control='Control',
         label='Population',
-        plotdir='reports/figures/simulated/{exp}/'
+        plotdir='reports/figures/simulated/{run}/'
     output:
-        json='data/interim/fits/simulated/{exp}_fit.json'
+        json='data/interim/fits/simulated/{run}_fit.json'
     script:
         'src/fit_louvain.py'
 
 rule simulated_icat:
     input:
-        X='data/processed/simulated/{exp}/X.csv',
-        obs='data/processed/simulated/{exp}/obs.csv',
-        var='data/processed/simulated/{exp}/var.csv',
-        json='data/interim/fits/simulated/{exp}_fit.json',
+        X='data/processed/simulated/{run}/X.csv',
+        obs='data/processed/simulated/{run}/obs.csv',
+        var='data/processed/simulated/{run}/var.csv',
+        json='data/interim/fits/simulated/{run}_fit.json',
         ncfs='data/external/simulated_ncfs_params.json'
     params:
-        name='{exp}',
+        name='{run}',
         treatment='Treatment',
         control='Control',
-        plotdir='reports/figures/simulated/{exp}/icat/',
-        outdir='data/results/simulated/icat/{exp}/',
+        plotdir='reports/figures/simulated/{run}/icat/',
+        outdir='data/results/simulated/icat/{run}/',
     output:
-        csv='data/results/simulated/icat/{exp}/performance.csv',
-        obs='data/results/simulated/icat/{exp}/obs.csv',
-        p1='reports/figures/simulated/{exp}/icat/umap_Louvain.svg',
-        p2='reports/figures/simulated/{exp}/icat/umap_NCFS-Louvain.svg',
-        p3='reports/figures/simulated/{exp}/icat/umap_NCFS-SSLouvain.svg'
+        csv='data/results/simulated/icat/{run}/performance.csv',
+        obs='data/results/simulated/icat/{run}/obs.csv',
+        p1='reports/figures/simulated/{run}/icat/umap_Louvain.svg',
+        p2='reports/figures/simulated/{run}/icat/umap_NCFS-Louvain.svg',
+        p3='reports/figures/simulated/{run}/icat/umap_NCFS-SSLouvain.svg'
     script:
         'src/evaluate_icat.py'
 
-rule simulated_seurat:
+rule simulated_seurat233:
     input:
-        X='data/processed/simulated/{exp}/X.csv',
-        obs='data/processed/simulated/{exp}/obs.csv',
-        json='data/interim/fits/simulated/{exp}_fit.json'
+        X='data/processed/simulated/{run}/X.csv',
+        obs='data/processed/simulated/{run}/obs.csv',
+        json='data/interim/fits/simulated/{run}_fit.json'
     params:
         treatment='Treatment',
         control='Control',
         label='Population',
         seurat=config['libraries']['seurat2.3.3']
     output:
-        csv='data/results/simulated/seurat/{exp}/clustered.csv'
+        X='data/results/simulated/seurat233/{run}/X.csv',
+        obs='data/results/simulated/seurat233/{run}/obs.csv'
     script:
-        'src/cluster_seurat.R'
+        'src/run_seurat2-3-3.R'
 
-rule simulated_scanorama:
+rule simulated_seurat311:
     input:
-        X='data/processed/simulated/{exp}/X.csv',
-        obs='data/processed/simulated/{exp}/obs.csv',
-        var='data/processed/simulated/{exp}/var.csv',
-        json='data/interim/fits/simulated/{exp}_fit.json'
+        X='data/processed/simulated/{run}/X.csv',
+        obs='data/processed/simulated/{run}/obs.csv',
+        json='data/interim/fits/simulated/{run}_fit.json'
+    params:
+        treatment='Treatment',
+        seurat=config['libraries']['seurat3.1.1']
     output:
-        X='data/results/simulated/scanorama/{exp}/X.csv',
-        obs='data/results/simulated/scanorama/{exp}/obs.csv',
-        var='data/results/simulated/scanorama/{exp}/var.csv'
+        X='data/results/simulated/seurat311/{run}/X.csv',
+        obs='data/results/simulated/seurat311/{run}/obs.csv',
+    script:
+        'src/run_seurat3-1-1.R'
+
+rule simulated_seurat_icat:
+    input:
+        X='data/results/simulated/seurat311/{run}/X.csv',
+        obs='data/results/simulated/seurat311/{run}/obs.csv',
+        json='data/interim/fits/simulated/{run}_fit.json',
+        ncfs='data/external/simulated_ncfs_params.json'
     params:
         treatment='Treatment',
         controls='Control',
-        outdir='data/results/simulated/scanorama/{exp}/'
+        outdir='data/results/simulated/seurat_icat/{run}/',
+        cluster='seurat.sslouvain'
+    output:
+        X='data/results/simulated/seurat_icat/{run}/X.csv',
+        obs='data/results/simulated/seurat_icat/{run}/obs.csv',
+    script:
+        'src/scanorama_icat.py'
+
+rule simulated_scanorama:
+    input:
+        X='data/processed/simulated/{run}/X.csv',
+        obs='data/processed/simulated/{run}/obs.csv',
+        var='data/processed/simulated/{run}/var.csv',
+        json='data/interim/fits/simulated/{run}_fit.json',
+    output:
+        X='data/results/simulated/scanorama/{run}/X.csv',
+        obs='data/results/simulated/scanorama/{run}/obs.csv',
+        var='data/results/simulated/scanorama/{run}/var.csv'
+    params:
+        treatment='Treatment',
+        controls='Control',
+        outdir='data/results/simulated/scanorama/{run}/'
     script:
         'src/run_scanorama.py'
 
 rule simulated_scanorama_icat:
     input:
-        X='data/results/simulated/scanorama/{exp}/X.csv',
-        obs='data/results/simulated/scanorama/{exp}/obs.csv',
-        var='data/results/simulated/scanorama/{exp}/var.csv',
-        json='data/interim/fits/simulated/{exp}_fit.json',
+        X='data/results/simulated/scanorama/{run}/X.csv',
+        obs='data/results/simulated/scanorama/{run}/obs.csv',
+        var='data/results/simulated/scanorama/{run}/var.csv',
+        json='data/interim/fits/simulated/{run}_fit.json',
         ncfs='data/external/simulated_ncfs_params.json'
     output:
-        X='data/results/simulated/icat_scan/{exp}/X.csv',
-        obs='data/results/simulated/icat_scan/{exp}/obs.csv',
-        var='data/results/simulated/icat_scan/{exp}/var.csv'
+        X='data/results/simulated/icat_scan/{run}/X.csv',
+        obs='data/results/simulated/icat_scan/{run}/obs.csv',
+        var='data/results/simulated/icat_scan/{run}/var.csv'
     params:
-        outdir='data/results/simulated/icat_scan/{exp}/',
+        outdir='data/results/simulated/icat_scan/{run}/',
         treatment='Treatment',
-        controls = 'Control'
+        controls ='Control',
+        cluster='scanorama.sslouvain'
     script:
         'src/scanorama_icat.py'
 
+rule plot_simulated_runs:
+    input:
+        X='data/results/simulated/{method}/{run}/X.csv',
+        obs='data/results/simulated/{method}/{run}/obs.csv',
+        fit='data/interim/fits/simulated/{run}_fit.json',
+    output:
+        treatment='reports/figures/simulated/clusters/{run}/{method}/treatment_umap.svg',
+        known='reports/figures/simulated/clusters/{run}/{method}/known_types_umap.svg',
+        cluster='reports/figures/simulated/clusters/{run}/{method}/cluster_umap.svg',
+        known_bar='reports/figures/simulated/clusters/{run}/{method}/cluster_distribution.svg',
+        cluster_bar='reports/figures/simulated/clusters/{run}/{method}/cell_type_distribution.svg'
+    params:
+        treatment='Treatment',
+        label='Population',
+        plotdir='reports/figures/simulated/clusters/{run}/{method}/'
+    script:
+        'src/plot_simulated.py'
+
+rule evaluate_methods_simulated:
+    input:
+        obs='data/results/simulated/{method}/{run}/obs.csv'
+    output:
+        csv='data/results/simulated/{method}/{run}/results.csv'
+    params:
+        run='{run}',
+        method='{method}',
+        identity='Population'
+    script:
+        'src/evaluate_clusters.py'
+
+rule combine_evaluations_simulated:
+    input:
+        csvs=expand('data/results/simulated/{method}/{run}/results.csv',
+                    method=METHODS, run=RUNS)
+    output:
+        csv='data/results/simulated/final/results.csv'
+    script:
+        'src/concatenate_results.py'
+
 rule summarize_simulated:
     input:
-        perf='data/results/simulated/icat/{exp}/performance.csv',
-        icat='data/results/simulated/icat/{exp}/obs.csv',
-        gene='data/results/simulated/icat/{exp}/var.csv',
-        seurat='data/results/simulated/seurat/{exp}/clustered.csv',
-        scanorama='data/results/simulated/scanorama/{exp}/obs.csv',
+        results='data/results/simulated/final/results.csv'
     output:
-        performance='data/results/simulated/performance.csv'
+        means=['data/results/simulated/final/{exp}/metric_means.csv'.format(
+               exp=exp) for exp in EXPERIMENTS],
+        devs=['data/results/simulated/final/{exp}/metric_stds.csv'.format(
+               exp=exp) for exp in EXPERIMENTS],
+        svgs=['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
+               exp=exp) for exp in EXPERIMENTS]
     params:
-        plotdir='reports/figures/simulated/{exp}/'
+        plotdir='reports/figures/simulated/performance/',
+        outdir='data/results/simulated/final/'
     script:
         'src/summarize_simulated.py'
-    
-# ------------------------ Analyze Benchmark Data ------------------------------
-rule fit_benchmark_data:
+
+rule plot_increasing_perturbation:
     input:
-        ctrl_X='data/processed/benchmark/sc_celseq2/X.csv',
-        ctrl_obs='data/processed/benchmark/sc_celseq2/obs.csv',
-        prtb_X = ['data/processed/benchmark/{}/X.csv'.format(x)\
-                  for x in ['cellmix1', 'cellmix2', 'cellmix3', 'cellmix4']],
-        prtb_obs = ['data/processed/benchmark/{}/obs.csv'.format(x)\
-                    for x in ['cellmix1', 'cellmix2', 'cellmix3', 'cellmix4']]
+        results='data/results/simulated/final/results.csv',
+        exp_params='data/external/paper_experiments.json'
     params:
-        label='mixture',
+        exp_id='2'
+    script:
+        'src/plot_increasing_perturbation'
+
+# --------------------------- Process Benchmark Data ---------------------------
+
+# normalize across cells, subset to highly variable genes, and ln(X +1)
+# transform cells
+rule format_benchmark_data:
+    input:
+        counts=['data/raw/benchmark/{bench}.count.csv'.format(bench=bench)\
+                for bench in BENCHMARK],
+        meta=['data/raw/benchmark/{bench}.metadata.csv'.format(bench=bench)\
+              for bench in BENCHMARK]
+    params:
+        outdir='data/processed/benchmark/',
         plotdir='figures/benchmark/'
     output:
-        json='data/interim/fits/benchmark/isolated_fits.json',
-        ctrl_svg='figures/benchmark/umap_isolated_cells.svg',
-        prtb_svg='figures/benchmark/umap_mixed_cells.svg',
-        comb_svg='figures/benchmark/umap_combined.svg'
+        X='data/processed/benchmark/X.csv',
+        obs='data/processed/benchmark/obs.csv',
+        var='data/processed/benchmark/var.csv',
+        gene_svg='figures/benchmark/filter_genes_dispersion.svg'
+    script:
+        'src/format_benchmark_data.py'
+
+# just combine separate csvs together, b/c Seurat forces it's own preprocessing
+rule combine_benchmark_data:
+    input:
+        counts=['data/raw/benchmark/{bench}.count.csv'.format(bench=bench)\
+                for bench in BENCHMARK],
+        meta=['data/raw/benchmark/{bench}.metadata.csv'.format(bench=bench)\
+              for bench in BENCHMARK]
+    params:
+        outdir='data/raw/benchmark/combined/',
+    output:
+        X='data/raw/benchmark/combined/X.csv',
+        obs='data/raw/benchmark/combined/obs.csv',
+        var='data/raw/benchmark/combined/var.csv',
+    script:
+        'src/combine_data.py'
+    
+# ------------------------ Fit and Analyze Benchmark Data ----------------------
+rule fit_benchmark_data:
+    input:
+        X='data/processed/benchmark/X.csv',
+        obs='data/processed/benchmark/obs.csv',
+        var='data/processed/benchmark/var.csv' 
+    params:
+        treatment='benchmark',
+        control='sc_celseq2',
+        label='mixture',
+        plotdir='reports/figures/benchmark/'
+    output:
+        json='data/interim/fits/benchmark/isolated_fits.json'
     script:
         'src/fit_louvain.py'
 
 rule benchmark_icat:
     input:
-        X=['data/processed/benchmark/{bench}/X.csv'.format(bench=bench)\
-           for bench in BENCHMARK],
-        obs=['data/processed/benchmark/{bench}/obs.csv'.format(bench=bench)\
-             for bench in BENCHMARK],
+        X='data/processed/benchmark/X.csv',
+        obs='data/processed/benchmark/obs.csv',
+        var='data/processed/benchmark/var.csv',
         json='data/interim/fits/benchmark/isolated_fits.json',
         ncfs='data/external/benchmark_ncfs_params.json'
     params:
-        control_id='sc_celseq2',
+        treatment='benchmark',
+        control='sc_celseq2',
+        label='mixture',
         outdir='data/results/benchmark/icat/'
     output:
-        X='data/results/benchmark/icat/X.csv',
-        obs='data/results/benchmark/icat/obs.csv',
-        var='data/results/benchmark/icat/var.csv'
+        X=protected('data/results/benchmark/icat/X.csv'),
+        obs=protected('data/results/benchmark/icat/obs.csv'),
+        var=protected('data/results/benchmark/icat/var.csv')
     script:
         'src/benchmark_icat.py'
 
-rule benchmark_seurat:
+rule benchmark_seurat233:
     input:
-        ctrl_X='data/processed/benchmark/isolated/X.csv',
-        ctrl_obs='data/processed/benchmark/isolated/obs.csv',
-        prtb_X='data/processed/benchmark/mixed/X.csv',
-        prtb_obs='data/processed/benchmark/mixed/obs.csv',
+        X='data/raw/benchmark/combined/X.csv',
+        obs='data/raw/benchmark/combined/obs.csv',
         json='data/interim/fits/benchmark/isolated_fits.json'
     params:
-        name='benchmark'
+        treatment='benchmark',
+        control='sc_celseq2',
+        label='mixture',
+        seurat=config['libraries']['seurat2.3.3']
     output:
-        csv='data/results/benchmark/seurat/clustered.csv'
+        X='data/results/benchmark/seurat233/X.csv',
+        obs='data/results/benchmark/seurat233/obs.csv'
     script:
-        'src/cluster_seurat.R'
+        'src/run_seurat2-3-3.R'
+
+rule benchmark_seurat311:
+    input:
+        X='data/raw/benchmark/combined/X.csv',
+        obs='data/raw/benchmark/combined/obs.csv',
+        json='data/interim/fits/benchmark/isolated_fits.json'
+    params:
+        treatment='benchmark',
+        seurat=config['libraries']['seurat3.1.1']
+    output:
+        X='data/results/benchmark/seurat311/X.csv',
+        obs='data/results/benchmark/seurat311/obs.csv',
+    script:
+        "src/run_seurat3-1-1.R"
+
+rule benchmark_seurat_icat:
+    input:
+        X='data/results/benchmark/seurat311/X.csv',
+        obs='data/results/benchmark/seurat311/obs.csv',
+        json='data/interim/fits/benchmark/isolated_fits.json',
+        ncfs='data/external/benchmark_ncfs_params.json'
+    params:
+        treatment='benchmark',
+        controls='sc_celseq2',
+        outdir='data/results/benchmark/seurat_icat/',
+        cluster='seurat.sslouvain'
+    output:
+        X='data/results/benchmark/seurat_icat/X.csv',
+        obs='data/results/benchmark/seurat_icat/obs.csv'
+    script:
+        'src/scanorama_icat.py'
 
 rule benchmark_scanorama:
     input:
-        X=['data/processed/benchmark/{bench}/X.csv'.format(bench=bench)\
-           for bench in BENCHMARK],
-        obs=['data/processed/benchmark/{bench}/obs.csv'.format(bench=bench)\
-             for bench in BENCHMARK],
-        var=['data/processed/benchmark/{bench}/var.csv'.format(bench=bench)\
-             for bench in BENCHMARK],
+        X='data/processed/benchmark/X.csv',
+        obs='data/processed/benchmark/obs.csv',
+        var='data/processed/benchmark/var.csv',
         json='data/interim/fits/benchmark/isolated_fits.json'
     params:
-        control_id='sc_celseq2',
+        treatment='benchmark',
+        controls='sc_celseq2',
         outdir='data/results/benchmark/scanorama/'
     output:
-        X='data/results/benchmark/scanorama/X.csv',
-        obs='data/results/benchmark/scanorama/obs.csv',
-        var='data/results/benchmark/scanorama/var.csv'
+        X=protected('data/results/benchmark/scanorama/X.csv'),
+        obs=protected('data/results/benchmark/scanorama/obs.csv'),
+        var=protected('data/results/benchmark/scanorama/var.csv')
     script:
         'src/run_scanorama.py'
         
@@ -295,36 +409,35 @@ rule benchmark_scanorama_icat:
         json='data/interim/fits/benchmark/isolated_fits.json',
         ncfs='data/external/benchmark_ncfs_params.json'
     output:
-        X='data/results/benchmark/icat_scan/X.csv',
-        obs='data/results/benchmark/icat_scan/obs.csv',
-        var='data/results/benchmark/icat_scan/var.csv'
+        X=protected('data/results/benchmark/icat_scan/X.csv'),
+        obs=protected('data/results/benchmark/icat_scan/obs.csv'),
+        var=protected('data/results/benchmark/icat_scan/var.csv'),
     params:
         outdir='data/results/benchmark/icat_scan/',
-        treat_col='benchmark',
-        treat_values = MIXES
+        treatment='benchmark',
+        controls='sc_celseq2',
+        cluster='scanorama.sslouvain'
     script:
         'src/scanorama_icat.py'
 
 rule summarize_benchmark:
     input:
-        icat='data/results/benchmark/icat/obs.csv',
-        seurat='data/results/benchmark/seurat/clustered.csv',
-        scanorama='data/results/benchmark/scanorama/obs.csv',
-        icat_scan='data/results/benchmark/icat_scan/obs.csv',
+        obs=['data/results/benchmark/{method}/obs.csv'.format(
+             method=method) for method in METHODS],
     params:
         identity='mixture'
     output:
-        csv='data/results/benchmark/results.csv'
+        csv='data/results/benchmark/results.csv',
+        svg='reports/figures/benchmark/metrics.svg'
     script:
         'src/summarize_benchmark.py'
-
 
 # create plots/figures
 rule plot_benchmark:
     input:
         results='data/results/benchmark/results.csv',
         labels=['data/results/benchmark/icat/obs.csv',
-                'data/results/benchmark/seurat/clustered.csv',
+                'data/results/benchmark/seurat233/clustered.csv',
                 'data/results/benchmark/scanorama/obs.csv',
                 'data/results/benchmark/icat_scan/obs.csv'],
         Xs=['data/results/benchmark/icat/X.csv',
@@ -333,7 +446,7 @@ rule plot_benchmark:
             'data/results/benchmark/icat_scan/X.csv'],
         fit='data/interim/fits/benchmark/isolated_fits.json'
     params:
-        methods=['icat', 'seurat', 'scanorama', 'icat_scan'],
+        methods=['icat', 'seurat233', 'scanorama', 'icat_scan'],
         plotdir='reports/figures/benchmark/',
         label='mixture',
         treatment='benchmark',
@@ -342,7 +455,7 @@ rule plot_benchmark:
         metrics='reports/figures/benchmark/metrics.svg',
         method_plots=['reports/figures/benchmark/{method}/{plot}'.format(
                       method=method, plot=plot) for method, plot in\
-                      itertools.product(['icat', 'seurat', 'scanorama',
+                      itertools.product(['icat', 'seurat233', 'scanorama',
                                          'icat_scan'],
                                         ['known_cells_umap.svg',
                                          'cluster_umap.svg',
@@ -361,12 +474,9 @@ rule kang_filter:
         obs='data/processed/Kang/obs.csv',
         var='data/processed/Kang/var.csv'
     output:
-        ctrl_X='data/filtered/Kang/controls/X.csv',
-        ctrl_obs='data/filtered/Kang/controls/obs.csv',
-        ctrl_var='data/filtered/Kang/controls/var.csv',
-        treated_X='data/filtered/Kang/treated/X.csv',
-        treated_obs='data/filtered/Kang/treated/obs.csv',
-        treated_var='data/filtered/Kang/treated/var.csv',
+        X='data/processed/Kang/filtered/X.csv',
+        obs='data/processed/Kang/filtered/obs.csv',
+        var='data/processed/Kang/filtered/var.csv',
     params:
         outdir='data/filtered/Kang',
         plotdir='figures/Kang/'

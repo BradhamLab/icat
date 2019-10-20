@@ -432,9 +432,9 @@ class icat():
         # subset to most informative genes
         selected = combined.var.index.values[
                        np.where(model.coef_**2 > self.weight_threshold)[0]]
-        if len(selected) == 0:
-            print('WARNING: No feature weights met threshold criteria. '
-                  'All genes will be used. Try lowering threshold value for'
+        if len(selected) <= 1:
+            print('WARNING: One or none feature weights met threshold criteria.'
+                  ' All genes will be used. Try lowering threshold value for'
                   ' future runs.')
             selected = combined.var.index.values
         combined = combined[:, selected].copy() # copy to be safe

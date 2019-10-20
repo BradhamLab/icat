@@ -18,14 +18,18 @@ create_seurat <- function(X, obs, label_col) {
   obs_data <- data.frame(obs_data[ , keep_cols],
                          row.names=row.names(obs_data))
   names(obs_data) <- names(keep_cols)
-  obs_data[label_col] <- as.factor(obs_data[label_col])
+  # obs_data[label_col] <- as.factor(obs_data[label_col])
   # force to population
-  # obs_data$Population <- as.factor(obs_data$Population)
   row.names(obs_data) <- colnames(X_data)
   data <- Seurat::CreateSeuratObject(raw.data=X_data, meta.data=obs_data)
+  return(data)
+}
+
+preprocess_data <- function(data) {
   data <- Seurat::NormalizeData(data)
   data <- Seurat::ScaleData(data)
   data <- Seurat::FindVariableGenes(object=data, do.plot=FALSE)
+  return(data)
 }
 
 rename_cells <- function(seurat_obj, prefix) {
@@ -59,29 +63,31 @@ cluster_across_treatments <- function(ctrl, prtb, k, treatment='treatment') {
   combined@meta.data[row.names(discarded@meta.data), 'cluster'] <- rep('unknown', nrow(discarded@meta.data))
   combined <- Seurat::RunUMAP(combined)
   combined@meta.data <- cbind(combined@meta.data, combined@dr$umap@cell.embeddings)
-  return(combined@meta.data)
+  return(combined)
 }
 
-main <- function(X, obs, fit_json, out_csv, treatment, control, label_col) {
+main <- function(X, obs, fit_json, out_X, out_obs, treatment, control, label_col) {
   data <- create_seurat(X, obs, label_col)
   # separate controls and treated
   control_cells <- row.names(data@meta.data[ , treatment] == control)
   treated_cells <- row.names(data@meta.data[ , treatment] != control)
   ctrl <- Seurat::SubsetData(data, cells=control_cells)
   prtb <- Seurat::SubsetData(data, cells=treated_cells)
+  ctrl <- preprocess_data(ctrl)
+  prtb <- preprocess_data(prtb)
   k <- fromJSON(file=fit_json)$n_neighbors
   clustered <- cluster_across_treatments(ctrl, prtb, k)
-  write.csv(clustered, out_csv)
+  write.csv(clustered@meta.data, out_obs)
+  write.table(t(as.matrix(clustered@data)), out_X, sep=',', row.names=FALSE,
+              col.names=FALSE)
 }
 
 if (exists('snakemake')) {
-  # snakemake likely only being run on scc, add location to user pkgs
-  print(sessionInfo())
-  print(.libPaths())
   main(snakemake@input[['X']],
        snakemake@input[['obs']],
        snakemake@input[['json']],
-       snakemake@output[['csv']],
+       snakemake@output[['X']],
+       snakemake@output[['obs']],
        snakemake@params[['treatment']],
        snakemake@params[['controls']],
        snakemake@params[['label']])

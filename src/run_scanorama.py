@@ -30,6 +30,7 @@ if __name__ == '__main__':
         adata = sc.AnnData(X=np.loadtxt(snakemake.input['X'], delimiter=','),
                            obs=pd.read_csv(snakemake.input['obs'], index_col=0),
                            var=pd.read_csv(snakemake.input['var'], index_col=0))
+        sc.pp.log1p(adata)
         adatas = []
         for each in enumerate(adata.obs[snakemake.params['treatment']].unique()):
             subset = dutils.filter_cells(adata, snakemake.params['treatment'],
@@ -42,4 +43,5 @@ if __name__ == '__main__':
             fit_data = json.load(f)
         k = fit_data['n_neighbors']
         out = run_scanorama(adatas, k)
+        out.var.index = ['scan-{}'.format(i + 1) for i in range(out.shape[1])]
         out.write_csvs(dirname=snakemake.params['outdir'], skip_data=False)

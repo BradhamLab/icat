@@ -16,8 +16,6 @@ if __name__ == '__main__':
                                              delimiter=','),
                                 obs=pd.read_csv(snakemake.input['obs'],
                                                 index_col=0))
-        integrated.var.index = ["scan-{}".format(i)\
-                                for i in range(integrated.shape[1])]
         ctrls = dutils.filter_cells(integrated, snakemake.params['treatment'],
                               lambda x: x == snakemake.params['controls']).\
                               copy()
@@ -32,9 +30,6 @@ if __name__ == '__main__':
         icat_kws['neighbor_kws']['n_neighbors'] = fit_data['n_neighbors']
         icat_model = models.icat(**icat_kws)
         out = icat_model.cluster(ctrls, prtb)
-        out.obs.rename(columns={'sslouvain': snakemake.params['cluster']},
+        out.obs.rename(columns={'sslouvain': 'seurat.sslouvain'},
                        inplace=True)
-        out.write_csvs(dirname=snakemake.params['outdir'],
-                       skip_data=False)
-        
-        
+        out.write_csvs(dirname=snakemake.params['outdir'], skip_data=False)

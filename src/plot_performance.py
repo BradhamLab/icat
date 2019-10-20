@@ -8,28 +8,24 @@ import numpy as np
 import pandas as pd
 from cycler import cycler
 from matplotlib import pyplot as plt
+import seaborn as sns
 from scanpy import api as sc
 
 from downstream.src.visualization import visualize
+from icat.src import utils
 
 loc = os.path.dirname(os.path.abspath(__file__))
 plt.style.use(os.path.join(loc, 'configs/figures.mplstyle'))
-plt.rc('axes', prop_cycle=cycler('color', cc.glasbey_dark))
-
+plt.rc('axes', prop_cycle=cycler('color', cc.glasbey_light))
 
 method_dictionary = {
     'icat': 'icat',
-    'seurat': 'Seurat 2.3 - All',
+    'seurat233': 'Seurat 2.3 - All',
     'seurat.aligned': 'Seurat 2.3 - Aligned',
+    'seurat311': 'Seurat 3.1',
     'scanorama': 'scanorama',
-    'icat_scan': 'scanorama + icat'
-}
-
-label_dictionary = {
-    'icat': 'sslouvain',
-    'seurat': 'cluster',
-    'scanorama': 'scanorama.louvain',
-    'icat_scan': 'scanorama.sslouvain'
+    'icat_scan': 'scanorama + icat',
+    'seurat_icat': 'Seurat 3.1 + icat'
 }
 
 metric_dictionary = {
@@ -78,10 +74,17 @@ def stacked_barplot(df, label, cluster, xlabel=''):
     plt.xlabel(xlabel, fontsize=24, labelpad=5)
     plt.ylabel("Percentage of Cells", fontsize=24)
     yticks, __ = plt.yticks()
-    ylabels = [str(y) + "%" for y in yticks]
+    ylabels = ["{:d}%".format(int(y)) for y in yticks]
     plt.yticks(yticks, ylabels)
     plt.ylim(0, 100)
     plt.tight_layout()
+
+
+def trendplot(results, x, y, hue=None, style=None):
+    ax = sns.lineplot(x=x, y=y, hue=hue, style=style, data=results,
+                      markers=True, dashes=False)
+    return ax
+
 
 def flip(items, ncol):
     """[summary]
@@ -103,31 +106,44 @@ def flip(items, ncol):
     """
     return itertools.chain(*[items[i::ncol] for i in range(ncol)])
 
-def plot_performance(df):
+def metric_plot(scores, errors=None):
     """
     Plot performance metrics across methods. 
     
     Parameters
     ----------
-    df : pd.DataFrame
+    scores : pd.DataFrame
         Performance data frame where each column is a different performance
         metric, and each row represents a different method.
     """
-    indices = np.arange(df.shape[0]).astype(float)
-    width = np.min(np.diff(indices)) / df.shape[1]
+    if errors is not None:
+        if not isinstance(errors, pd.DataFrame):
+            raise ValueError("Expected DataFrame for `errors` parameter")
+        if np.all(errors.index != scores.index):
+            raise ValueError("`scores` and `errors` dataframes should have the"
+                             " same index.")
+        if np.all(errors.columns != scores.columns):
+            raise ValueError("`scores` and `errors` dataframes should have the"
+                             " same columns.")
+    indices = np.arange(scores.shape[0]).astype(float)
+    width = np.min(np.diff(indices)) / scores.shape[1]
     indices = indices + indices * width
     colors = cycler(color=plt.rcParams['axes.prop_cycle'].by_key()['color'])
-    starts = indices - width * df.shape[1] / 2
-    for method, color in zip(sorted(df.columns), colors()):
-        plt.bar(starts + width, df[method], width, color=color['color'],
-                label=method_dictionary[method])
+    starts = indices - width * scores.shape[1] / 2
+    for method, color in zip(sorted(scores.columns), colors()):
+        yerr = None
+        if errors is not None:
+            yerr = errors[method]
+        plt.bar(starts + width, scores[method], width, color=color['color'],
+                label=method_dictionary[method],
+                yerr=yerr)
         starts = starts + width
     indices = indices + width / 2
-    plt.xticks(indices, labels=[metric_dictionary[x] for x in df.index.values])
+    plt.xticks(indices, labels=[metric_dictionary[x] for x in scores.index.values])
     plt.title("Method Performance", loc='left')
     ax = plt.gca()
     handles, labels = ax.get_legend_handles_labels()
-    legend_cols = int(np.ceil(performance.shape[1] / 2))
+    legend_cols = int(np.ceil(scores.shape[1] / 2))
     plt.legend(flip(handles, legend_cols), flip(labels, legend_cols),
                loc='upper center', bbox_to_anchor=(0.5, -0.05),
                ncol=legend_cols)
@@ -160,7 +176,7 @@ if __name__ == "__main__":
             X = np.loadtxt(X, delimiter=',')
             obs = pd.read_csv(obs, index_col=0)
             # rename cluster column to be consistent between methods
-            col_name = label_dictionary[method]
+            col_name = utils.label_dictionary[method]
             obs.rename(columns={col_name: 'Cluster'}, inplace=True)
             obs['Cluster'] = obs['Cluster'].astype(str)
             # create AnnData object
@@ -199,6 +215,6 @@ if __name__ == "__main__":
                   
         # plot performance across metrics
         performance = pd.read_csv(snakemake.input['results'], index_col=0).T
-        plot_performance(performance)
+        metric_plot(performance)
         plt.savefig(snakemake.output['metrics'])
         close_plot()
