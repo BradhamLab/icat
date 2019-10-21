@@ -9,6 +9,7 @@ suppressPackageStartupMessages({
   library(reticulate)
 })
 
+# check conda installation
 if (exists("snakemake")) {
   if (~is.null(snakemake@params$python)) {
     reticulate::use_condaenv(snakemake@params$python)
