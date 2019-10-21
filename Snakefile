@@ -34,7 +34,7 @@ rule all:
         'data/results/simulated/final/results.csv',
         ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
                exp=exp) for exp in EXPERIMENTS],
-        'reports/figures/benchmark/metrics.svg',
+        # 'reports/figures/benchmark/metrics.svg',
         
         # ['data/results/simulated/icat/{run}/performance.csv'.format(run=run)\
         #   for run in RUNS],
@@ -141,7 +141,7 @@ rule simulated_seurat311:
         json='data/interim/fits/simulated/{run}_fit.json'
     params:
         treatment='Treatment',
-        seurat=config['libraries']['seurat3.1.1']
+        seurat=config['libraries']['seurat3.1.1'],
         python=config['libraries']['conda_env']
     output:
         X='data/results/simulated/seurat311/{run}/X.csv',
