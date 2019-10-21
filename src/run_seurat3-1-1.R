@@ -1,5 +1,5 @@
 if (exists("snakemake")) {
-  .libPaths(c(snakemake@params$seurat],
+  .libPaths(c(snakemake@params$seurat,
               .libPaths()))
 }
 
