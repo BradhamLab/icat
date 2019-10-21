@@ -31,12 +31,12 @@ MIXES = BENCHMARK[:-1]
 
 rule all:
     input:
-        'data/results/simulated/final/results.csv',
-        ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
-               exp=exp) for exp in EXPERIMENTS],
+        # 'data/results/simulated/final/results.csv',
+        # ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
+        #        exp=exp) for exp in EXPERIMENTS],
         # 'reports/figures/benchmark/metrics.svg',
-        # ['data/results/simulated/icat/{run}/performance.csv'.format(run=run)\
-        #   for run in RUNS],
+        ['data/results/simulated/icat/{run}/performance.csv'.format(run=run)\
+          for run in RUNS],
         # ['data/results/simulated/seurat233/{run}/obs.csv'.format(run=run)\
         #   for run in RUNS],
         # ['data/results/simulated/scanorama/{run}/obs.csv'.format(run=run)\
