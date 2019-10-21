@@ -68,23 +68,26 @@ def main(configs, sims=1, reps=1):
             exp_key = perturbation_keys[0].split('.')[0]
             sim_rep_data = [[[None] for i in range(reps)] for j in range(sims)]
             for sim in range(sims):
-                # flag if controls from simulation have been merged yet
-                sim_merged = False
                 for rep in range(reps):
+                    # combine perturbations across the same simulations + reps
                     adatas = []
-                    # combine perturbations across the same simulations + replications
-                    for pert in perturbation_keys:
+                    # include controls
+                    pert = perturbation_keys[0]
+                    adata = datasets[pert][sim][rep]
+                    # rename treatment from Perturbed to Perturbed{X}
+                    label = pert.split('.')[-1]
+                    adata.obs['Treatment'].replace('Perturbed', label,
+                                                    inplace=True)
+                    adatas.append(adata)
+                    for pert in perturbation_keys[1:]:
                         adata = datasets[pert][sim][rep]
-                        # remove controls if merged
-                        if sim_merged:
-                            adata = dutils.filter_cells(adata, 'Treatment',
-                                                     lambda x: x == 'Perturbed')
+                        adata = dutils.filter_cells(adata, 'Treatment',
+                                                    lambda x: x == 'Perturbed')
                         # rename treatment from Perturbed to Perturbed{X}
                         label = pert.split('.')[-1]
                         adata.obs['Treatment'].replace('Perturbed', label,
                                                        inplace=True)
                         adatas.append(adata)
-                        sim_merged = True
                     adata = utils.rbind_adata(adatas)
                     adata.obs.index = ['cell-{}'.format(i + 1)\
                                        for i in range(adata.shape[0])]
