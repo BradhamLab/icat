@@ -34,12 +34,7 @@ rule all:
         'data/results/simulated/final/results.csv',
         ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
                exp=exp) for exp in EXPERIMENTS],
-<<<<<<< HEAD
         # 'reports/figures/benchmark/metrics.svg',
-=======
-        #'reports/figures/benchmark/metrics.svg',
->>>>>>> 82fc74faedc0527d5db818a2e03f5f43df463011
-        
         # ['data/results/simulated/icat/{run}/performance.csv'.format(run=run)\
         #   for run in RUNS],
         # ['data/results/simulated/seurat233/{run}/obs.csv'.format(run=run)\
