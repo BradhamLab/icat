@@ -13,6 +13,8 @@ if __name__ == '__main__':
         adata = sc.AnnData(X=np.loadtxt(snakemake.input['X'], delimiter=','),
                            obs=pd.read_csv(snakemake.input['obs'], index_col=0),
                            var=pd.read_csv(snakemake.input['var'], index_col=0))
+        adata = utils.filter_cells(adata, 'multiplets',
+                                   lambda x: x=='singlet').copy() 
         sc.pp.filter_genes(adata, min_cells=3)
         # normalize data
         sc.pp.normalize_total(adata)

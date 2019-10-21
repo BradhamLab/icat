@@ -12,6 +12,9 @@ from glob import glob
 import os
 import pickle as pkl
 
+from downstream.src.analysis import utils as dutils
+
+
 def match_matrix_and_barcode_files(data_dir):
     """
     Match cell expression data files with associated cell barcode files.
@@ -110,10 +113,12 @@ def main(data_dir, outdir):
     # combine count matrices, verify unique index ids, sort gene names. 
     counts = pd.concat(count_mats, axis=0, verify_integrity=True,
                        sort=True)
-    counts.fillna(value=0)
-    anno_df = sc.AnnData(X=counts, obs=cells,
-                         var=genes.loc[counts.columns.values, :])
-    anno_df.write_csvs(dirname=outdir, skip_data=False)
+    counts.fillna(value=0, inplace=True)
+    adata = sc.AnnData(X=counts.values, obs=cells[counts.index, :],
+                       var=genes.loc[counts.columns.values, :])
+    # filtere cells to singlets
+    # adata = dutils.filter_cells(adata, 'multiplets', lambda x: x=='singlet')
+    adata.write_csvs(dirname=outdir, skip_data=False)
 
 
 if __name__ == "__main__":
