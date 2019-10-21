@@ -51,19 +51,6 @@ rule all:
         # 'data/results/benchmark/results.csv'
         # ['data/processed/benchmark/{bench}/X.csv'.format(bench=bench)\
         #     for bench in BENCHMARK]
-
-# ---------------------------- Process Kang Data -------------------------------
-
-rule format_kang_data:
-    params:
-        datadir='data/raw/Kang/',
-        outdir='data/processed/Kang/'
-    output:
-        'data/processed/Kang/X.csv',
-        'data/processed/Kang/obs.csv',
-        'data/processed/Kang/var.csv'
-    script:
-        'src/generate_kang_et_al.py'
     
 # ---------------------------- Generate Simulated Data -------------------------
 rule simulate_data:
@@ -466,7 +453,17 @@ rule plot_benchmark:
     script:
         'src/plot_performance.py'
 
-# ---------------------------- Analyze Kang Data -------------------------------
+# ---------------------------- Process Kang Data -------------------------------
+rule format_kang_data:
+    params:
+        datadir='data/raw/Kang/',
+        outdir='data/processed/Kang/'
+    output:
+        'data/processed/Kang/X.csv',
+        'data/processed/Kang/obs.csv',
+        'data/processed/Kang/var.csv'
+    script:
+        'src/generate_kang_et_al.py'
 
 # normalize counts, find most variable genes
 rule kang_filter:
@@ -484,4 +481,6 @@ rule kang_filter:
     script:
         "src/filter_kang.py"
 
-    
+
+# ---------------------------- Analyze Kang Data -------------------------------
+ 
