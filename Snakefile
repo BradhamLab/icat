@@ -110,6 +110,7 @@ rule simulated_icat:
         outdir='data/results/simulated/icat/{run}/',
     output:
         csv='data/results/simulated/icat/{run}/performance.csv',
+        X='data/results/simulated/icat/{run}/X.csv',
         obs='data/results/simulated/icat/{run}/obs.csv',
         p1='reports/figures/simulated/{run}/icat/umap_Louvain.svg',
         p2='reports/figures/simulated/{run}/icat/umap_NCFS-Louvain.svg',
