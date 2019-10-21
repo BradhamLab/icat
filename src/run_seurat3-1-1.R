@@ -10,6 +10,7 @@ suppressPackageStartupMessages({
 })
 
 if (exists("snakemake")) {
+  print(snakemake@params)
   if (~is.null(snakemake@params[['python']])) {
     reticulate::use_condaenv(snakemake@params[['python']])
   }
