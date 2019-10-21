@@ -1,9 +1,12 @@
-
 import glob
 import os
 import itertools
 from icat.src import snakemake_utils as utils
 
+# check cluster
+# if os.path.exists("/projectnb/bradham"):
+#     shell.prefix('module load gcc/8.3.0')
+    
 configfile: './snakemake-config.yaml'
 
 FILES = ['X.csv', 'obs.csv', 'var.csv']
