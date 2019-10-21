@@ -16,6 +16,8 @@ if __name__ == '__main__':
                                              delimiter=','),
                                 obs=pd.read_csv(snakemake.input['obs'],
                                                 index_col=0))
+        integrated.var.index = ["scan-{}".format(i)\
+                                for i in range(integrated.shape[1])]
         ctrls = dutils.filter_cells(integrated, snakemake.params['treatment'],
                               lambda x: x == snakemake.params['controls']).\
                               copy()
