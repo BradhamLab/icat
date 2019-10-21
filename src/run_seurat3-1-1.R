@@ -1,5 +1,5 @@
 if (exists("snakemake")) {
-  .libPaths(c(snakemake@params[['seurat']],
+  .libPaths(c(snakemake@params$seurat],
               .libPaths()))
 }
 
@@ -10,8 +10,8 @@ suppressPackageStartupMessages({
 })
 
 if (exists("snakemake")) {
-  if (~is.null(snakemake@params[['python']])) {
-    reticulate::use_condaenv(snakemake@params[['python']])
+  if (~is.null(snakemake@params$python)) {
+    reticulate::use_condaenv(snakemake@params$python)
   }
 }
 
