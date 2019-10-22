@@ -12,9 +12,7 @@ if __name__ == '__main__':
     if snakemake is not None:
         adata = sc.AnnData(X=np.loadtxt(snakemake.input['X'], delimiter=','),
                            obs=pd.read_csv(snakemake.input['obs'], index_col=0),
-                           var=pd.read_csv(snakemake.input['var'], index_col=0))
-        adata = utils.filter_cells(adata, 'multiplets',
-                                   lambda x: x=='singlet').copy() 
+                           var=pd.read_csv(snakemake.input['var'], index_col=0)) 
         sc.pp.filter_genes(adata, min_cells=3)
         # normalize data
         sc.pp.normalize_total(adata)
@@ -27,7 +25,7 @@ if __name__ == '__main__':
         # subset to variable genes
         variable_genes = adata.var.index[
                                 np.where(adata.var['highly_variable'])[0]]
-        adata = adata[:, variable_genes]
+        adata = adata[:, variable_genes].copy()
         # write data to csvs
-        ctrls.write_csvs(dirname=snakemake.params['outdir'],
+        adata.write_csvs(dirname=snakemake.params['outdir'],
                          skip_data=False)
