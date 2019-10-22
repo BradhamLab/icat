@@ -11,9 +11,9 @@ suppressPackageStartupMessages({
 
 # check conda installation
 if (exists("snakemake")) {
-  if (~is.null(snakemake@params$python)) {
-    reticulate::use_condaenv(snakemake@params$python)
-  }
+  # Sys.setenv(RETICULATE_PYTHON="/projectnb/bradham/dyh0110/.conda/envs/icat/bin/python")
+  reticulate::use_condaenv("icat", required=TRUE)
+  py_run_string('import umap')
 }
 
 create_seurat <- function(X, obs) {
