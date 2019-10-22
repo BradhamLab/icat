@@ -18,7 +18,10 @@ RUNS = utils.get_simulation_ids(config['simulations']['json'],
 skip = ['Experiment7Sim1Rep1', 'Experiment7Sim1Rep2', 'Experiment7Sim1Rep3']
 RUNS = set(RUNS)
 for each in skip:
-    RUNS.remove(each)
+    try:
+        RUNS.remove(each)
+    except KeyError:
+        pass
 RUNS = list(RUNS)
 EXPERIMENTS = utils.get_experiment_ids(RUNS)
 
