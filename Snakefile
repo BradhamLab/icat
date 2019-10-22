@@ -10,9 +10,16 @@ from icat.src import snakemake_utils as utils
 configfile: './snakemake-config.yaml'
 
 FILES = ['X.csv', 'obs.csv', 'var.csv']
+# this is maybe producing duplicates, at least with merge perturbations
 RUNS = utils.get_simulation_ids(config['simulations']['json'],
                                 config['simulations']['sims'],
                                 config['simulations']['reps'])
+# skip killed jobs
+skip = ['Experiment7Sim1Rep1', 'Experiment7Sim1Rep2', 'Experiment7Sim1Rep3']
+RUNS = set(RUNS)
+for each in skip:
+    RUNS.remove(each)
+RUNS = list(RUNS)
 EXPERIMENTS = utils.get_experiment_ids(RUNS)
 
 # debugging/test stuff
@@ -34,12 +41,12 @@ MIXES = BENCHMARK[:-1]
 
 rule all:
     input:
-        # 'data/results/simulated/final/results.csv',
-        # ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
-        #        exp=exp) for exp in EXPERIMENTS],
-        # 'reports/figures/benchmark/metrics.svg',
-        ['data/results/simulated/icat/{run}/performance.csv'.format(run=run)\
-          for run in RUNS],
+        'data/results/simulated/final/results.csv',
+        ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
+               exp=exp) for exp in EXPERIMENTS],
+        'reports/figures/benchmark/metrics.svg',
+        # ['data/results/simulated/icat/{run}/performance.csv'.format(run=run)\
+        #   for run in RUNS],
         # ['data/results/simulated/seurat233/{run}/obs.csv'.format(run=run)\
         #   for run in RUNS],
         # ['data/results/simulated/scanorama/{run}/obs.csv'.format(run=run)\
@@ -250,11 +257,20 @@ rule summarize_simulated:
 rule plot_increasing_perturbation:
     input:
         results='data/results/simulated/final/results.csv',
-        exp_params='data/external/paper_experiments.json'
+        exp="data/processed/simulated/simulations.csv"
     params:
         exp_id='2'
     script:
-        'src/plot_increasing_perturbation'
+        'src/plot_increasing_perturbation.py'
+
+rule plot_increasing_sparsity:
+    input:
+        results='data/results/simulated/final/results.csv',
+        exp="data/processed/simulated/simulations.csv"
+    params:
+        exp_id='8'
+    script:
+        'src/plot_increasing_sparsity.py'
 
 # --------------------------- Process Benchmark Data ---------------------------
 
@@ -458,6 +474,13 @@ rule plot_benchmark:
 
 # ---------------------------- Process Kang Data -------------------------------
 rule format_kang_data:
+    input:
+        mtx=['data/raw/Kang/GSM2560248_2.1.mtx',
+             'data/raw/Kang/GSM2560249_2.2.mtx'],
+        barcodes=['data/raw/Kang/GSM2560248_barcodes.tsv',
+                  'data/raw/Kang/GSM2560249_barcodes.tsv'],
+        genes='data/raw/Kang/GSE96583_batch2.genes.tsv',
+        cells='data/raw/Kang/GSE96583_batch2.total.tsne.df.tsv'
     params:
         datadir='data/raw/Kang/',
         outdir='data/processed/Kang/'
@@ -479,11 +502,10 @@ rule kang_filter:
         obs='data/processed/Kang/filtered/obs.csv',
         var='data/processed/Kang/filtered/var.csv',
     params:
-        outdir='data/filtered/Kang',
+        outdir='data/processed/Kang/filtered/',
         plotdir='figures/Kang/'
     script:
         "src/filter_kang.py"
-
 
 # ---------------------------- Analyze Kang Data -------------------------------
  
