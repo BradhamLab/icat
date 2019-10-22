@@ -14,40 +14,6 @@ import pickle as pkl
 
 from downstream.src.analysis import utils as dutils
 
-
-def match_matrix_and_barcode_files(data_dir):
-    """
-    Match cell expression data files with associated cell barcode files.
-    
-    Parameters
-    ----------
-    data_dir : str
-        Directory containing cell expression data and barcode files. Expression
-        data should have *.mtx extensions, while barcode files are expected to
-        have *.tsv extensions.
-    
-    Returns
-    -------
-    list, tuple
-        List of tuples where each entry is a matched pair of expression and
-        barcode files. Each element is ordered with the expression file first, 
-        and barcode file second.
-    
-    Raises
-    ------
-    IOError
-        Raised if a matrix file cannot be matched with a barcode file.
-    """
-    matrix_files = glob(os.path.join(data_dir, '*.mtx'))
-    ids = [os.path.basename(x.split('_')[0]) for x in matrix_files]
-    barcodes = [data_dir + x + '_barcodes.tsv' for x in ids]
-    for i, each in enumerate(barcodes):
-        if not os.path.exists(each):
-            raise IOError("Cannot find matching barcode file "
-                          "for {}. Expected {}".format(matrix_files[i], each))
-    return [(matrix_files[i], barcodes[i]) for i in range(len(matrix_files))]
-
-
 def create_count_matrix(matrix_file, barcode_file, genes):
     """
     Create a count matrix from necessary files.
@@ -74,51 +40,15 @@ def create_count_matrix(matrix_file, barcode_file, genes):
     # read in cell barcodes
     barcodes = pd.read_csv(barcode_file, names=['cell.barcode'])
     # match index numbers to names, indices started with 1
-    idx_to_gene = {i + 1:x for i, x in
-                   enumerate(genes.index)}
+    idx_to_gene = {i + 1:x for i, x in enumerate(genes.index)}
     idx_to_bc = {i + 1:barcodes.loc[i, 'cell.barcode'] for i in barcodes.index}
     data = pd.read_csv(matrix_file, delimiter=' ', skiprows=3,
                        names=['gene', 'cell', 'count'])
     matrix = pd.pivot_table(data=data, index='cell', columns='gene',
                             values='count', fill_value=0)
+    print(matrix.shape)
     matrix = matrix.rename(index=idx_to_bc, columns=idx_to_gene)
     return matrix
-
-
-def main(data_dir, outdir):
-    """
-    Create an annotated dataframe object from the Kang 2018 dataset.
-    
-    Parameters
-    ----------
-    data_dir : str
-        Directory containing downloaded data.
-    outfile : str
-        File to write pickled AnnData object to.
-    """
-    if data_dir[-1] != '/':
-        data_dir += '/'
-    files = match_matrix_and_barcode_files(data_dir)
-    gene_file = glob(data_dir + '*genes.tsv')[0]
-    cell_file = glob(data_dir + '*tsne*tsv')[0]
-    genes = pd.read_csv(gene_file, names=['ensmbl.id', 'name'], delimiter='\t',
-                        index_col=0)
-    cells = pd.read_csv(cell_file, index_col=0, delimiter='\t')
-    count_mats = [create_count_matrix(each[0], each[1], genes)\
-                  for each in files]
-    shared = set(count_mats[0].index.values)\
-             .intersection(count_mats[1].index.values)
-    count_mats[0] = count_mats[0].rename(index={x:x+'1' for x in shared})
-    
-    # combine count matrices, verify unique index ids, sort gene names. 
-    counts = pd.concat(count_mats, axis=0, verify_integrity=True,
-                       sort=True)
-    counts.fillna(value=0, inplace=True)
-    adata = sc.AnnData(X=counts.values, obs=cells[counts.index, :],
-                       var=genes.loc[counts.columns.values, :])
-    # filtere cells to singlets
-    # adata = dutils.filter_cells(adata, 'multiplets', lambda x: x=='singlet')
-    adata.write_csvs(dirname=outdir, skip_data=False)
 
 
 if __name__ == "__main__":
@@ -127,7 +57,25 @@ if __name__ == "__main__":
     except NameError:
         snakemake = None
     if snakemake is not None:
-        main(snakemake.params['datadir'], snakemake.params['outdir'])
-
+        genes = pd.read_csv(snakemake.input['genes'],
+                            names=['ensmbl.id', 'name'], delimiter='\t',
+                            index_col=0)
+        cells = pd.read_csv(snakemake.input['cells'],
+                            index_col=0, delimiter='\t')
+        mats_and_bars = [snakemake.input['mtx'], snakemake.input['barcodes']]
+        count_mats = [create_count_matrix(mtx, bc, genes)\
+                      for mtx, bc in zip(*mats_and_bars)]
+        shared = set(count_mats[0].index.values)\
+                .intersection(count_mats[1].index.values)
+        count_mats[0] = count_mats[0].rename(index={x:x+'1' for x in shared})
+        # combine count matrices, verify unique index ids, sort gene names. 
+        counts = pd.concat(count_mats, axis=0, verify_integrity=True,
+                           sort=True)
+        counts.fillna(value=0, inplace=True)
+        adata = sc.AnnData(X=counts.values, obs=cells.loc[counts.index, :],
+                           var=genes.loc[counts.columns, :])
+        adata = dutils.filter_cells(adata, 'multiplets',
+                                    lambda x: x=='singlet').copy()
+        adata.write_csvs(dirname=snakemake.params['outdir'], skip_data=False)
 
     
