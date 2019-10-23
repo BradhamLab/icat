@@ -177,7 +177,7 @@ def plot_umap(adata, color, shape, ax=None):
     return figure
 
 def parse_sim(name):
-    exp_re = re.compile('^Experiment.[0-9a-z]')
+    exp_re = re.compile('^Experiment.[0-9a-z]|Experiment*[0-9]')
     sim_re = re.compile('Sim*[0-9]')
     rep_re = re.compile('Rep*[0-9]')
     pert_re = re.compile('Perturbation*[0-9]')
@@ -191,4 +191,7 @@ def parse_sim(name):
             out[x] = match.group()
         else:
             out[x] = ''
+        if x == 'Experiment' and out[x] == '':
+            with open('parse.log', 'a') as f:
+                f.write('name: {}\n'.format(name))
     return out
