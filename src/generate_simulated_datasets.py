@@ -130,5 +130,7 @@ if __name__ == '__main__':
                                                              n_rep + 1))
                 if not os.path.exists(exp_dir):
                     os.makedirs(exp_dir)
-                data.write_csvs(dirname=exp_dir, skip_data=False)
+                # do not write over previously created data
+                if not os.path.exists(os.path.join(exp_dir, 'X.csv')):
+                    data.write_csvs(dirname=exp_dir, skip_data=False)
                     
