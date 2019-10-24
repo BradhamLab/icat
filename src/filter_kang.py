@@ -14,6 +14,7 @@ if __name__ == '__main__':
                            obs=pd.read_csv(snakemake.input['obs'], index_col=0),
                            var=pd.read_csv(snakemake.input['var'], index_col=0)) 
         sc.pp.filter_genes(adata, min_cells=3)
+        adata.write_csvs(dirnames=snakemake.params['countdir'], skip_data=False)
         # normalize data
         sc.pp.normalize_total(adata)
         # log transform counts to detected highly variable genes
