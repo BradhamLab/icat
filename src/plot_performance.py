@@ -20,7 +20,7 @@ plt.rc('axes', prop_cycle=cycler('color', cc.glasbey_light))
 
 method_dictionary = {
     'icat': 'icat',
-    'seurat233': 'Seurat 2.3 - All',
+    'seurat233': 'Seurat 2.3',
     'seurat.aligned': 'Seurat 2.3 - Aligned',
     'seurat311': 'Seurat 3.1',
     'scanorama': 'scanorama',
@@ -83,6 +83,11 @@ def stacked_barplot(df, label, cluster, xlabel=''):
 def trendplot(results, x, y, hue=None, style=None):
     ax = sns.lineplot(x=x, y=y, hue=hue, style=style, data=results,
                       markers=True, dashes=False)
+    plt.ylim(-0.05, 1)
+    ax.spines['right'].set_color('none')
+    ax.spines['top'].set_color('none')
+    plt.legend(loc='center left', bbox_to_anchor=(1, .85),
+               frameon=False, fancybox=False)
     return ax
 
 
