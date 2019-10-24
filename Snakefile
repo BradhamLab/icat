@@ -14,16 +14,10 @@ FILES = ['X.csv', 'obs.csv', 'var.csv']
 RUNS = utils.get_simulation_ids(config['simulations']['json'],
                                 config['simulations']['sims'],
                                 config['simulations']['reps'])
-# skip killed jobs
-skip = ['Experiment7Sim1Rep1', 'Experiment7Sim1Rep2', 'Experiment7Sim1Rep3']
-RUNS = set(RUNS)
-for each in skip:
-    try:
-        RUNS.remove(each)
-    except KeyError:
-        pass
-RUNS = list(RUNS)
+RUNS = list(set(RUNS))
 EXPERIMENTS = utils.get_experiment_ids(RUNS)
+METRICS = ['adjusted-mutual-info', 'adjusted-rand', 'completeness',
+           'fowlkes-mallows', 'homogeneity']
 
 # debugging/test stuff
 # RUNS = ['Experiment1.Perturbation1Sim1Rep1',
@@ -34,6 +28,7 @@ EXPERIMENTS = utils.get_experiment_ids(RUNS)
 
 METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'icat_scan',
            'seurat_icat']
+METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'seurat_icat']
 # METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama']
 
 SIMULATED = ["data/processed/simulated/{run}/{out}".\
@@ -44,10 +39,21 @@ MIXES = BENCHMARK[:-1]
 
 rule all:
     input:
+        # SIMULATED OUTPUT
         'data/results/simulated/final/results.csv',
         ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
                exp=exp) for exp in EXPERIMENTS],
+        ['reports/figures/simulated/clusters/{run}/{method}/treatment_umap.svg'.\
+         format(run=run, method=method) for run, method in itertools.product(
+                RUNS, METHODS)],
+        ['reports/figures/simulated/performance/perturbation/{metric}.svg'.\
+              format(metric=metric) for metric in METRICS],
+        ['reports/figures/simulated/performance/dropout/{metric}.svg'.\
+              format(metric=metric) for metric in METRICS],
+        # BENCHMARK OUTPUT
         'reports/figures/benchmark/metrics.svg',
+        # ['data/results/simulated/{method}/{run}/results.csv'.format(
+        #   method=method, run=run) for method, run in itertools.product(METHODS, RUNS)]
         # ['data/results/simulated/icat/{run}/performance.csv'.format(run=run)\
         #   for run in RUNS],
         # ['data/results/simulated/seurat233/{run}/obs.csv'.format(run=run)\
@@ -78,6 +84,15 @@ rule simulate_data:
         csv="data/processed/simulated/simulations.csv"
     script:
         "src/generate_simulated_datasets.py"
+
+rule calculate_dropout:
+    input:
+        Xs=['data/processed/simulated/{run}/X.csv'.format(run=run)\
+            for run in RUNS]
+    output:
+        csv='data/processed/simulated/dropout.csv'
+    script:
+        'src/calc_dropout.py'
 
 # ---------------------- Fit and Analyze Simulated Data ------------------------
 rule fit_simulated:
@@ -202,24 +217,6 @@ rule simulated_scanorama_icat:
     script:
         'src/scanorama_icat.py'
 
-rule plot_simulated_runs:
-    input:
-        X='data/results/simulated/{method}/{run}/X.csv',
-        obs='data/results/simulated/{method}/{run}/obs.csv',
-        fit='data/interim/fits/simulated/{run}_fit.json',
-    output:
-        treatment='reports/figures/simulated/clusters/{run}/{method}/treatment_umap.svg',
-        known='reports/figures/simulated/clusters/{run}/{method}/known_types_umap.svg',
-        cluster='reports/figures/simulated/clusters/{run}/{method}/cluster_umap.svg',
-        known_bar='reports/figures/simulated/clusters/{run}/{method}/cluster_distribution.svg',
-        cluster_bar='reports/figures/simulated/clusters/{run}/{method}/cell_type_distribution.svg'
-    params:
-        treatment='Treatment',
-        label='Population',
-        plotdir='reports/figures/simulated/clusters/{run}/{method}/'
-    script:
-        'src/plot_simulated.py'
-
 rule evaluate_methods_simulated:
     input:
         obs='data/results/simulated/{method}/{run}/obs.csv'
@@ -241,6 +238,26 @@ rule combine_evaluations_simulated:
     script:
         'src/concatenate_results.py'
 
+#----------------------- Plot Simulated Performance ----------------------------
+
+rule plot_simulated_runs:
+    input:
+        X='data/results/simulated/{method}/{run}/X.csv',
+        obs='data/results/simulated/{method}/{run}/obs.csv',
+        fit='data/interim/fits/simulated/{run}_fit.json',
+    output:
+        treatment='reports/figures/simulated/clusters/{run}/{method}/treatment_umap.svg',
+        known='reports/figures/simulated/clusters/{run}/{method}/known_types_umap.svg',
+        cluster='reports/figures/simulated/clusters/{run}/{method}/cluster_umap.svg',
+        known_bar='reports/figures/simulated/clusters/{run}/{method}/cluster_distribution.svg',
+        cluster_bar='reports/figures/simulated/clusters/{run}/{method}/cell_type_distribution.svg'
+    params:
+        treatment='Treatment',
+        label='Population',
+        plotdir='reports/figures/simulated/clusters/{run}/{method}/'
+    script:
+        'src/plot_simulated.py'
+
 rule summarize_simulated:
     input:
         results='data/results/simulated/final/results.csv'
@@ -260,20 +277,34 @@ rule summarize_simulated:
 rule plot_increasing_perturbation:
     input:
         results='data/results/simulated/final/results.csv',
-        exp="data/processed/simulated/simulations.csv"
+        simulations="data/processed/simulated/simulations.csv"
     params:
-        exp_id='2'
+        exp='Experiment2',
+        sim_feature='perturbation.percent_perturb',
+        xlabel='Percent of Perturbed Genes',
+        plotdir='reports/figures/simulated/performance/perturbation'
+    output:
+        svgs=['reports/figures/simulated/performance/perturbation/{metric}.svg'.\
+              format(metric=metric) for metric in METRICS],
+        csv='data/results/simulated/final/perturbation.csv'
     script:
-        'src/plot_increasing_perturbation.py'
+        'src/plot_metric_trends.py'
 
 rule plot_increasing_sparsity:
     input:
         results='data/results/simulated/final/results.csv',
-        exp="data/processed/simulated/simulations.csv"
+        simulations='data/processed/simulated/dropout.csv'
     params:
-        exp_id='8'
+        exp='Experiment8',
+        sim_feature='dropout',
+        xlabel='Percent Dropout',
+        plotdir='reports/figures/simulated/performance/dropout'
+    output:
+        svgs=['reports/figures/simulated/performance/dropout/{metric}.svg'.\
+              format(metric=metric) for metric in METRICS],
+        csv='data/results/simulated/final/dropout.csv'
     script:
-        'src/plot_increasing_sparsity.py'
+        'src/plot_metric_trends.py'
 
 # --------------------------- Process Benchmark Data ---------------------------
 
