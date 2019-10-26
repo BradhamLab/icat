@@ -12,7 +12,9 @@ if __name__ == '__main__':
     if snakemake is not None:
         adata = sc.AnnData(X=np.loadtxt(snakemake.input['X'], delimiter=','),
                            obs=pd.read_csv(snakemake.input['obs'], index_col=0),
-                           var=pd.read_csv(snakemake.input['var'], index_col=0)) 
+                           var=pd.read_csv(snakemake.input['var'], index_col=0))
+        obs.index.name = 'cell-barcode'
+        obs.rename(columns={'cell.1': 'cell'}, inplace=True)
         sc.pp.filter_genes(adata, min_cells=3)
         adata.write_csvs(dirnames=snakemake.params['countdir'], skip_data=False)
         # normalize data
