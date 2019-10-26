@@ -26,10 +26,10 @@ METRICS = ['adjusted-mutual-info', 'adjusted-rand', 'completeness',
 # EXPERIMENTS = ['Experiment1Perturbation1']
 
 
-METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'icat_scan',
-           'seurat_icat']
-METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'seurat_icat']
-# METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama']
+# METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'icat_scan',
+#            'seurat_icat']
+# METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'seurat_icat']
+METHODS = ['icat', 'seurat233', 'seurat311', 'seurat_icat'] #, 'scanorama']
 
 SIMULATED = ["data/processed/simulated/{run}/{out}".\
              format(run=run, out=out)\
@@ -40,20 +40,20 @@ MIXES = BENCHMARK[:-1]
 rule all:
     input:
         # SIMULATED OUTPUT
-        'data/results/simulated/final/results.csv',
-        ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
-               exp=exp) for exp in EXPERIMENTS],
+        # 'data/results/simulated/final/results.csv',
+        # ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
+        #        exp=exp) for exp in EXPERIMENTS],
         ['reports/figures/simulated/clusters/{run}/{method}/treatment_umap.svg'.\
          format(run=run, method=method) for run, method in itertools.product(
                 RUNS, METHODS)],
-        ['reports/figures/simulated/performance/perturbation/{metric}.svg'.\
-              format(metric=metric) for metric in METRICS],
-        ['reports/figures/simulated/performance/dropout/{metric}.svg'.\
-              format(metric=metric) for metric in METRICS],
+        # ['reports/figures/simulated/performance/perturbation/{metric}.svg'.\
+        #       format(metric=metric) for metric in METRICS],
+        # ['reports/figures/simulated/performance/dropout/{metric}.svg'.\
+        #       format(metric=metric) for metric in METRICS],
         # BENCHMARK OUTPUT
         'reports/figures/benchmark/metrics.svg',
         # KANG OUTPUT
-        'reports/figures/Kang/metrics.svg'
+        # 'reports/figures/Kang/metrics.svg'
     
 # ---------------------------- Generate Simulated Data -------------------------
 rule simulate_data:
