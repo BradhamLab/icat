@@ -11,7 +11,7 @@ from icat.src import plot_performance
 
 
 label_dictionary = {
-    'icat': 'sslouvain',
+    'icat': 'NCFS-SSLouvain',
     'seurat233': 'cluster',
     'scanorama': 'scanorama.louvain',
     'icat_scan': 'scanorama.sslouvain',

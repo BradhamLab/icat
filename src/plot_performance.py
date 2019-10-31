@@ -164,7 +164,8 @@ def metric_plot(scores, errors=None):
     legend_cols = int(np.ceil(scores.shape[1] / 2))
     plt.legend(flip(handles, legend_cols), flip(labels, legend_cols),
                loc='upper center', bbox_to_anchor=(0.5, -0.05),
-               ncol=legend_cols)
+               ncol=legend_cols, frameon=False, fancybox=False)
+    plt.ylim(0, 1)
     ax.spines['right'].set_color('none')
     ax.spines['top'].set_color('none')
     plt.tight_layout()

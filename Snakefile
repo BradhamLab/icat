@@ -26,10 +26,10 @@ METRICS = ['adjusted-mutual-info', 'adjusted-rand', 'completeness',
 # EXPERIMENTS = ['Experiment1Perturbation1']
 
 
-METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'icat_scan',
-           'seurat_icat']
-METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'seurat_icat']
-# METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama']
+# METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'icat_scan',
+#            'seurat_icat']
+# METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'seurat_icat']
+METHODS = ['icat', 'seurat233', 'seurat311', 'seurat_icat'] #, 'scanorama']
 
 SIMULATED = ["data/processed/simulated/{run}/{out}".\
              format(run=run, out=out)\
@@ -40,36 +40,20 @@ MIXES = BENCHMARK[:-1]
 rule all:
     input:
         # SIMULATED OUTPUT
-        'data/results/simulated/final/results.csv',
-        ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
-               exp=exp) for exp in EXPERIMENTS],
+        # 'data/results/simulated/final/results.csv',
+        # ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
+        #        exp=exp) for exp in EXPERIMENTS],
         ['reports/figures/simulated/clusters/{run}/{method}/treatment_umap.svg'.\
          format(run=run, method=method) for run, method in itertools.product(
                 RUNS, METHODS)],
-        ['reports/figures/simulated/performance/perturbation/{metric}.svg'.\
-              format(metric=metric) for metric in METRICS],
-        ['reports/figures/simulated/performance/dropout/{metric}.svg'.\
-              format(metric=metric) for metric in METRICS],
+        # ['reports/figures/simulated/performance/perturbation/{metric}.svg'.\
+        #       format(metric=metric) for metric in METRICS],
+        # ['reports/figures/simulated/performance/dropout/{metric}.svg'.\
+        #       format(metric=metric) for metric in METRICS],
         # BENCHMARK OUTPUT
         'reports/figures/benchmark/metrics.svg',
-        # ['data/results/simulated/{method}/{run}/results.csv'.format(
-        #   method=method, run=run) for method, run in itertools.product(METHODS, RUNS)]
-        # ['data/results/simulated/icat/{run}/performance.csv'.format(run=run)\
-        #   for run in RUNS],
-        # ['data/results/simulated/seurat233/{run}/obs.csv'.format(run=run)\
-        #   for run in RUNS],
-        # ['data/results/simulated/scanorama/{run}/obs.csv'.format(run=run)\
-        #   for run in RUNS],
-        # ['data/results/simulated/{method}/{run}/results.csv'.format(
-        #   method=method, run=run) for method, run in\
-        #   itertools.product(METHODS, RUNS)],
-        # 'data/results/simulated/final/results.csv',
-        # ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
-        #        exp=exp) for exp in EXPERIMENTS]
-        # 'data/processed/Kang/X.csv',
-        # 'data/results/benchmark/results.csv'
-        # ['data/processed/benchmark/{bench}/X.csv'.format(bench=bench)\
-        #     for bench in BENCHMARK]
+        # KANG OUTPUT
+        # 'reports/figures/Kang/metrics.svg'
     
 # ---------------------------- Generate Simulated Data -------------------------
 rule simulate_data:
@@ -535,7 +519,11 @@ rule kang_filter:
         X='data/processed/Kang/filtered/X.csv',
         obs='data/processed/Kang/filtered/obs.csv',
         var='data/processed/Kang/filtered/var.csv',
+        X_counts='data/processed/Kang/counts/X.csv',
+        obs_counts='data/processed/Kang/counts/obs.csv',
+        var_counts='data/processed/Kang/counts/var.csv',
     params:
+        countdir='data/processed/Kang/counts/',
         outdir='data/processed/Kang/filtered/',
         plotdir='figures/Kang/'
     script:
@@ -543,3 +531,131 @@ rule kang_filter:
 
 # ---------------------------- Analyze Kang Data -------------------------------
  
+rule fit_kang_data:
+    input:
+        X='data/processed/Kang/X.csv',
+        obs='data/processed/Kang/obs.csv',
+        var='data/processed/Kang/var.csv' 
+    params:
+        treatment='stim',
+        control='ctrl',
+        label='cell',
+        plotdir='reports/figures/Kang/'
+    output:
+        json='data/interim/fits/Kang/isolated_fits.json'
+    script:
+        'src/fit_louvain.py'
+
+rule kang_icat:
+    input:
+        X='data/processed/Kang/X.csv',
+        obs='data/processed/Kang/obs.csv',
+        var='data/processed/Kang/var.csv',
+        json='data/interim/fits/Kang/isolated_fits.json',
+        ncfs='data/external/kang_ncfs_params.json'
+    params:
+        treatment='stim',
+        control='ctrl',
+        label='cell',
+        outdir='data/results/Kang/icat/'
+    output:
+        X=protected('data/results/Kang/icat/X.csv'),
+        obs=protected('data/results/Kang/icat/obs.csv'),
+        var=protected('data/results/Kang/icat/var.csv')
+    script:
+        'src/kang_icat.py'
+
+rule kang_seurat233:
+    input:
+        X='data/processed/Kang/counts/X.csv',
+        obs='data/processed/Kang/counts/obs.csv',
+        json='data/interim/fits/Kang/isolated_fits.json'
+    params:
+        treatment='stim',
+        control='ctrl',
+        label='cell',
+        seurat=config['libraries']['seurat2.3.3']
+    output:
+        X='data/results/Kang/seurat233/X.csv',
+        obs='data/results/Kang/seurat233/obs.csv'
+    script:
+        'src/run_seurat2-3-3.R'
+
+rule kang_seurat311:
+    input:
+        X='data/processed/Kang/counts/X.csv',
+        obs='data/processed/Kang/counts/obs.csv',
+        json='data/interim/fits/Kang/isolated_fits.json'
+    params:
+        treatment='stim',
+        seurat=config['libraries']['seurat3.1.1']
+    output:
+        X='data/results/Kang/seurat311/X.csv',
+        obs='data/results/Kang/seurat311/obs.csv',
+    script:
+        "src/run_seurat3-1-1.R"
+
+rule kang_seurat_icat:
+    input:
+        X='data/results/Kang/seurat311/X.csv',
+        obs='data/results/Kang/seurat311/obs.csv',
+        json='data/interim/fits/Kang/isolated_fits.json',
+        ncfs='data/external/kang_ncfs_params.json'
+    params:
+        treatment='stim',
+        controls='ctrl',
+        outdir='data/results/Kang/seurat_icat/',
+        cluster='seurat.sslouvain'
+    output:
+        X='data/results/Kang/seurat_icat/X.csv',
+        obs='data/results/Kang/seurat_icat/obs.csv'
+    script:
+        'src/scanorama_icat.py'
+
+rule kang_scanorama:
+    input:
+        X='data/processed/Kang/X.csv',
+        obs='data/processed/Kang/obs.csv',
+        var='data/processed/Kang/var.csv',
+        json='data/interim/fits/Kang/isolated_fits.json'
+    params:
+        treatment='stim',
+        controls='ctrl',
+        outdir='data/results/Kang/scanorama/'
+    output:
+        X=protected('data/results/Kang/scanorama/X.csv'),
+        obs=protected('data/results/Kang/scanorama/obs.csv'),
+        var=protected('data/results/Kang/scanorama/var.csv')
+    script:
+        'src/run_scanorama.py'
+        
+rule kang_scanorama_icat:
+    input:
+        X='data/results/Kang/scanorama/X.csv',
+        obs='data/results/Kang/scanorama/obs.csv',
+        var='data/results/Kang/scanorama/var.csv',
+        json='data/interim/fits/Kang/isolated_fits.json',
+        ncfs='data/external/kang_ncfs_params.json'
+    output:
+        X=protected('data/results/Kang/icat_scan/X.csv'),
+        obs=protected('data/results/Kang/icat_scan/obs.csv'),
+        var=protected('data/results/Kang/icat_scan/var.csv'),
+    params:
+        outdir='data/results/Kang/icat_scan/',
+        treatment='stim',
+        controls='ctrl',
+        cluster='scanorama.sslouvain'
+    script:
+        'src/scanorama_icat.py'
+
+rule summarize_kang:
+    input:
+        obs=['data/results/Kang/{method}/obs.csv'.format(
+             method=method) for method in METHODS],
+    params:
+        identity='mixture'
+    output:
+        csv='data/results/Kang/results.csv',
+        svg='reports/figures/Kang/metrics.svg'
+    script:
+        'src/summarize_benchmark.py'
