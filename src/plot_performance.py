@@ -80,15 +80,28 @@ def stacked_barplot(df, label, cluster, xlabel=''):
     plt.tight_layout()
 
 
-def trendplot(results, x, y, hue=None, style=None):
-    ax = sns.lineplot(x=x, y=y, hue=hue, style=style, data=results,
-                      markers=True, dashes=False)
+def trendplot(results, x, y, hue=None, xlabel=None):
+    lm = sns.lmplot(x=x, y=y, hue=hue, col=hue, col_wrap=3, data=results)
+    xmin = min(results[x])
+    xmin -= 0.1*xmin
+    xmax = max(results[x])
+    xmax += 0.1*xmax
+    labelsize= plt.rcParams['axes.titlesize']
     plt.ylim(-0.05, 1)
-    ax.spines['right'].set_color('none')
-    ax.spines['top'].set_color('none')
-    plt.legend(loc='center left', bbox_to_anchor=(1, .85),
-               frameon=False, fancybox=False)
-    return ax
+    for ax in lm.fig.axes:
+        ax.set_title(ax.get_title().replace("{} = ".format(hue), ""),
+                     fontsize=int(labelsize * 0.75))
+        ax.set_xlabel('')
+        ax.set_ylabel('')
+        ax.set_xlim(xmin, xmax)
+    if xlabel is None:
+        xlabel = x
+    lm.fig.text(0.5, 0.03, xlabel, ha='center', va='center',
+                fontsize=labelsize)
+    lm.fig.text(0.02, 0.5, y, ha='center', va='center', rotation='vertical',
+                fontsize=labelsize)
+
+    return lm
 
 
 def flip(items, ncol):
