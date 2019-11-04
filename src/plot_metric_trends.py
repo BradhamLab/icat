@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 
 from matplotlib import pyplot as plt
+from cycler import cycler
 import seaborn as sns
 
 from icat.src import plot_performance
@@ -19,6 +20,8 @@ if __name__ == '__main__':
     except NameError:
         snakemake = None
     if snakemake is not None:
+        plt.rcParams['axes.prop_cycle'] =\
+            cycler(color=plot_performance.method_colors)
         results = pd.read_csv(snakemake.input['results'], index_col=0)
         simulations = pd.read_csv(snakemake.input['simulations'], index_col=0)
         exp_id = snakemake.params['exp']
