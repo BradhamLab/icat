@@ -270,24 +270,29 @@ def ternary_plot(data, column, label, scale=9):
     data['c1'] = data.apply(lambda x: int(x[label].split(',')[0]), axis=1)
     data['c2'] = data.apply(lambda x: int(x[label].split(',')[1]), axis=1)
     data['c3'] = data.apply(lambda x: int(x[label].split(',')[2]), axis=1)
+    by_column = data.groupby(column)
     plot_data = data.groupby(column)['c1', 'c2', 'c3'].median()
-    figure, tax = ternary.figure(scale=scale)
-    colors = plot_data.apply(lambda x: ternary_color_point(np.array(
-                                                           [x.c1, x.c2, x.c3]),
+    size = by_column.size()
+    plot_data['size'] = ((755 - 175) * (size - size.min()) /\
+                         (size.max() - size.min()) + 175).astype(int)
+    __, tax = ternary.figure(scale=scale)
+    colors = plot_data.apply(lambda x: ternary_color_point(
+                                                   np.array([x.c1, x.c2, x.c3]),
                                                    scale),
                              axis=1).values
     labelsize=plt.rcParams['axes.titlesize']
     tax.gridlines(multiple=1)
     tax.boundary(scale=scale, linewidth=1.25)
-    tax.scatter(plot_data[['c1', 'c2', 'c3']].values, c=colors, s=200, alpha=1)
+    tax.scatter(plot_data[['c1', 'c2', 'c3']].values, c=colors,
+                s=plot_data['size'], alpha=1)
     tax.left_corner_label('HCC827', position=[-0.1, 0.075, 0],
                           fontsize=labelsize)
     tax.top_corner_label('H2228', position=[-0.02, 1.17, 0],
-                         fontsize=labelsize)
+                          fontsize=labelsize)
     tax.right_corner_label('H1975', position=[1.02, 0.02, 0],
-                           fontsize=labelsize)
+                          fontsize=labelsize)
     tax.ticks(axis='lbr', multiple=1, offset=0.025,
-             fontsize=int(labelsize * 0.75), linewidth=1.25)
+              fontsize=int(labelsize * 0.75), linewidth=1.25)
     tax.get_axes().axis('off')
     tax.clear_matplotlib_ticks()
     return tax
