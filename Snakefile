@@ -26,10 +26,10 @@ METRICS = ['adjusted-mutual-info', 'adjusted-rand', 'completeness',
 # EXPERIMENTS = ['Experiment1Perturbation1']
 
 
-# METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'icat_scan',
-#            'seurat_icat']
+METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'icat_scan',
+           'seurat_icat']
 # METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'seurat_icat']
-METHODS = ['icat', 'seurat233', 'seurat311', 'seurat_icat'] #, 'scanorama']
+# METHODS = ['icat', 'seurat233', 'seurat311', 'seurat_icat'] #, 'scanorama']
 
 SIMULATED = ["data/processed/simulated/{run}/{out}".\
              format(run=run, out=out)\
@@ -447,48 +447,21 @@ rule benchmark_scanorama_icat:
 
 rule summarize_benchmark:
     input:
+        X=['data/results/benchmark/{method}/X.csv'.format(method=method)\
+            for method in METHODS],
         obs=['data/results/benchmark/{method}/obs.csv'.format(
              method=method) for method in METHODS],
+        fit='data/interim/fits/benchmark/isolated_fits.json',
     params:
-        identity='mixture'
+        identity='mixture',
+        plotdir='reports/figures/benchmark/',
+        treatment='benchmark',
+        controls='sc_celseq2',
     output:
         csv='data/results/benchmark/results.csv',
         svg='reports/figures/benchmark/metrics.svg'
     script:
         'src/summarize_benchmark.py'
-
-# create plots/figures
-rule plot_benchmark:
-    input:
-        results='data/results/benchmark/results.csv',
-        labels=['data/results/benchmark/icat/obs.csv',
-                'data/results/benchmark/seurat233/clustered.csv',
-                'data/results/benchmark/scanorama/obs.csv',
-                'data/results/benchmark/icat_scan/obs.csv'],
-        Xs=['data/results/benchmark/icat/X.csv',
-            'data/results/benchmark/icat/X.csv', # not going to use the X data
-            'data/results/benchmark/scanorama/X.csv',
-            'data/results/benchmark/icat_scan/X.csv'],
-        fit='data/interim/fits/benchmark/isolated_fits.json'
-    params:
-        methods=['icat', 'seurat233', 'scanorama', 'icat_scan'],
-        plotdir='reports/figures/benchmark/',
-        label='mixture',
-        treatment='benchmark',
-        xlabel='Cell Mixture'
-    output:
-        metrics='reports/figures/benchmark/metrics.svg',
-        method_plots=['reports/figures/benchmark/{method}/{plot}'.format(
-                      method=method, plot=plot) for method, plot in\
-                      itertools.product(['icat', 'seurat233', 'scanorama',
-                                         'icat_scan'],
-                                        ['known_cells_umap.svg',
-                                         'cluster_umap.svg',
-                                         'treatment_umap.svg',
-                                         'cell_type_distribution.svg',
-                                         'cluster_distribution.svg'])]
-    script:
-        'src/plot_performance.py'
 
 # ---------------------------- Process Kang Data -------------------------------
 rule format_kang_data:
