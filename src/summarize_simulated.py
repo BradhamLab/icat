@@ -22,6 +22,12 @@ if __name__ == "__main__":
                                             x['Sim']),
                                          axis=1)
         sim_mean = results.groupby(['ExpID', 'method']).mean()
+        # rank performance in metrics between methods
+        ranked = sim_mean.groupby(['ExpID'])[['AMI', 'Homogeneity',
+                                              'Completeness', 'ARI']]\
+                                           .rank(ascending=False)
+        ranked = ranked.groupby('method').mean().rank()
+        ranked = ranked.loc[ranked.mean(axis=1).sort_values().index, :]
         sim_mean['id'] = sim_mean.apply(lambda x: x.name[0].split('Sim')[0],
                                         axis=1)
         by_exp = sim_mean.groupby(['id', 'method'])
