@@ -14,6 +14,7 @@ FILES = ['X.csv', 'obs.csv', 'var.csv']
 RUNS = utils.get_simulation_ids(config['simulations']['json'],
                                 config['simulations']['sims'],
                                 config['simulations']['reps'])
+RUNS = [run for run in RUNS if 'Experiment7' not in run]
 RUNS = list(set(RUNS))
 EXPERIMENTS = utils.get_experiment_ids(RUNS)
 METRICS = ['adjusted-mutual-info', 'adjusted-rand', 'completeness',
@@ -26,10 +27,11 @@ METRICS = ['adjusted-mutual-info', 'adjusted-rand', 'completeness',
 # EXPERIMENTS = ['Experiment1Perturbation1']
 
 
-# METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'icat_scan',
-#            'seurat_icat']
+METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'icat_scan',
+           'seurat_icat']
 # METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'seurat_icat']
-METHODS = ['icat', 'seurat233', 'seurat311', 'seurat_icat'] #, 'scanorama']
+# METHODS = ['icat', 'seurat233', 'seurat311', 'seurat_icat'] #, 'scanorama']
+# METHODS = ['scanorama']
 
 SIMULATED = ["data/processed/simulated/{run}/{out}".\
              format(run=run, out=out)\
@@ -40,20 +42,22 @@ MIXES = BENCHMARK[:-1]
 rule all:
     input:
         # SIMULATED OUTPUT
-        # 'data/results/simulated/final/results.csv',
-        # ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
-        #        exp=exp) for exp in EXPERIMENTS],
+        'data/results/simulated/final/results.csv',
+        ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
+               exp=exp) for exp in EXPERIMENTS],
         ['reports/figures/simulated/clusters/{run}/{method}/treatment_umap.svg'.\
          format(run=run, method=method) for run, method in itertools.product(
                 RUNS, METHODS)],
-        # ['reports/figures/simulated/performance/perturbation/{metric}.svg'.\
-        #       format(metric=metric) for metric in METRICS],
-        # ['reports/figures/simulated/performance/dropout/{metric}.svg'.\
-        #       format(metric=metric) for metric in METRICS],
+        ['reports/figures/simulated/performance/perturbation/{metric}.svg'.\
+              format(metric=metric) for metric in METRICS],
+        ['reports/figures/simulated/performance/dropout/{metric}.svg'.\
+              format(metric=metric) for metric in METRICS],
         # BENCHMARK OUTPUT
         'reports/figures/benchmark/metrics.svg',
         # KANG OUTPUT
         # 'reports/figures/Kang/metrics.svg'
+        # ['data/results/simulated/icat_scan/{run}/obs.csv'.format(run=run)\
+        #  for run in RUNS]
     
 # ---------------------------- Generate Simulated Data -------------------------
 rule simulate_data:
@@ -533,9 +537,9 @@ rule kang_filter:
  
 rule fit_kang_data:
     input:
-        X='data/processed/Kang/X.csv',
-        obs='data/processed/Kang/obs.csv',
-        var='data/processed/Kang/var.csv' 
+        X='data/processed/Kang/filtered/X.csv',
+        obs='data/processed/Kang/filtered/obs.csv',
+        var='data/processed/Kang/filtered/var.csv' 
     params:
         treatment='stim',
         control='ctrl',
@@ -548,9 +552,9 @@ rule fit_kang_data:
 
 rule kang_icat:
     input:
-        X='data/processed/Kang/X.csv',
-        obs='data/processed/Kang/obs.csv',
-        var='data/processed/Kang/var.csv',
+        X='data/processed/Kang/filtered/X.csv',
+        obs='data/processed/Kang/filtered/obs.csv',
+        var='data/processed/Kang/filtered/var.csv',
         json='data/interim/fits/Kang/isolated_fits.json',
         ncfs='data/external/kang_ncfs_params.json'
     params:
@@ -614,9 +618,9 @@ rule kang_seurat_icat:
 
 rule kang_scanorama:
     input:
-        X='data/processed/Kang/X.csv',
-        obs='data/processed/Kang/obs.csv',
-        var='data/processed/Kang/var.csv',
+        X='data/processed/Kang/filtered/X.csv',
+        obs='data/processed/Kang/filtered/obs.csv',
+        var='data/processed/Kang/filtered/var.csv',
         json='data/interim/fits/Kang/isolated_fits.json'
     params:
         treatment='stim',
