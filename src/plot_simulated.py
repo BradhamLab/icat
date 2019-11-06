@@ -7,7 +7,7 @@ from scanpy import api as sc
 from matplotlib import pyplot as plt
 
 from downstream.src.visualization import visualize
-from icat.src import plot_performance
+from icat.src import plotting
 
 
 label_dictionary = {
@@ -53,26 +53,26 @@ if __name__ == "__main__":
         # plot umap colored by known cell type
         visualize.plot_umap(adata, color_col=snakemake.params['label'])
         plt.savefig(snakemake.output['known'])
-        plot_performance.close_plot()
+        plotting.close_plot()
         # plot umap colored by cluster
         visualize.plot_umap(adata, color_col='Cluster')
         plt.savefig(snakemake.output['cluster'])
-        plot_performance.close_plot()
+        plotting.close_plot()
         # plot umap by 'treatment'
         visualize.plot_umap(adata, color_col=snakemake.params['treatment'])
         plt.savefig(snakemake.output['treatment'])
-        plot_performance.close_plot()
+        plotting.close_plot()
         # plot distrubtion of cluster labels between known cell types
-        plot_performance.stacked_barplot(adata.obs,
-                                         snakemake.params['label'],
-                                         'Cluster',
-                                         xlabel='Population')
+        plotting.stacked_barplot(adata.obs,
+                                 snakemake.params['label'],
+                                 'Cluster',
+                                 xlabel='Population')
         plt.savefig(snakemake.output['known_bar'])
-        plot_performance.close_plot()
+        plotting.close_plot()
         # plot_distributin of known cell labels between clusters
-        plot_performance.stacked_barplot(adata.obs,
-                                         'Cluster',
-                                         snakemake.params['label'],
-                                         xlabel='Cluster')
+        plotting.stacked_barplot(adata.obs,
+                                 'Cluster',
+                                 snakemake.params['label'],
+                                 xlabel='Cluster')
         plt.savefig(snakemake.output['cluster_bar'])
-        plot_performance.close_plot()
+        plotting.close_plot()

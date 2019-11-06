@@ -5,9 +5,10 @@ import pandas as pd
 import numpy as np
 
 from matplotlib import pyplot as plt
+from cycler import cycler
 import seaborn as sns
 
-from icat.src import plot_performance
+from icat.src import plotting
 
 def experiment_match(exp_id, index):
     regex = re.compile(exp_id)
@@ -19,6 +20,8 @@ if __name__ == '__main__':
     except NameError:
         snakemake = None
     if snakemake is not None:
+        plt.rcParams['axes.prop_cycle'] =\
+            cycler(color=plotting.method_colors)
         results = pd.read_csv(snakemake.input['results'], index_col=0)
         simulations = pd.read_csv(snakemake.input['simulations'], index_col=0)
         exp_id = snakemake.params['exp']
@@ -50,16 +53,16 @@ if __name__ == '__main__':
         sim_mean = results.groupby(['ExpID', 'method']).mean()
         sim_mean['Method'] = sim_mean.index.get_level_values('method')
         sim_mean['Method'] = sim_mean['Method'].apply(lambda x:\
-                                          plot_performance.method_dictionary[x])
-        sim_mean.rename(columns=plot_performance.metric_dictionary,
+                                          plotting.method_dictionary[x])
+        sim_mean.rename(columns=plotting.metric_dictionary,
                         inplace=True)
-        to_metric = {v:k for k, v in plot_performance.metric_dictionary.items()}
+        to_metric = {v:k for k, v in plotting.metric_dictionary.items()}
         sim_mean[feature] = sim_mean[feature] * 100
-        for y in plot_performance.metric_dictionary.values():
-            plot_performance.trendplot(sim_mean, x=feature,
+        for y in plotting.metric_dictionary.values():
+            plotting.trendplot(sim_mean, x=feature,
                                        y=y, hue='Method',
                                        xlabel=snakemake.params['xlabel'])
             plt.savefig(os.path.join(snakemake.params['plotdir'],
                         to_metric[y].replace('.', '-') + '.svg'))
-            plot_performance.close_plot()
+            plotting.close_plot()
         sim_mean.to_csv(snakemake.output['csv'])

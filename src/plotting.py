@@ -6,9 +6,10 @@ import colorcet as cc
 import matplotlib as mpl
 import numpy as np
 import pandas as pd
-from cycler import cycler
 from matplotlib import pyplot as plt
 import seaborn as sns
+import ternary
+from cycler import cycler
 from scanpy import api as sc
 
 from downstream.src.visualization import visualize
@@ -28,6 +29,15 @@ method_dictionary = {
     'seurat_icat': 'Seurat 3.1 + icat'
 }
 
+method_colors = ["#0a5e62", "#4bbfb8", "#fbcf5b",
+                 "#ff5959", "#4f8522", "#a2d665"]
+
+method_colors1 = ["#3c4347", "#5e6769", "#719192",
+                  "#e1cec5", "#518413", "#a3c541"]
+
+method_colors2 = ["#f77855", "#584b43", "#537d90",
+                  "#a5d2c9", "#518413", "#a3c541"]
+
 metric_dictionary = {
     'adjusted.mutual.info': 'AMI',
     'adjusted.rand': 'ARI',
@@ -37,7 +47,8 @@ metric_dictionary = {
 }
 
 def stacked_barplot(df, label, cluster, xlabel=''):
-    """[summary]
+    """
+    Plot a stacked barplot.
     
     Parameters
     ----------
@@ -81,6 +92,31 @@ def stacked_barplot(df, label, cluster, xlabel=''):
 
 
 def trendplot(results, x, y, hue=None, xlabel=None):
+    """
+    Plot performance trends across some variable.
+    
+    Parameters
+    ----------
+    results : pd.DataFrame
+        Dataframe containing performance measures and other features across
+        datasets and methods.
+    x : string
+        Column in `results` representing the independent variable in cluster
+        performance.
+    y : string
+        Column in `results` measuring cluster performance -- presumably affected
+        by `x`.
+    hue : string, optional
+        Column in `results` to separate on. Default is None, and all points rows
+        will be used in a single plot.
+    xlabel : string, optional
+        Label for x-axis, by default None, and `x` will be used.
+    
+    Returns
+    -------
+    mpl.Axes
+        Plot of linear trends between `x` and `y` separated on `hue`.
+    """
     lm = sns.lmplot(x=x, y=y, hue=hue, col=hue, col_wrap=3, data=results)
     xmin = min(results[x])
     xmin -= 0.1*xmin
@@ -100,12 +136,12 @@ def trendplot(results, x, y, hue=None, xlabel=None):
                 fontsize=labelsize)
     lm.fig.text(0.02, 0.5, y, ha='center', va='center', rotation='vertical',
                 fontsize=labelsize)
-
     return lm
 
 
 def flip(items, ncol):
-    """[summary]
+    """
+    Flips matplotlib legends to increment by rows before columns.
 
     Taken from here:
     https://stackoverflow.com/questions/10101141/matplotlib-legend-add-items-across-columns-instead-of-down
@@ -133,6 +169,10 @@ def metric_plot(scores, errors=None):
     scores : pd.DataFrame
         Performance data frame where each column is a different performance
         metric, and each row represents a different method.
+    
+    errors : pd.DataFrame, optional
+        Errors associated with each method-performance pair in `scores`. Should
+        be the same shape/size as `scores`. 
     """
     if errors is not None:
         if not isinstance(errors, pd.DataFrame):
@@ -175,65 +215,84 @@ def close_plot():
     plt.clf() 
     plt.close()
 
-if __name__ == "__main__":
-    try:
-        snakemake
-    except NameError:
-        snakemake = None
-    if snakemake is not None:
-        # load in fit data for n_neighbors
-        with open(snakemake.input['fit'], 'r') as f:
-            fit = json.load(f)
-        n_neighbors = fit['n_neighbors']
-        # plot distribution of cluster labels in known 
-        for X, obs, method in zip(snakemake.input['Xs'],
-                                  snakemake.input['labels'],
-                                  snakemake.params['methods']):
-            plotdir = os.path.join(snakemake.params['plotdir'], method)
-            if not os.path.exists(plotdir):
-                os.makedirs(plotdir)
-            X = np.loadtxt(X, delimiter=',')
-            obs = pd.read_csv(obs, index_col=0)
-            # rename cluster column to be consistent between methods
-            col_name = utils.label_dictionary[method]
-            obs.rename(columns={col_name: 'Cluster'}, inplace=True)
-            obs['Cluster'] = obs['Cluster'].astype(str)
-            # create AnnData object
-            adata = sc.AnnData(X=X, obs=obs)
-            # check to see if UMAP projection is already saved in obs data
-            # calculate otherwise
-            umap_cols = set(['UMAP1', 'UMAP2'])
-            if umap_cols.intersection(obs.columns) != umap_cols:
-                sc.pp.pca(adata)
-                sc.pp.neighbors(adata, n_neighbors=n_neighbors)
-                sc.tl.umap(adata, min_dist=0.0)
-                adata.obs['UMAP1'] = adata.obsm['X_umap'][:, 0]
-                adata.obs['UMAP2'] = adata.obsm['X_umap'][:, 1]
-            # plot umap colored by known cell type
-            visualize.plot_umap(adata, color_col=snakemake.params['label'])
-            plt.savefig(os.path.join(plotdir, 'known_cells_umap.svg'))
-            close_plot()
-            # plot umap colored by cluster
-            visualize.plot_umap(adata, color_col='Cluster')
-            plt.savefig(os.path.join(plotdir, 'cluster_umap.svg'))
-            close_plot()
-            # plot umap by 'treatment'
-            visualize.plot_umap(adata, color_col=snakemake.params['treatment'])
-            plt.savefig(os.path.join(plotdir, 'treatment_umap.svg'))
-            close_plot()
-            # plot distrubtion of cluster labels between known cell types
-            stacked_barplot(adata.obs, snakemake.params['label'], 'Cluster',
-                            xlabel=snakemake.params['xlabel'])
-            plt.savefig(os.path.join(plotdir, 'cluster_distribution.svg'))
-            close_plot()
-            # plot_distributin of known cluster labels between clusters
-            stacked_barplot(adata.obs, 'Cluster', snakemake.params['label'],
-                            xlabel='Cluster')
-            plt.savefig(os.path.join(plotdir, 'cell_type_distribution.svg'))
-            close_plot()
-                  
-        # plot performance across metrics
-        performance = pd.read_csv(snakemake.input['results'], index_col=0).T
-        metric_plot(performance)
-        plt.savefig(snakemake.output['metrics'])
-        close_plot()
+
+def ternary_color_point(point, scale=9):
+    """
+    Transform a ternary point into an associated RGBV value.
+    
+    Parameters
+    ----------
+    point : list-like, numpy.ndarray
+        A ternary point. Expected to have length equal to three.
+    scale : int, optional
+        Total value points sum to, by default 9.
+    
+    Returns
+    -------
+    np.ndarray
+        Color associated with the provided point in RGBV space.
+    """
+    point = np.array(point)
+    assert point.size == 3
+    scaled = (point + 3) / scale
+    scaled[scaled < 0] = 0
+    cmaps = [plt.get_cmap('Blues'), plt.get_cmap("Reds"), plt.get_cmap('Greens')]
+    rgba = np.array([cmap(p) for cmap, p in zip(cmaps, scaled)])
+    out = (rgba.mean(axis=0)) * np.hstack((scaled, [1])) 
+    out[-1] = 1
+    return out
+
+
+# [9, 0, 0] 'H1975', -> bottom right 
+# [0, 9, 0] 'H2228', -> top
+# [0, 0, 9] 'HCC827' -> bottom left
+def ternary_plot(data, column, label, scale=9):
+    """
+    Summarize `benchmark` clusters by plotting cluster medians
+    
+    Parameters
+    ----------
+    data : pd.DataFrame
+        Dateframe containing assigned cluster labels along with known cell
+        mixtures.
+    column : string
+        Column in `data` containing assigned cluster labels.
+    label : string
+        Column in `data` containing known cell mixtures.
+    scale : int, optional
+        Total number of cells used in each mixture, by default 9.
+    
+    Returns
+    -------
+    mpl.Axes
+        Ternary plot of cluster medians of cell mixtures.
+    """
+    data['c1'] = data.apply(lambda x: int(x[label].split(',')[0]), axis=1)
+    data['c2'] = data.apply(lambda x: int(x[label].split(',')[1]), axis=1)
+    data['c3'] = data.apply(lambda x: int(x[label].split(',')[2]), axis=1)
+    by_column = data.groupby(column)
+    plot_data = data.groupby(column)['c1', 'c2', 'c3'].median()
+    size = by_column.size()
+    plot_data['size'] = ((950 - 175) * (size - 45) /\
+                         (950 - 45) + 175).astype(int)
+    __, tax = ternary.figure(scale=scale)
+    colors = plot_data.apply(lambda x: ternary_color_point(
+                                                   np.array([x.c1, x.c2, x.c3]),
+                                                   scale),
+                             axis=1).values
+    labelsize=plt.rcParams['axes.titlesize']
+    tax.gridlines(multiple=1)
+    tax.boundary(scale=scale, linewidth=1.25)
+    tax.scatter(plot_data[['c1', 'c2', 'c3']].values, c=colors,
+                s=plot_data['size'], alpha=1)
+    tax.left_corner_label('HCC827', position=[-0.1, 0.075, 0],
+                          fontsize=labelsize)
+    tax.top_corner_label('H2228', position=[-0.02, 1.17, 0],
+                          fontsize=labelsize)
+    tax.right_corner_label('H1975', position=[1.02, 0.02, 0],
+                          fontsize=labelsize)
+    tax.ticks(axis='lbr', multiple=1, offset=0.025,
+              fontsize=int(labelsize * 0.75), linewidth=1.25)
+    tax.get_axes().axis('off')
+    tax.clear_matplotlib_ticks()
+    return tax

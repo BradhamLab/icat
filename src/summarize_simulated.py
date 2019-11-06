@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
-from icat.src import plot_performance
+from icat.src import plotting
 
 import os
 
@@ -35,9 +35,9 @@ if __name__ == "__main__":
                                                     'metric_means.csv'))
             method_deviation.loc[exp].to_csv(os.path.join(write_dir,
                                                          'metric_stds.csv'))
-            plot_performance.metric_plot(method_mean.loc[exp].T,
+            plotting.metric_plot(method_mean.loc[exp].T,
                                          method_deviation.loc[exp].T) 
             plt.savefig(os.path.join(snakemake.params['plotdir'],
                         exp + '_metrics.svg'))
-            plot_performance.close_plot()
+            plotting.close_plot()
         
