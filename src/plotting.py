@@ -117,9 +117,10 @@ def ranked_heatmap(ranks):
                 cbar_kws={'shrink': 0.95})
     ax.set_yticklabels([method_dictionary[x.get_text()]\
                         for x in ax.get_yticklabels()],
-                       fontsize=labelsize*0.75, rotation=0)
-    ax.set_xticklabels(ax.get_xticklabels(), fontsize=labelsize*0.75,
-                       rotation=90)
+                        fontsize=labelsize*0.75, rotation=0)
+    ax.set_xticklabels([metric_dictionary[x.get_text()]\
+                        for x in ax.get_xticklabels()], fontsize=labelsize*0.75,
+                        rotation=90)
     fig.axes[1].annotate('Worse', (-1, -0.05), xycoords='axes fraction',
                          fontsize=labelsize*0.7)
     fig.axes[1].annotate('Better', (-1, 1.01), xycoords='axes fraction',
