@@ -31,10 +31,7 @@ METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'icat_scan',
            'seurat_icat']
 # METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'seurat_icat']
 # METHODS = ['icat', 'seurat233', 'seurat311', 'seurat_icat'] #, 'scanorama']
-<<<<<<< HEAD
 # METHODS = ['scanorama']
-=======
->>>>>>> cc6c69f2549a30ca392bff544a7ebb7348d85291
 
 SIMULATED = ["data/processed/simulated/{run}/{out}".\
              format(run=run, out=out)\
@@ -258,7 +255,8 @@ rule summarize_simulated:
         devs=['data/results/simulated/final/{exp}/metric_stds.csv'.format(
                exp=exp) for exp in EXPERIMENTS],
         svgs=['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
-               exp=exp) for exp in EXPERIMENTS]
+               exp=exp) for exp in EXPERIMENTS],
+        ranks='reports/figures/simulated/performance/ranked.svg'
     params:
         plotdir='reports/figures/simulated/performance/',
         outdir='data/results/simulated/final/'
