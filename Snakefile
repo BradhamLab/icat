@@ -14,7 +14,7 @@ FILES = ['X.csv', 'obs.csv', 'var.csv']
 RUNS = utils.get_simulation_ids(config['simulations']['json'],
                                 config['simulations']['sims'],
                                 config['simulations']['reps'])
-RUNS = [run for run in RUNS if 'Experiment7' not in run]
+# RUNS = [run for run in RUNS if 'Experiment7' not in run]
 RUNS = list(set(RUNS))
 EXPERIMENTS = utils.get_experiment_ids(RUNS)
 METRICS = ['adjusted-mutual-info', 'adjusted-rand', 'completeness',
@@ -31,10 +31,7 @@ METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'icat_scan',
            'seurat_icat']
 # METHODS = ['icat', 'seurat233', 'seurat311', 'scanorama', 'seurat_icat']
 # METHODS = ['icat', 'seurat233', 'seurat311', 'seurat_icat'] #, 'scanorama']
-<<<<<<< HEAD
 # METHODS = ['scanorama']
-=======
->>>>>>> cc6c69f2549a30ca392bff544a7ebb7348d85291
 
 SIMULATED = ["data/processed/simulated/{run}/{out}".\
              format(run=run, out=out)\
@@ -45,20 +42,22 @@ MIXES = BENCHMARK[:-1]
 rule all:
     input:
         # SIMULATED OUTPUT
-        'data/results/simulated/final/results.csv',
-        ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
-               exp=exp) for exp in EXPERIMENTS],
-        ['reports/figures/simulated/clusters/{run}/{method}/treatment_umap.svg'.\
-         format(run=run, method=method) for run, method in itertools.product(
-                RUNS, METHODS)],
-        ['reports/figures/simulated/performance/perturbation/{metric}.svg'.\
-              format(metric=metric) for metric in METRICS],
-        ['reports/figures/simulated/performance/dropout/{metric}.svg'.\
-              format(metric=metric) for metric in METRICS],
+        # 'data/results/simulated/final/results.csv',
+        # ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
+        #        exp=exp) for exp in EXPERIMENTS],
+        # ['reports/figures/simulated/clusters/{run}/{method}/treatment_umap.svg'.\
+        #  format(run=run, method=method) for run, method in itertools.product(
+        #         RUNS, METHODS)],
+        # ['reports/figures/simulated/performance/perturbation/{metric}.svg'.\
+        #       format(metric=metric) for metric in METRICS],
+        # ['reports/figures/simulated/performance/dropout/{metric}.svg'.\
+        #       format(metric=metric) for metric in METRICS],
         # BENCHMARK OUTPUT
         'reports/figures/benchmark/metrics.svg',
         # KANG OUTPUT
-        # 'reports/figures/Kang/metrics.svg'
+        'reports/figures/Kang/metrics.svg'
+        # 'data/results/Kang/seurat311/X.csv',
+        # 'data/results/Kang/scanorama/X.csv',
         # ['data/results/simulated/icat_scan/{run}/obs.csv'.format(run=run)\
         #  for run in RUNS]
     
