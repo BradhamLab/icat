@@ -90,6 +90,46 @@ def stacked_barplot(df, label, cluster, xlabel=''):
     plt.ylim(0, 100)
     plt.tight_layout()
 
+def ranked_heatmap(ranks):
+    """
+    Plot a heatmap of method ranks across various method.
+
+    Low values are considered good (e.g. 1 is better than 2). Negative values
+    are used during plotting for visual purposes.
+    
+    Parameters
+    ----------
+    ranks : pd.DataFrame
+        A dataframe containing methods as index values and metrics as columns.
+        Each cell represents the rank of the specified method in the respective
+        metric compared to other methods.
+    
+    Returns
+    -------
+    mpl.Figure
+        Heatmap summarizing method performance.
+    """
+    figsize = np.array(plt.rcParams['figure.figsize']) * 1.25
+    labelsize = plt.rcParams['axes.titlesize']
+    fig, ax = plt.subplots(figsize=figsize)
+    plot_ranks = -1 * ranks.loc[ranks.mean(axis=1).sort_values().index, :]
+    sns.heatmap(plot_ranks, cmap='viridis',
+                cbar_kws={'shrink': 0.95})
+    ax.set_yticklabels([method_dictionary[x.get_text()]\
+                        for x in ax.get_yticklabels()],
+                        fontsize=labelsize*0.75, rotation=0)
+    ax.set_xticklabels([metric_dictionary[x.get_text()]\
+                        for x in ax.get_xticklabels()], fontsize=labelsize*0.75,
+                        rotation=90)
+    fig.axes[1].annotate('Worse', (-1, -0.05), xycoords='axes fraction',
+                         fontsize=labelsize*0.7)
+    fig.axes[1].annotate('Better', (-1, 1.01), xycoords='axes fraction',
+                         fontsize=labelsize*0.7)
+    fig.axes[1].set_yticklabels([''] * len(fig.axes[1].get_yticks()) )
+    plt.ylabel('')
+    plt.tight_layout()
+    return fig
+
 
 def trendplot(results, x, y, hue=None, xlabel=None):
     """

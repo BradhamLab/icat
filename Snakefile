@@ -257,7 +257,8 @@ rule summarize_simulated:
         devs=['data/results/simulated/final/{exp}/metric_stds.csv'.format(
                exp=exp) for exp in EXPERIMENTS],
         svgs=['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
-               exp=exp) for exp in EXPERIMENTS]
+               exp=exp) for exp in EXPERIMENTS],
+        ranks='reports/figures/simulated/performance/ranked.svg'
     params:
         plotdir='reports/figures/simulated/performance/',
         outdir='data/results/simulated/final/'
