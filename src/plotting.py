@@ -163,7 +163,7 @@ def trendplot(results, x, y, hue=None, xlabel=None):
     xmax = max(results[x])
     xmax += 0.1*xmax
     labelsize= plt.rcParams['axes.titlesize']
-    plt.ylim(-0.05, 1)
+    plt.ylim(-0.05, 1.05)
     for ax in lm.fig.axes:
         ax.set_title(ax.get_title().replace("{} = ".format(hue), ""),
                      fontsize=int(labelsize * 0.75))
