@@ -3,10 +3,6 @@ import os
 import itertools
 from icat.src import snakemake_utils as utils
 
-# check cluster
-# if os.path.exists("/projectnb/bradham"):
-#     shell.prefix('module load gcc/8.3.0')
-    
 configfile: './snakemake-config.yaml'
 
 FILES = ['X.csv', 'obs.csv', 'var.csv']
@@ -14,7 +10,7 @@ FILES = ['X.csv', 'obs.csv', 'var.csv']
 RUNS = utils.get_simulation_ids(config['simulations']['json'],
                                 config['simulations']['sims'],
                                 config['simulations']['reps'])
-RUNS = [run for run in RUNS if 'Experiment7' not in run]
+# RUNS = [run for run in RUNS if 'Experiment7' not in run]
 RUNS = list(set(RUNS))
 EXPERIMENTS = utils.get_experiment_ids(RUNS)
 METRICS = ['adjusted-mutual-info', 'adjusted-rand', 'completeness',
@@ -42,6 +38,8 @@ MIXES = BENCHMARK[:-1]
 rule all:
     input:
         # SIMULATED OUTPUT
+        # ['data/results/simulated/icat/{run}/performance.csv'.format(run=run)\
+        #   for run in RUNS],
         'data/results/simulated/final/results.csv',
         ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
                exp=exp) for exp in EXPERIMENTS],
@@ -53,16 +51,18 @@ rule all:
         ['reports/figures/simulated/performance/dropout/{metric}.svg'.\
               format(metric=metric) for metric in METRICS],
         # BENCHMARK OUTPUT
-        'reports/figures/benchmark/metrics.svg',
+        # 'reports/figures/benchmark/metrics.svg',
         # KANG OUTPUT
-        # 'reports/figures/Kang/metrics.svg'
+        # 'reports/figures/Kang/metrics.svg',
+        # 'data/results/Kang/seurat311/X.csv',
+        # 'data/results/Kang/scanorama/X.csv',
         # ['data/results/simulated/icat_scan/{run}/obs.csv'.format(run=run)\
         #  for run in RUNS]
     
 # ---------------------------- Generate Simulated Data -------------------------
 rule simulate_data:
     input:
-        json=config['simulations']['json'],
+        json=ancient(config['simulations']['json']),
     params:
         sims=config['simulations']['sims'],
         reps=config['simulations']['reps'],
@@ -541,7 +541,7 @@ rule kang_icat:
         obs=protected('data/results/Kang/icat/obs.csv'),
         var=protected('data/results/Kang/icat/var.csv')
     script:
-        'src/kang_icat.py'
+        'src/benchmark_icat.py'
 
 rule kang_seurat233:
     input:

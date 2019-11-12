@@ -1,0 +1,23 @@
+{
+    "__default__": {
+        "error": "snake_error",
+        "out": "snake_out",
+        "project": "bradham",
+        "latency-wait": 15,
+        "python": "/projectnb/bradham/PythonModules",
+        "gcc": "/share/pkg.7/gcc/8.1.0/install/lib64:/share/pkg.7/gcc/8.1.0/install/lib",
+        "cpus": "'broadwell|bulldozer|epyc|haswell|ivybridge|knl|nehalem|sandybridge|skylake'"
+    },
+    "plot_simulated_runs": {
+        "latency-wait": 30
+    },
+    "simulated_scanorama": {
+        "cpus": "'!bulldozer&!nehalem&!sandybridge&!ivybridge'"
+    },
+    "benchmark_scanorama": {
+        "cpus": "'!bulldozer&!nehalem&!sandybridge&!ivybridge'"
+    },
+    "kang_scanorama": {
+        "cpus": "'!bulldozer&!nehalem&!sandybridge&!ivybridge'"
+    }
+}
