@@ -3,10 +3,6 @@ import os
 import itertools
 from icat.src import snakemake_utils as utils
 
-# check cluster
-# if os.path.exists("/projectnb/bradham"):
-#     shell.prefix('module load gcc/8.3.0')
-    
 configfile: './snakemake-config.yaml'
 
 FILES = ['X.csv', 'obs.csv', 'var.csv']
@@ -42,20 +38,22 @@ MIXES = BENCHMARK[:-1]
 rule all:
     input:
         # SIMULATED OUTPUT
-        # 'data/results/simulated/final/results.csv',
-        # ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
-        #        exp=exp) for exp in EXPERIMENTS],
-        # ['reports/figures/simulated/clusters/{run}/{method}/treatment_umap.svg'.\
-        #  format(run=run, method=method) for run, method in itertools.product(
-        #         RUNS, METHODS)],
-        # ['reports/figures/simulated/performance/perturbation/{metric}.svg'.\
-        #       format(metric=metric) for metric in METRICS],
-        # ['reports/figures/simulated/performance/dropout/{metric}.svg'.\
-        #       format(metric=metric) for metric in METRICS],
+        # ['data/results/simulated/icat/{run}/performance.csv'.format(run=run)\
+        #   for run in RUNS],
+        'data/results/simulated/final/results.csv',
+        ['reports/figures/simulated/performance/{exp}_metrics.svg'.format(
+               exp=exp) for exp in EXPERIMENTS],
+        ['reports/figures/simulated/clusters/{run}/{method}/treatment_umap.svg'.\
+         format(run=run, method=method) for run, method in itertools.product(
+                RUNS, METHODS)],
+        ['reports/figures/simulated/performance/perturbation/{metric}.svg'.\
+              format(metric=metric) for metric in METRICS],
+        ['reports/figures/simulated/performance/dropout/{metric}.svg'.\
+              format(metric=metric) for metric in METRICS],
         # BENCHMARK OUTPUT
-        'reports/figures/benchmark/metrics.svg',
+        # 'reports/figures/benchmark/metrics.svg',
         # KANG OUTPUT
-        'reports/figures/Kang/metrics.svg'
+        # 'reports/figures/Kang/metrics.svg',
         # 'data/results/Kang/seurat311/X.csv',
         # 'data/results/Kang/scanorama/X.csv',
         # ['data/results/simulated/icat_scan/{run}/obs.csv'.format(run=run)\
@@ -64,7 +62,7 @@ rule all:
 # ---------------------------- Generate Simulated Data -------------------------
 rule simulate_data:
     input:
-        json=config['simulations']['json'],
+        json=ancient(config['simulations']['json']),
     params:
         sims=config['simulations']['sims'],
         reps=config['simulations']['reps'],
@@ -543,7 +541,7 @@ rule kang_icat:
         obs=protected('data/results/Kang/icat/obs.csv'),
         var=protected('data/results/Kang/icat/var.csv')
     script:
-        'src/kang_icat.py'
+        'src/benchmark_icat.py'
 
 rule kang_seurat233:
     input:
