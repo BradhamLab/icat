@@ -424,14 +424,15 @@ class icat():
         # combine control and perturbed data
         combined = utils.rbind_adata([controls, perturbed])
         # fit gene weights using control dataset
-        model.fit(fit_X, np.array(controls.obs[self.cluster_col].values))
+        model.fit(fit_X, np.array(controls.obs[self.cluster_col].values),
+                  sample_weight='balanced')
         # apply learned weights across gene expression matrix
         combined.X = model.transform(combined.X)
         # save genes weights
         combined.var['ncfs.weights'] = model.coef_
         # subset to most informative genes
         selected = combined.var.index.values[
-                       np.where(model.coef_**2 > self.weight_threshold)[0]]
+                       np.where(model.coef_ > self.weight_threshold)[0]]
         if len(selected) <= 1:
             print('WARNING: One or none feature weights met threshold criteria.'
                   ' All genes will be used. Try lowering threshold value for'
