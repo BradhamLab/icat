@@ -47,7 +47,7 @@ class SingleCellDataset():
     """
     def __init__(self, samples=200, genes=1000, populations=2,
                  pop_sizes=None, p_marker=None, dispersion=1, scalar=100,
-                 percentile=50):
+                 percentile=50, method='conditional', dropout=0.66):
         """
         Parameters
         ----------
@@ -74,8 +74,8 @@ class SingleCellDataset():
             estimate average gene expression for a simualted gene. Default is
             100.
         percentile : float, optional
-            Float value between 0 and 1 denoting which percentile to use when
-            calculating dropout probabilities. Default is 0.5, and the median
+            Float value between 0 and 100 denoting which percentile to use when
+            calculating dropout probabilities. Default is 50, and the median
             will be calculated. 
         """
         self.samples = samples
@@ -86,6 +86,8 @@ class SingleCellDataset():
         self.dispersion = dispersion
         self.scalar = scalar
         self.percentile = percentile
+        self.method = method
+        self.dropout = dropout
         
     @property
     def samples(self):
@@ -233,6 +235,36 @@ class SingleCellDataset():
             raise ValueError("`percentile` must be a float between 0 and 100.")
         self._percentile = value
 
+    @property
+    def method(self):
+        """
+        Which method to use to calculate gene dropout. Options are 
+        "conditional" and "uniform".
+        """
+        return self._method
+
+    @method.setter
+    def method(self, value):
+        if value not in ['conditional', 'uniform']:
+            raise ValueError("Unsupported method {}.".format(value))
+        self._method = value
+
+    @property
+    def dropout(self):
+        """
+        Average percent of genes to dropout during count simulation. Only used
+        if `method == uniform`.
+        """
+        return self._dropout
+    
+    @dropout.setter
+    def dropout(self, value):
+        if value < 0 or value > 1:
+            raise ValueError("Expected values between zero and 1. "
+                             "Received {}.".format(value))
+        self._dropout = value
+        
+
     def __repr__(self):
         """Return string representation of SingleCellDataset object."""
         header = "Simulated Single-Cell Dataset\n"
@@ -248,7 +280,9 @@ class SingleCellDataset():
                     'p_marker': self.p_marker,
                     'dispersion': self.dispersion,
                     'scalar': self.scalar,
-                    'percentile': self.percentile}
+                    'percentile': self.percentile,
+                    'method': self.method,
+                    'dropout': self.dropout}
         return out_dict
 
     def simulate(self):
@@ -355,7 +389,8 @@ class SingleCellDataset():
         
         X, labels = simulate_counts(self.samples, mus, self.dispersion,
                                     self.populations, self.pop_sizes,
-                                    percentile=self.percentile)
+                                    percentile=self.percentile,
+                                    method=self.method, dropout=self.dropout)
         obs['Population'] = labels
         # rename obs and var rows for clarity
         obs.rename(index={i:'cell-{}'.format(i + 1) for i in obs.index}, inplace=True)
@@ -805,7 +840,7 @@ def dropout_probability(mu, median_avg, beta_0=-1.5):
     return 1 - sigmoid(x)
 
 def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes,
-                    percentile=50):
+                    percentile=50, method='conditional', dropout=0.66):
     r"""
     Simulate counts across genes for a set number of samples.
     
@@ -826,6 +861,14 @@ def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes,
     percentile : float, optional
         Which percentile to use when calculating dropout probabilities. Default
         is 0.5, and the median will be used.
+    method : str, optional
+        How to perform dropout. Default is `conditional` and dropout rates for
+        each gene will be conditioned on its average experession compared to the
+        median average expression. The other option is `uniform` and all genes
+        will share the same chance of dropping out. Default is conditional
+    dropout : float, optional
+        Value between 0 and 1 denoting the average chance of a dropout event for
+        a given gene. Only used if `method=='uniform'`. Default is 0.66
     
     Returns
     -------
@@ -860,7 +903,10 @@ def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes,
 
     # calculate dropout probabilites for each gene in each population
     # a |gene| x |populations| size matrix
-    p_dropout = dropout_probability(means_, percentile_)
+    if method == 'conditional':
+        p_dropout = dropout_probability(means_, percentile_)
+    elif method == 'uniform':
+        p_dropout = np.ones_like(means_) * dropout
     # simulate counts across populations
     for i in range(populations):
         if i == 0:
