@@ -342,7 +342,7 @@ class icat():
             value = default_kws
         self._pca_kws = value
 
-    def cluster(self, controls, perturbed):
+    def cluster(self, controls, perturbed, log_transform=True):
         """
         Cluster cells in control and experimental conditions.
         
@@ -383,6 +383,7 @@ class icat():
         if self.treatment_col not in perturbed.obs.columns:
             raise ValueError("Expected {} column in perturbed data.".format(
                                 self.treatment_col))
+        
         # change numeric indices to strings
         for each in [controls, perturbed]:
             if isinstance(each.obs.index, pd.RangeIndex):
@@ -393,6 +394,10 @@ class icat():
                 print("WARNING: Numeric index used for gene ids. "
                       "Converting to strings.")
                 each.var.index = each.var.index.map(str)
+        if log_transform:
+            sc.pp.log1p(controls)
+            sc.pp.log1p(perturbed)
+
         # scale perturbed data using control data
         scaler = preprocessing.MinMaxScaler()
         scaler.fit(controls.X)
@@ -424,10 +429,11 @@ class icat():
         # combine control and perturbed data
         combined = utils.rbind_adata([controls, perturbed])
         # fit gene weights using control dataset
-        model.fit(fit_X, np.array(controls.obs[self.cluster_col].values),
-                  sample_weight='balanced')
+        # model.fit(fit_X, np.array(controls.obs[self.cluster_col].values),
+        #           sample_weight='balanced')
+        model.fit(fit_X, np.array(controls.obs[self.cluster_col].values))
         # apply learned weights across gene expression matrix
-        combined.X = model.transform(combined.X)
+        combined.X = model.transform(scaler.transform(combined.X))
         # save genes weights
         combined.var['ncfs.weights'] = model.coef_
         # subset to most informative genes
