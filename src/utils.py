@@ -113,24 +113,6 @@ def flatten_dict(d, parent_key='', sep='.'):
     return dict(items)
 
 
-def rbind_adata(adata_lists):
-    df_cols = [adata_lists[0].var.columns] + [None]*(len(adata_lists) - 1)
-    for i, adata in enumerate(adata_lists[1:]):
-        df_cols[i + 1] = adata.var.columns.difference(df_cols[i])
-    combined = sc.AnnData(X=np.vstack([each.X for each in adata_lists]),
-                          obs=pd.concat([each.obs for each in adata_lists],
-                                        axis=0,
-                                        sort=False),
-                          var=pd.concat([each.var[col] for each, col\
-                                        in zip(adata_lists, df_cols)], axis=1))
-    if not combined.obs.index.is_unique:
-        print("WARNING: Datasets contain overlapping" 
-              " cell ids. Index will be reset.")
-        combined.obs.index = ['cell-{}'.format(i + 1)\
-                              for i in range(combined.shape[0])]
-    return combined
-
-
 def performance(adata, true_col, pred_col):
     """Measure the performance of a clustering partition."""
     if isinstance(adata, sc.AnnData):
