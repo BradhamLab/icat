@@ -2,6 +2,7 @@ import collections
 import inspect
 import os
 import re
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -10,6 +11,8 @@ import seaborn as sns
 from cycler import cycler
 from matplotlib import pyplot as plt
 from sklearn import metrics
+import igraph as ig
+
 
 # try:
 #     import colorcet as cc
@@ -151,6 +154,89 @@ def performance(adata, true_col, pred_col):
                 'fowlkes.mallows': fm}
     return measures
 
+def igraph_from_adjacency(adjacency, directed=None):
+    """
+    Get igraph graph from adjacency matrix.
+    
+    Parameters
+    ----------
+
+    adjacency : numpy.ndarray, scipy.sparse.csr
+        Adjacency matrix where non-zero entries represent connections between 
+        samples.
+    directed: boolean, optional
+
+    Returns
+    -------
+    igraph.graph
+        Nearest neighbor graph generated from adjacency matrix.
+
+    References
+    ----------
+    Taken from: https://github.com/theislab/scanpy/blob/28498953092dc7cbecd0bd67380b1b060367d639/scanpy/_utils.py#L170
+    """
+    import igraph as ig
+    sources, targets = adjacency.nonzero()
+    weights = adjacency[sources, targets]
+    if isinstance(weights, np.matrix):
+        weights = weights.A1
+    g = ig.Graph(directed=directed)
+    g.add_vertices(adjacency.shape[0])  # this adds adjacency.shape[0] vertices
+    g.add_edges(list(zip(sources, targets)))
+    try:
+        g.es['weight'] = weights
+    except:
+        pass
+    if g.vcount() != adjacency.shape[0]:
+        warnings.warn(
+            f'The constructed graph has only {g.vcount()} nodes. '
+            'Your adjacency matrix contained redundant nodes.'
+        )
+    return g
+
+def is_none(x):
+    """Check whether a value is a null value."""
+    if isinstance(x, float):
+        return np.isnan(x)
+    return x is None
+
+def format_labels(clusters):
+    """
+    Format cluster labels for sslouvain.
+
+    Parameters
+    ----------
+    clusters : iterable
+        List of cluster labels where None or np.nan represent previously
+        unlabeled samples.
+    
+    Returns
+    -------
+    (list, list):
+        labels : list
+            List of labels where previously unlabeled samples are given 
+            their own labels
+        mutables : list
+            List of samples indicating which samples were previously labelled.
+    """
+    if isinstance(clusters, pd.Series):
+        clusters = clusters.values
+    elif isinstance(clusters, list):
+        clusters = np.array(clusters)
+    elif not isinstance(clusters, np.ndarray):
+        warnings.warn(f"Unsupport type {type(clusters)} for `clusters`")
+    clusters = clusters.astype(float)
+    mutables = [True] * len(clusters)
+    labels = [None] * len(clusters)
+    start_label = int(np.nanmax(clusters) + 1)
+    for i, x in enumerate(clusters):
+        if is_none(x):
+            labels[i] = start_label
+            start_label += 1
+        else:
+            labels[i] = int(x)
+            mutables[i] = False
+    return (labels, mutables)
 
 def plot_umap(adata, color, shape, ax=None):
     if ax is None:
