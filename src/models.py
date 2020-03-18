@@ -1,4 +1,5 @@
 import inspect
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -10,8 +11,8 @@ from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis as QDA
 from scipy import stats
 
 from ncfs_expanded import NCFS
-from scanpy import api as sc
-from sslouvain import ssLouvain
+import scanpy as sc
+import sslouvain 
 import pomegranate as pmg
 
 from icat.src import utils
@@ -164,7 +165,7 @@ class SEG():
         return np.sqrt(w * (np.mean(X) - mu_min) / (mu_max - mu_min))
 
     def fit(self, datasets, ds_col):
-        combined = utils.rbind_adata(datasets)
+        combined = datasets[0].concatenate(*datasets[1:])
         idxs = [np.where(combined.obs[ds_col] == x)[0]\
                 for x in combined.obs[ds_col].unique()]
         X = combined.X
@@ -322,7 +323,7 @@ class icat():
     
     @sslouvain_kws.setter
     def sslouvain_kws(self, value):
-        default_kws = utils.get_default_kwargs(ssLouvain.ssLouvain, 'self')
+        default_kws = utils.get_default_kwargs(sslouvain.find_partition, '')
         if value is not None:
             value = utils.check_kws(default_kws, value, 'sslouvain_kws')
         else:
@@ -342,7 +343,7 @@ class icat():
             value = default_kws
         self._pca_kws = value
 
-    def cluster(self, controls, perturbed, log_transform=True):
+    def cluster(self, controls, perturbed, log_transform=False):
         """
         Cluster cells in control and experimental conditions.
         
@@ -361,7 +362,7 @@ class icat():
         if not isinstance(controls, sc.AnnData):
             raise ValueError("Expected AnnData object for `controls`.")
         if self.treatment_col not in controls.obs.columns:
-            controls.obs[self.treatment_col] = 'Controls'
+            controls.obs[self.treatment_col] = 'Control'
         if not isinstance(perturbed, sc.AnnData):
             if isinstance(perturbed, list):
                 if not all([isinstance(x, sc.AnnData) for x in perturbed]):
@@ -371,7 +372,7 @@ class icat():
                 for x in perturbed]):
                     raise ValueError("Gene columns do not match between control"
                                      " and perturbed cells.")
-                perturbed = utils.rbind_adata(perturbed)
+                perturbed = perturbed[0].concatenate(*perturbed[1:])
             else:
                 raise ValueError("Unexpected input type for `perturbed`: "
                                  "{}. Expected list of sc.AnnData objects or "
@@ -397,16 +398,11 @@ class icat():
         if log_transform:
             sc.pp.log1p(controls)
             sc.pp.log1p(perturbed)
-
-        # scale perturbed data using control data
-        scaler = preprocessing.MinMaxScaler()
-        scaler.fit(controls.X)
-        # 
-        sc.pp.pca(controls, **self.pca_kws)
-        sc.pp.neighbors(controls, **self.neighbor_kws)
-        sc.tl.umap(controls, min_dist=0.0)
-        # no previous clustering provided, cluster ya self
+        # no previous clustering provided, cluster using louvain or leiden
         if self.cluster_col is None:
+            sc.pp.pca(controls, **self.pca_kws)
+            sc.pp.neighbors(controls, **self.neighbor_kws)
+            sc.tl.umap(controls, min_dist=0.0)
             if self.clustering == 'louvain':
                 sc.tl.louvain(controls, **self.cluster_kws)
                 self.cluster_col = 'louvain'
@@ -415,51 +411,57 @@ class icat():
                 self.cluster_col = 'leiden'
         else:
             if self.cluster_col not in controls.obs.columns:
-                raise ValueError("`cluster_col` - {} not found in control data."\
-                                 .format(self.cluster_col))
+                raise ValueError(f"`cluster_col` - {self.cluster_col} not found"
+                                  " in control data.")
             if np.any([pd.isnull(x) for x in controls.obs[self.cluster_col]]):
                 raise ValueError("Expected labelled cells by passing "\
                                  "`cluster_col`={}. ".format(self.cluster_col) +
                                  "Received atleast one unannotated cell.")
+        # combine control and perturbed data
+        combined = controls.concatenate(perturbed, join='outer')
+        # fit scale function to scale features between 0 and 1
+        scaler = preprocessing.MinMaxScaler()
+        scaler.fit(controls.X)
         # instantiate ncfs model
         model = NCFS.NCFS(**self.ncfs_kws)
-
-        # scale genes between 0 and 1 -- TODO: change to option 
         fit_X = scaler.transform(controls.X).astype(np.float64)
-        # combine control and perturbed data
-        combined = utils.rbind_adata([controls, perturbed])
+        
         # fit gene weights using control dataset
-        # model.fit(fit_X, np.array(controls.obs[self.cluster_col].values),
-        #           sample_weight='balanced')
-        model.fit(fit_X, np.array(controls.obs[self.cluster_col].values))
-        # apply learned weights across gene expression matrix
+        model.fit(fit_X, np.array(controls.obs[self.cluster_col].values),
+                  sample_weights='balanced')
+        # scale combined matrix between 0 and 1 and apply learned weights
+        # across gene expression matrix
         combined.X = model.transform(scaler.transform(combined.X))
         # save genes weights
         combined.var['ncfs.weights'] = model.coef_
-        # subset to most informative genes
-        selected = combined.var.index.values[
-                       np.where(model.coef_ > self.weight_threshold)[0]]
-        if len(selected) <= 1:
-            print('WARNING: One or none feature weights met threshold criteria.'
-                  ' All genes will be used. Try lowering threshold value for'
-                  ' future runs.')
-            selected = combined.var.index.values
-        combined = combined[:, selected].copy() # copy to be safe
-        # create neighbor graph for control+perturbed combined data -- perform
-        # pca if more than n_components remain in selected data
-        if self.pca_kws['n_comps'] < combined.shape[1]:
-            sc.pp.pca(combined, **self.pca_kws)
+        combined.var['informative'] = combined.var['ncfs.weights'].apply(lambda x: x > self.weight_threshold)
+        n_clusters = len(controls.obs[self.cluster_col].unique())
+        informative = combined.var['informative'].sum()
+        if sum(model.coef_ > self.weight_threshold) < n_clusters:
+            warnings.warn("Number of marker genes of informative genes less "
+                          "than the number of identified control clusters: "
+                          f"informative genes - {informative}, "
+                          f"number of clusters - {n_clusters}. Consider "
+                          "increasing `sigma` or decreasing `reg` for better "
+                          "performance.")
+        # create neighbor graph for control+perturbed combined data
+        self.neighbor_kws['use_rep'] = 'X'
         sc.pp.neighbors(combined, **self.neighbor_kws)
         sc.tl.umap(combined, min_dist=0.0)
         # grab connectivities of cells
-        A_ = combined.uns['neighbors']['connectivities']
+        g = utils.igraph_from_adjacency(combined.uns['neighbors']['connectivities'])
         # instantiate semi-supervised Louvain model
-        ss_model = ssLouvain.ssLouvain(**self.sslouvain_kws)
-        y_ = combined.obs[self.cluster_col]
-        # cluster cells
-        ss_model.fit(A_, y_)
+        try:
+            resolution = self.sslouvain_kws['resolution_parameter']
+        except KeyError:
+            resolution = 1.0
+        y_, mutables = utils.format_labels(combined.obs[self.cluster_col])
+        partition = sslouvain.find_partition(g, sslouvain.CPMVertexPartition,
+                                             initial_membership=y_,
+                                             mutable_nodes=mutables,
+                                             resolution_parameter=resolution)
         # store new cluster labels in cell metadata
-        combined.obs['sslouvain'] = ss_model.labels_
+        combined.obs['sslouvain'] = partition.membership
         return combined
 
 
