@@ -383,15 +383,19 @@ class SingleCellDataset():
             # share marker genes
             possible_markers = np.array(list(
                                     set(possible_markers).difference(markers)))
-        # log population averages
+        
+        X, dropout, labels = simulate_counts(self.samples, mus, self.dispersion,
+                                             self.populations, self.pop_sizes,
+                                             percentile=self.percentile,
+                                             method=self.method,
+                                             dropout=self.dropout)
+        # log population averages and dropout probabilities
         for i in range(self.populations):
             var['Pop.{}.Mu'.format(i + 1)] = mus[:, i]
-        
-        X, labels = simulate_counts(self.samples, mus, self.dispersion,
-                                    self.populations, self.pop_sizes,
-                                    percentile=self.percentile,
-                                    method=self.method, dropout=self.dropout)
+            var['Pop.{}.Dropout'.format(i + 1)] = dropout[:, i]
+
         obs['Population'] = labels
+        obs['Treatment'] = 'Control'
         # rename obs and var rows for clarity
         obs.rename(index={i:'cell-{}'.format(i + 1) for i in obs.index}, inplace=True)
         var.rename(index={i:'gene-{}'.format(i + 1) for i in var.index}, inplace=True)
@@ -426,7 +430,8 @@ def population_markers(adata):
 # TODO: add option to simulate untargetted populations/ add treatment
 # specific populations
 def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
-            percent_perturb=None, pop_sizes=None, percentile=50):
+            percent_perturb=None, pop_sizes=None, percentile=50,
+            perturbation_key=None):
     r"""
     Perturb a simulated single-cell dataset.
 
@@ -556,19 +561,21 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
     obs_ = pd.DataFrame(populations, columns=['Population'],
                         index=["cell-{}".format(i + 1) for i in\
                                range(len(populations))])
-    pop_columns = ['Pop.{}.Mu'.format(x) for x in pop_targets]
-    # calculate control median of averages to ensure equal dropout rates between
-    # datasets.
-    # control_median_ = np.median(adata.var[pop_columns].values\
-    #                 * np.ones((adata.shape[1], len(pop_targets)))\
-    #                 * disp_)
-    # calculate average expression values for each gene in eac population
+    pop_columns = [f'Pop.{x}.Mu' for x in pop_targets]
+    pop_dropout = [f'Pop.{x}.Dropout' for x in pop_targets]
+    # # calculate average expression values for each gene in each population
     # in perturbed dataset
     mus = adata.var[pop_columns].values \
         * np.ones((adata.shape[1], len(pop_columns))) \
         * var_['Perturbation.Shift'].values.reshape(-1, 1)
-    X_, __ = simulate_counts(samples, mus, disp_, len(pop_targets), pop_sizes,
-                             percentile=percentile)
+    X_, *__ = simulate_counts(samples, mus, disp_,
+                              len(pop_targets), pop_sizes,
+                              percentile=percentile,
+                              dropout=var_[pop_dropout].values)
+    if perturbation_key is not None:
+        obs_['Treatment'] = 'Perturbed'
+    else:
+        obs_['Treatment'] = perturbation_key
     return sc.AnnData(X=X_, obs=obs_, var=var_)
 
 
@@ -678,9 +685,9 @@ class Experiment(object):
         pop_markers[new_markers] = True
         gamma = stats.gamma(a=2, scale=2)
         mus[new_markers] *= gamma.rvs(len(new_markers))
-        counts, __ = simulate_counts(n_cells, mus,
-                                     adata.var['Base.Dispersion'].values,
-                                     1, [n_cells])
+        counts, *__ = simulate_counts(n_cells, mus,
+                                      adata.var['Base.Dispersion'].values,
+                                      1, [n_cells])
         if pop_id is None:
             c_pops = adata.obs['Population'].unique()
             try:
@@ -694,7 +701,7 @@ class Experiment(object):
                                 'Pop.{}.Marker'.format(pop_id): pop_markers})
         pop_obs = pd.DataFrame({'Population': np.array([pop_id]*n_cells)})
         new_adata = sc.AnnData(X=counts, obs=pop_obs, var=pop_var)
-        return utils.rbind_adata([adata, new_adata])
+        return adata.concatenate(new_adata, join='outer')
         
     def run(self, simulations=1, replications=1, controls=None,
             pop_targets=None):
@@ -860,7 +867,7 @@ def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes,
         list of samples per population.
     percentile : float, optional
         Which percentile to use when calculating dropout probabilities. Default
-        is 0.5, and the median will be used.
+        is 50, and the median will be used.
     method : str, optional
         How to perform dropout. Default is `conditional` and dropout rates for
         each gene will be conditioned on its average experession compared to the
@@ -899,12 +906,21 @@ def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes,
     means_ = mus \
            * np.ones((dispersion.shape[0], populations))\
            * dispersion
-    percentile_ = np.percentile(means_, percentile)
 
     # calculate dropout probabilites for each gene in each population
     # a |gene| x |populations| size matrix
     if method == 'conditional':
-        p_dropout = dropout_probability(means_, percentile_)
+        if isinstance(dropout, np.ndarray):
+            if not dropout.shape[0] != means_.shape[0]\
+            and dropout.shape[1] != means_.shape[1]:
+                raise ValueError("When passing a numpy array for `dropout`, "
+                                 "assume a (|gene| x |population|) size array. "
+                               f"expected {means_.shape}, got {dropout.shape}.")
+            else:
+                p_dropout = dropout
+        else:
+            percentile_ = np.percentile(means_, percentile)
+            p_dropout = dropout_probability(means_, percentile_)
     elif method == 'uniform':
         p_dropout = np.ones_like(means_) * dropout
     # simulate counts across populations
@@ -922,4 +938,4 @@ def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes,
             # moves dropped counts to 0. 
             dropped = stats.bernoulli(p=1 - p_dropout[j, i]).rvs(pop_sizes[i])
             X_[start:start + pop_sizes[i], j] = dist.rvs(pop_sizes[i]) * dropped
-    return X_, labels_
+    return X_, p_dropout, labels_
