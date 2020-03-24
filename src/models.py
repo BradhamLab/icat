@@ -1,213 +1,83 @@
+"""
+Module to identify cell-types across treatments.
+
+@author: Dakota Y. Hawkins
+@contact: dyh0110@bu.edu
+
+Example:
+
+.. code-block::python
+    from icat import simulate
+    data_model = simulate.SingleCellDataset()
+    controls = data_model.simulate()
+    controls.obs['treatment'] = 'control'
+    perturbed = simulate.perturb(controls)
+    perturbed.obs['treatment'] = 'perturbed'
+    model = icat(ncfs_kws={'reg': 0.5, 'sigma': 3},
+                 weight_threshold=1,
+                 neighbor_kws={'n_neighbors': 100},
+                 sslouvain_kws={'resolution_parameter': 1})
+    out = model.cluster(controls, perturbed)
+    print(out.obs['sslouvain'])
+"""
+
 import inspect
 import warnings
 
 import numpy as np
 import pandas as pd
-from sklearn import preprocessing, neighbors
-from sklearn.exceptions import NotFittedError
-from sklearn.decomposition import PCA
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
-from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis as QDA
-from scipy import stats
-
-from ncfs_expanded import NCFS
 import scanpy as sc
-import sslouvain 
-import pomegranate as pmg
+import sslouvain
+from sklearn import preprocessing
 
 from icat.src import utils
-
-class SignalNoiseModel(object):
-    def __init__(self):
-        """
-        Model technical noise in a single-cell expression profile.
-        
-        Attributes
-        ----------
-        gmm_ : pomegranate.GeneralMixtureModel 
-            Mixture of a Poisson and Normal Distribution to de-convolve noise
-            and signal.
-        range_ : list
-            Two element list with range of possible values. Minimum is always
-            zero, and max is set to the maximum observed value + spread.
-        weights_ : dict
-            Mixing proportions beteen technical noise and actual signal. Keyed
-            by 'noise' and 'signal', respectively.
-
-        Methods
-        -------
-        pdf : Calculate the probability of values within an array.
-        cdf : Calculate cumulative density probabilities of values in an array.
-        threshold: Find the first value such that P(Noise) < P(Signal)
-        """
-        self.gmm_ = None
-        self.range_ = None
-        self.weights_ = None
-
-    def fit(self, X):
-        """
-        Fit data to a mixture model to distinguish signal from technical noise.
-
-        Fit data to a mixture model where technical noise of scRNAseq profiles
-        is modelled using a Poisson distribution, and true expression is
-        modelled as a Gaussian Distribution. 
-        
-        Parameters
-        ----------
-        X : numpy.array
-            Single-cell expression profile across cells. Values are assumed to
-            be log-transformed.
-        
-        Returns
-        -------
-        None
-        """
-        #  use count data for mixtures
-        counts, bins = np.histogram(X, bins=30)
-
-        # estimate center as maximum non-zero count
-        mode_idx = np.where(counts == np.max(counts[1:]))[0][0]
-        # estimate 2SD as center - end value --> find values in normal dist.
-        normal_spread = bins[-1] - bins[mode_idx]
-
-        # find minimum value heuristically expected to be in signal
-        noise_indices = np.where(bins < bins[mode_idx] - normal_spread)[0]
-        if len(noise_indices) > 0:
-            normal_min = bins[noise_indices[-1]]
-        else:
-            # no values below expected threshold, set to first non-zero value
-            normal_min = bins[1]
-
-        # estimate Normal distribution from likely normal samples
-        signal = pmg.NormalDistribution.from_samples(X[X >= normal_min])
-        # estimate Poisson from likely non-normal samples
-        pois_samples = X[X < normal_min]
-        percent_zeros = sum(X == 0) / len(X) 
-        pois_lambda = percent_zeros
-        if len(pois_samples) != 0:
-            pois_lambda = max(np.mean(pois_samples), percent_zeros)
-        noise = pmg.PoissonDistribution(pois_lambda)
-        # instantiate and fit mixture to data
-        gmm = pmg.GeneralMixtureModel([noise, signal])
-        gmm.fit(X)
-        self.gmm_ = gmm
-        self.range_ = [0, np.max(X) + normal_spread]
-        # exponentiate log weights, will likely change depending on
-        # pomegrante 
-        self.weights_ = {'noise': np.exp(gmm.weights[0]),
-                         'signal': np.exp(gmm.weights[1])}
-        self.params_ = {'noise': {'lambda': gmm.distributions[0].parameters[0]},
-                        'signal': {'mean': gmm.distributions[1].parameters[0],
-                                   'var': gmm.distributions[1].parameters[1]}}
-
-    def __check_fit(self):
-        if self.gmm_ is None:
-            raise NotFittedError("This SignalNoiseModel is not fitted.")
-
-    def pdf(self, X):
-        """
-        Calculate probability density function of the fit mixture model.
-        
-        Parameters
-        ----------
-        X : np.array
-            Linespace defining the domain of the mixture model.
-        
-        Returns
-        -------
-        np.array
-            Array of probabilities along the domain.
-        """
-        self.__check_fit()
-        return self.gmm_.probability(X)
-
-    def cdf(self, X):
-        """
-        Calculate cumulative density function of the fit mixture model.
-        
-        Parameters
-        ----------
-        X : np.array
-            Linespace defining the domain of the mixture model.
-        
-        Returns
-        -------
-        np.array
-            Array of cumulative densities for each provided value.
-        """
-        self.__check_fit()
-        values = np.zeros_like(X)
-        for i, x in enumerate(X):
-            space = np.arange(0, x + 0.01, 0.01)
-            values[i] = np.sum(self.pdf(space)*0.01)
-        return values
-
-    def threshold(self):
-        self.__check_fit()
-        space = np.arange(self.range_[0], self.range_[1], 0.01).reshape(-1, 1)
-        p_x = self.gmm_.predict_proba(space)
-        idx = 0
-        while idx < p_x.shape[0] - 1 and p_x[idx][0] > p_x[idx][1]:
-            idx += 1
-        return space[idx][0]
-
-class SEG():
-    def __init__(self):
-        """Class to find stabley expressed genes between datasets."""
-        self.index_ = None
-
-    def __check_fit(self):
-        if self.index_ is None:
-            raise NotFittedError("This SEG is not fitted.")
-
-    def __corrected_w(self, X, mu_min, mu_max):
-        w = sum(X==0) / X.shape[0]
-        return np.sqrt(w * (np.mean(X) - mu_min) / (mu_max - mu_min))
-
-    def fit(self, datasets, ds_col):
-        combined = datasets[0].concatenate(*datasets[1:])
-        idxs = [np.where(combined.obs[ds_col] == x)[0]\
-                for x in combined.obs[ds_col].unique()]
-        X = combined.X
-        mus = np.mean(X, axis=0)
-        mu_min = np.min(mus)
-        mu_max = np.max(mus)
-        metric_array = np.zeros((X.shape[1], 4))
-        for i in range(X.shape[1]):
-            gene_X = X[:, i]
-            mixture = SignalNoiseModel()
-            mixture.fit(np.log2(gene_X + 1))
-            # high percentage of noise mixing -> unstable
-            mixing = mixture.weights_['noise']
-            # high variance in signal -> unstable
-            signal_var = mixture.params_['signal']['var']
-            # high proportion of zeros -> unstable 
-            w = self.__corrected_w(gene_X, mu_min, mu_max)
-            # high H -> unstable
-            H = stats.kruskal(*[gene_X[idx] for idx in idxs]).statistic
-            metric_array[i, :] = np.array([mixing, signal_var, w, H])
-        # get ranks for each gene
-        sorted_ = np.argsort(metric_array, axis=0)
-        ranks = np.empty_like(sorted_)
-        for i in range(metric_array.shape[1]):
-            ranks[sorted_[:, i], i] = np.arange(metric_array.shape[0])
-        ranks = ranks / (ranks.shape[0] - 1)
-        self.index_ = np.mean(ranks, axis=1)
-
-    def get_stable(self, n_genes=100):
-        self.__check_fit()
-        # want lowest
-        return np.argsort(self.index_)[:n_genes]
+from ncfs_expanded import NCFS
 
 
 class icat():
     """
-    Model to Identify Clusters Across Treatments. 
+    Model to identify clusters across treatments.
+
+    Parameters
+    ----------
+    clustering : str, optional
+        Method to use for initial clustering of control cells, by default
+        'louvain'. Options are 'louvain' or 'leiden'.
+    treatment_col : str, optional
+        Column name in oberservation data annotating treatment type between
+        datasets, by default 'treatment'.
+    ncfs_kws : dict, optional
+        Keyword arguments to pass to `ncfs.NCFS` model, by default None and
+        default parameters are used. See `ncfs.NCFS` for more information.
+    cluster_kws : dict, optional
+        Keyword arguments to pass to clustering method, by default None and 
+        default parameters are used. See `scanpy.tl.louvain` or
+        `scanpy.tl.leiden` for more information.
+    cluster_col : str, optional
+        Optional column in observation data denoting pre-identified clusters.
+        By default None, and clustering will be performed following
+        `clustering` and `cluster_kws`. 
+    weight_threshold : float, optional
+        Heuristic to determine number of informative genes returned by NCFS.
+        Does not affect performance, but does help inform reasonable NCFS 
+        hyperparamters. Default is 1. 
+    neighbor_kws : dict, optional
+        Keyword arguments for identifying neighbors. By default None, and 
+        default parameters are used. See `scanpy.pp.neighbors` for more
+        information.
+    sslouvain_kws : dict, optional
+        Keyword arguments for `sslouvain`. By default None, and default
+        parameters will be used. See `sslouvain.find_partition` for more
+        information.
+    pca_kws : dict, optional
+        Keyword arguments for performing principle component analysis. B default
+        None, and default parameters will be used. See `sslouvain.tl.pca` for
+        more information.
     """
 
     def __init__(self, clustering='louvain', treatment_col='treatment',
                  ncfs_kws=None, cluster_kws=None, cluster_col=None,
-                 weight_threshold=None, neighbor_kws=None,
+                 weight_threshold=1.0, neighbor_kws=None,
                  sslouvain_kws=None, pca_kws=None):
         self.clustering = clustering
         self.treatment_col = treatment_col
@@ -235,6 +105,9 @@ class icat():
 
     @property
     def treatment_col(self):
+        """
+        Column in control and perturbed datasets annotated treatment.
+        """
         return self._treatment_col
 
     @treatment_col.setter
@@ -243,6 +116,9 @@ class icat():
 
     @property
     def ncfs_kws(self):
+        """
+        Keyword arguments to pass to NCFS. See NCFS documentation for me information.
+        """
         return self._ncfs_kws
     
     @ncfs_kws.setter
@@ -256,12 +132,11 @@ class icat():
     
     @property
     def weight_threshold(self):
+        """ Weight threshold for genes to be considered informative."""
         return self._weight_threshold
     
     @weight_threshold.setter
     def weight_threshold(self, value):
-        if value is None:
-            value = 0
         elif not isinstance(value, (float, int, np.float, np.integer)):
             raise ValueError("Expected numerical value for `weight_threshold`."
                              "Received: {}".format(value))
@@ -269,6 +144,7 @@ class icat():
 
     @property
     def neighbor_kws(self):
+        """Keyword arguments for neighbor determination."""
         return self._neighbor_kws
 
     @neighbor_kws.setter
@@ -283,6 +159,7 @@ class icat():
         
     @property
     def cluster_kws(self):
+        """Keyword arguments to pass to clustering algorithm."""
         return self._cluster_kws
     
     @cluster_kws.setter
@@ -308,6 +185,7 @@ class icat():
 
     @property
     def cluster_col(self):
+        """Optional column identifying pre-computed clusters."""
         return self._cluster_col
     
     @cluster_col.setter
@@ -319,6 +197,7 @@ class icat():
 
     @property
     def sslouvain_kws(self):
+        """Keyword arguments for sslouvain."""
         return self._sslouvain_kws
     
     @sslouvain_kws.setter
@@ -332,6 +211,7 @@ class icat():
 
     @property
     def pca_kws(self):
+        """Keyword arguments for PCA."""
         return self._pca_kws
 
     @pca_kws.setter
@@ -343,7 +223,7 @@ class icat():
             value = default_kws
         self._pca_kws = value
 
-    def cluster(self, controls, perturbed, log_transform=False):
+    def cluster(self, controls, perturbed):
         """
         Cluster cells in control and experimental conditions.
         
@@ -395,12 +275,10 @@ class icat():
                 print("WARNING: Numeric index used for gene ids. "
                       "Converting to strings.")
                 each.var.index = each.var.index.map(str)
-        if log_transform:
-            sc.pp.log1p(controls)
-            sc.pp.log1p(perturbed)
         # no previous clustering provided, cluster using louvain or leiden
         if self.cluster_col is None:
-            sc.pp.pca(controls, **self.pca_kws)
+            if self.neighbor_kws['use_rep'] != 'X':
+                sc.pp.pca(controls, **self.pca_kws)
             sc.pp.neighbors(controls, **self.neighbor_kws)
             sc.tl.umap(controls, min_dist=0.0)
             if self.clustering == 'louvain':
@@ -438,10 +316,10 @@ class icat():
         n_clusters = len(controls.obs[self.cluster_col].unique())
         informative = combined.var['informative'].sum()
         if sum(model.coef_ > self.weight_threshold) < n_clusters:
-            warnings.warn("Number of marker genes of informative genes less "
+            warnings.warn("Number of informative genes less "
                           "than the number of identified control clusters: "
-                          f"informative genes - {informative}, "
-                          f"number of clusters - {n_clusters}. Consider "
+                          f"informative genes: {informative}, "
+                          f"number of clusters:  {n_clusters}. Consider "
                           "increasing `sigma` or decreasing `reg` for better "
                           "performance.")
         # create neighbor graph for control+perturbed combined data
@@ -456,25 +334,12 @@ class icat():
         except KeyError:
             resolution = 1.0
         y_, mutables = utils.format_labels(combined.obs[self.cluster_col])
-        partition = sslouvain.find_partition(g, sslouvain.CPMVertexPartition,
-                                             initial_membership=y_,
-                                             mutable_nodes=mutables,
-                                             resolution_parameter=resolution)
+        part = sslouvain.find_partition(g,
+                                        sslouvain.RBConfigurationVertexPartition,
+                                        initial_membership=y_,
+                                        mutable_nodes=mutables,
+                                        resolution_parameter=resolution)
         # store new cluster labels in cell metadata
-        combined.obs['sslouvain'] = partition.membership
+        combined.obs['sslouvain'] = part.membership
         return combined
 
-
-if __name__ == '__main__':
-    import sys
-    sys.path.append('src/')
-    import simulate
-    data_model = simulate.SingleCellDataset()
-    controls = data_model.simulate()
-    perturbed = simulate.perturb(controls)
-    perturbed.obs['treatment'] = 'ayo'
-    model = icat(ncfs_kws={'reg': 3, 'sigma': 2},
-                 weight_threshold=0,
-                 neighbor_kws={'n_neighbors': 100},
-                 sslouvain_kws={'immutable': True, 'precluster': False})
-    out = model.cluster(controls, perturbed)
