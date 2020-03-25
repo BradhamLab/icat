@@ -30,7 +30,7 @@ import scanpy as sc
 import sslouvain
 from sklearn import preprocessing
 
-from icat.src import utils
+from . import utils
 from ncfs_expanded import NCFS
 
 
@@ -137,7 +137,7 @@ class icat():
     
     @weight_threshold.setter
     def weight_threshold(self, value):
-        elif not isinstance(value, (float, int, np.float, np.integer)):
+        if not isinstance(value, (float, int, np.float, np.integer)):
             raise ValueError("Expected numerical value for `weight_threshold`."
                              "Received: {}".format(value))
         self._weight_threshold = value

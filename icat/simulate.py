@@ -8,10 +8,10 @@ import re
 
 import numpy as np
 import pandas as pd
+import scanpy as sc
 from scipy import stats
 
-from icat.src import utils
-from scanpy import api as sc
+from . import utils
 
 
 class SingleCellDataset():
@@ -401,6 +401,199 @@ class SingleCellDataset():
         var.rename(index={i:'gene-{}'.format(i + 1) for i in var.index}, inplace=True)
         return sc.AnnData(X=X, obs=obs, var=var)
 
+
+
+
+class Experiment(object):
+    """Class to simulate scRNA experiments with perturbations."""
+
+    def __init__(self, control_kwargs=None, perturb_kwargs=None):
+        """
+        Simulate a scRNAseq experiment with perturbations. 
+        
+        Parameters
+        ----------
+        control_kwargs : dict, optional
+            Dictionary of keyword arguments that specify simulation parameters.
+            See `SingleCellDataSet` for more infomration. By default None, and
+            default parameters for SingleCellDataSet will be used. 
+        perturb_kwargs : dict, optional
+            [description], by default None
+        """
+
+        self.control_kwargs = control_kwargs
+        self.perturb_kwargs = perturb_kwargs
+
+    @property
+    def control_kwargs(self):
+        """Get control_kwargs attribute."""
+        return self._control_kwargs
+
+    @control_kwargs.setter
+    def control_kwargs(self, value):
+        """Set control_kwargs attribute."""
+        default_kws = utils.get_default_kwargs(SingleCellDataset, ['self'])
+        if value is not None:
+            value = utils.check_kws(default_kws, value, 'control_kwargs')
+        else:
+            value = default_kws
+        self._pca_kws = value
+        self._control_kwargs = value
+
+    @property
+    def perturb_kwargs(self):
+        """Get perturb_kwargs attribute."""
+        return self._perturb_kwargs
+
+    @perturb_kwargs.setter
+    def perturb_kwargs(self, value):
+        """Set perturb_kwargs attribute."""
+        default_kws = utils.get_default_kwargs(perturb, ['adata'])
+        if value is not None:
+            value = utils.check_kws(default_kws, value, 'perturb_kwargs')
+        else:
+            value = default_kws
+        self._pca_kws = value
+        if 'percentile' not in value and 'percentile' in self.control_kwargs:
+            value['percentile'] = self.control_kwargs['percentile']
+        self._perturb_kwargs = value
+
+    def simulate_controls(self):
+        adata = SingleCellDataset(**self.control_kwargs).simulate()
+        return adata
+
+    def new_population(self, adata, n_cells, perturbed=False, pop_id=None):
+        """
+        Add a new population to a previously simulated single-cell dataset.
+        
+        Parameters
+        ----------
+        adata : sc.AnnData
+            Previously simulated single-cell dataset.
+        n_cells : int
+            Number of cells to simulate.
+        perturbed : bool, optional
+            Whether the previously simulated dataset is a perturbed dataset.
+            Default is False.
+        pop_id : int, optional
+            Id to denote new population. Default is None, and the id will be
+            incremented from the previously simulated.
+        
+        Returns
+        -------
+        sc.AnnData
+            Previously simulated single-cell dataset with new population
+            appended.
+        
+        Raises
+        ------
+        ValueError
+            Raised is provided `pop_id` is non-unique.
+        """
+        mus = adata.var['Base.Mu'].values
+        if perturbed:
+            mus *= adata.var['Perturbation.Shift'].values
+        previous_markers = np.hstack([x for x in\
+                                      population_markers(adata).values()])
+        # don't set markers to perturbed genes, goal is to simulate an
+        # unperturbed cell identity
+        if perturbed:
+            p_genes = adata.var.index[adata.var['Perturbation.Shift'] != 1]\
+                           .values
+            previous_markers = np.hstack([previous_markers, p_genes])
+        n_markers = np.random.binomial(adata.shape[1],
+                                       self.control_kwargs['p_marker'])
+        new_markers = np.random.choice(list(set(range(adata.shape[1]))
+                                            - set(previous_markers)),
+                                       n_markers)
+        pop_markers = np.array([False]*adata.shape[1])
+        pop_markers[new_markers] = True
+        gamma = stats.gamma(a=2, scale=2)
+        mus[new_markers] *= gamma.rvs(len(new_markers))
+        counts, *__ = simulate_counts(n_cells, mus,
+                                      adata.var['Base.Dispersion'].values,
+                                      1, [n_cells])
+        if pop_id is None:
+            c_pops = adata.obs['Population'].unique()
+            try:
+                pop_id = c_pops.max() + 1
+            except TypeError:
+                pop_id = len(c_pops) + 1
+        else:
+            if pop_id in adata.obs['Population']:
+                raise ValueError("Non-unique population id: {}".format(pop_id))
+        pop_var = pd.DataFrame({'Pop.{}.Mu'.format(pop_id): mus,
+                                'Pop.{}.Marker'.format(pop_id): pop_markers})
+        pop_obs = pd.DataFrame({'Population': np.array([pop_id]*n_cells)})
+        new_adata = sc.AnnData(X=counts, obs=pop_obs, var=pop_var)
+        return adata.concatenate(new_adata, join='outer')
+        
+    def run(self, simulations=1, replications=1, controls=None,
+            pop_targets=None):
+        """
+        Simulate control and perturbed datasets under experimental conditions.
+
+        Parameters
+        ----------
+        simulations : int, optional
+            Number of control datasets to simulate. Default is 1, and a single
+            reference control dataset will be simulated.
+        replications : int, optional
+            Number of perturbations to simulate for each control dataset.
+            Default is 1, and a single perturbation will be simulated for each
+            reference control dataset.
+        controls : sc.AnnData, optional
+            A dataset of simulated control cells to perturb. Default is None,
+            and a control dataset will be simulated according to parameters
+            defined by `control_kwargs`.
+        pop_targets : list-like, optional
+            Populations to target during perturbation. Default is None, and
+            perturbed genes will be randomly selected. If a list of populations
+            is provided, marker genes for these populations will be targeted
+            instead. 
+        
+        Returns
+        -------
+        list
+            Two-dimensional list that is indexed first by simulation and second
+            by replicate. 
+        """
+        out = []
+        for __ in range(simulations):
+            sim_out = []
+            if controls is None:
+                controls = self.simulate_controls()
+            if not isinstance(controls, sc.AnnData):
+                raise ValueError("Unexpected type for `controls`: {}".format(
+                                  type(controls)))
+            markers = population_markers(controls)
+            if pop_targets is not None:
+                self.perturb_kwargs['gene_targets'] = []
+                for each in pop_targets:
+                    self.perturb_kwargs['gene_targets'] += list(markers[each])
+            else:
+                markers = np.hstack([x for x in markers.values()])
+                possible = set(controls.var.index).difference(markers)
+                try:
+                    p = self.perturb_kwargs['percent_perturb']
+                except KeyError:
+                    p = None
+                if p is None:
+                    p = 0.20
+                targets = np.random.choice(list(possible),
+                                           int(p * controls.shape[1]))
+                self.perturb_kwargs['gene_targets'] = targets
+                self.perturb_kwargs['percent_perturb'] = None
+            for __ in range(replications):
+                treated = perturb(controls, **self.perturb_kwargs)
+                controls.obs['Treatment'] = 'Control'
+                treated.obs['Treatment'] = 'Perturbed'
+                combined = controls.concatenate(treated)
+                sim_out.append(combined)
+            out.append(sim_out)
+        return out
+
+
 def dispersions(size, a=1, b=5):
     """
     Randomly choose dispersion parameter 'r' for simulating cell counts.
@@ -579,196 +772,6 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
     return sc.AnnData(X=X_, obs=obs_, var=var_)
 
 
-class Experiment(object):
-    """Class to simulate scRNA experiments with perturbations."""
-
-    def __init__(self, control_kwargs=None, perturb_kwargs=None):
-        """
-        Simulate a scRNAseq experiment with perturbations. 
-        
-        Parameters
-        ----------
-        control_kwargs : dict, optional
-            Dictionary of keyword arguments that specify simulation parameters.
-            See `SingleCellDataSet` for more infomration. By default None, and
-            default parameters for SingleCellDataSet will be used. 
-        perturb_kwargs : dict, optional
-            [description], by default None
-        """
-
-        self.control_kwargs = control_kwargs
-        self.perturb_kwargs = perturb_kwargs
-
-    @property
-    def control_kwargs(self):
-        """Get control_kwargs attribute."""
-        return self._control_kwargs
-
-    @control_kwargs.setter
-    def control_kwargs(self, value):
-        """Set control_kwargs attribute."""
-        default_kws = utils.get_default_kwargs(SingleCellDataset, ['self'])
-        if value is not None:
-            value = utils.check_kws(default_kws, value, 'control_kwargs')
-        else:
-            value = default_kws
-        self._pca_kws = value
-        self._control_kwargs = value
-
-    @property
-    def perturb_kwargs(self):
-        """Get perturb_kwargs attribute."""
-        return self._perturb_kwargs
-
-    @perturb_kwargs.setter
-    def perturb_kwargs(self, value):
-        """Set perturb_kwargs attribute."""
-        default_kws = utils.get_default_kwargs(perturb, ['adata'])
-        if value is not None:
-            value = utils.check_kws(default_kws, value, 'perturb_kwargs')
-        else:
-            value = default_kws
-        self._pca_kws = value
-        if 'percentile' not in value and 'percentile' in self.control_kwargs:
-            value['percentile'] = self.control_kwargs['percentile']
-        self._perturb_kwargs = value
-
-    def simulate_controls(self):
-        adata = SingleCellDataset(**self.control_kwargs).simulate()
-        return adata
-
-    def new_population(self, adata, n_cells, perturbed=False, pop_id=None):
-        """
-        Add a new populatin to a previously simulated single-cell dataset.
-        
-        Parameters
-        ----------
-        adata : sc.AnnData
-            Previously simulated single-cell dataset.
-        n_cells : int
-            Number of cells to simulate.
-        perturbed : bool, optional
-            Whether the previously simulated dataset is a perturbed dataset.
-            Default is False.
-        pop_id : int, optional
-            Id to denote new population. Default is None, and the id will be
-            incremented from the previously simulated.
-        
-        Returns
-        -------
-        sc.AnnData
-            Previously simulated single-cell dataset with new population
-            appended.
-        
-        Raises
-        ------
-        ValueError
-            Raised is provided `pop_id` is non-unique.
-        """
-        mus = adata.var['Base.Mu'].values
-        if perturbed:
-            mus *= adata.var['Perturbation.Shift'].values
-        previous_markers = np.hstack([x for x in\
-                                      population_markers(adata).values()])
-        # don't set markers to perturbed genes, goal is to simulate an
-        # unperturbed cell identity
-        if perturbed:
-            p_genes = adata.var.index[adata.var['Perturbation.Shift'] != 1]\
-                           .values
-            previous_markers = np.hstack([previous_markers, p_genes])
-        n_markers = np.random.binomial(adata.shape[1],
-                                       self.control_kwargs['p_marker'])
-        new_markers = np.random.choice(list(set(range(adata.shape[1]))
-                                            - set(previous_markers)),
-                                       n_markers)
-        pop_markers = np.array([False]*adata.shape[1])
-        pop_markers[new_markers] = True
-        gamma = stats.gamma(a=2, scale=2)
-        mus[new_markers] *= gamma.rvs(len(new_markers))
-        counts, *__ = simulate_counts(n_cells, mus,
-                                      adata.var['Base.Dispersion'].values,
-                                      1, [n_cells])
-        if pop_id is None:
-            c_pops = adata.obs['Population'].unique()
-            try:
-                pop_id = c_pops.max() + 1
-            except TypeError:
-                pop_id = len(c_pops) + 1
-        else:
-            if pop_id in adata.obs['Population']:
-                raise ValueError("Non-unique population id: {}".format(pop_id))
-        pop_var = pd.DataFrame({'Pop.{}.Mu'.format(pop_id): mus,
-                                'Pop.{}.Marker'.format(pop_id): pop_markers})
-        pop_obs = pd.DataFrame({'Population': np.array([pop_id]*n_cells)})
-        new_adata = sc.AnnData(X=counts, obs=pop_obs, var=pop_var)
-        return adata.concatenate(new_adata, join='outer')
-        
-    def run(self, simulations=1, replications=1, controls=None,
-            pop_targets=None):
-        """
-        Simulate control and perturbed datasets under experimental conditions.
-
-        Parameters
-        ----------
-        simulations : int, optional
-            Number of control datasets to simulate. Default is 1, and a single
-            reference control dataset will be simulated.
-        replications : int, optional
-            Number of perturbations to simulate for each control dataset.
-            Default is 1, and a single perturbation will be simulated for each
-            reference control dataset.
-        controls : sc.AnnData, optional
-            A dataset of simulated control cells to perturb. Default is None,
-            and a control dataset will be simulated according to parameters
-            defined by `control_kwargs`.
-        pop_targets : list-like, optional
-            Populations to target during perturbation. Default is None, and
-            perturbed genes will be randomly selected. If a list of populations
-            is provided, marker genes for these populations will be targeted
-            instead. 
-        
-        Returns
-        -------
-        list
-            Two-dimensional list that is indexed first by simulation and second
-            by replicate. 
-        """
-        out = []
-        for __ in range(simulations):
-            sim_out = []
-            if controls is None:
-                controls = self.simulate_controls()
-            if not isinstance(controls, sc.AnnData):
-                raise ValueError("Unexpected type for `controls`: {}".format(
-                                  type(controls)))
-            markers = population_markers(controls)
-            if pop_targets is not None:
-                self.perturb_kwargs['gene_targets'] = []
-                for each in pop_targets:
-                    self.perturb_kwargs['gene_targets'] += list(markers[each])
-            else:
-                markers = np.hstack([x for x in markers.values()])
-                possible = set(controls.var.index).difference(markers)
-                try:
-                    p = self.perturb_kwargs['percent_perturb']
-                except KeyError:
-                    p = None
-                if p is None:
-                    p = 0.20
-                targets = np.random.choice(list(possible),
-                                           int(p * controls.shape[1]))
-                self.perturb_kwargs['gene_targets'] = targets
-                self.perturb_kwargs['percent_perturb'] = None
-            for __ in range(replications):
-                treated = perturb(controls, **self.perturb_kwargs)
-                controls.obs['Treatment'] = 'Control'
-                treated.obs['Treatment'] = 'Perturbed'
-                combined = utils.rbind_adata([controls, treated])
-                sim_out.append(combined)
-            out.append(sim_out)
-        return out
-
-
 def average_exp(scale_factor, n=1):
     r"""
     Simulate average expression parameters for simulated genes.
@@ -845,6 +848,7 @@ def dropout_probability(mu, median_avg, beta_0=-1.5):
     """
     x = beta_0 + 1 / median_avg * mu
     return 1 - sigmoid(x)
+
 
 def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes,
                     percentile=50, method='conditional', dropout=0.66):
