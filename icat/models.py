@@ -30,8 +30,9 @@ import scanpy as sc
 import sslouvain
 from sklearn import preprocessing
 
+import ncfs
+
 from . import utils
-from ncfs_expanded import NCFS
 
 
 class icat():
@@ -123,7 +124,7 @@ class icat():
     
     @ncfs_kws.setter
     def ncfs_kws(self, value):
-        default_kws = utils.get_default_kwargs(NCFS.NCFS, ['self'])
+        default_kws = utils.get_default_kwargs(ncfs.NCFS, ['self'])
         if value is not None:
             value = utils.check_kws(default_kws, value, 'ncfs')
         else:
@@ -277,8 +278,7 @@ class icat():
                 each.var.index = each.var.index.map(str)
         # no previous clustering provided, cluster using louvain or leiden
         if self.cluster_col is None:
-            if self.neighbor_kws['use_rep'] != 'X':
-                sc.pp.pca(controls, **self.pca_kws)
+            sc.pp.pca(controls, **self.pca_kws)
             sc.pp.neighbors(controls, **self.neighbor_kws)
             sc.tl.umap(controls, min_dist=0.0)
             if self.clustering == 'louvain':
@@ -301,7 +301,7 @@ class icat():
         scaler = preprocessing.MinMaxScaler()
         scaler.fit(controls.X)
         # instantiate ncfs model
-        model = NCFS.NCFS(**self.ncfs_kws)
+        model = ncfs.NCFS(**self.ncfs_kws)
         fit_X = scaler.transform(controls.X).astype(np.float64)
         
         # fit gene weights using control dataset
