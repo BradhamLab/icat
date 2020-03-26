@@ -34,6 +34,11 @@ def get_default_kwargs(func, ignore_params=[]):
     return kwargs
 
 
+def check_matching_genes(ref, new):
+    """Ensure two AnnData objects have shared genes."""
+    return set(ref.var.index.values).difference(new.var.index.values) == 0
+
+
 def check_np_castable(obj, name):
     """Check whether an object is castable to a numpy.ndarray."""
     if not isinstance(obj, np.ndarray):
