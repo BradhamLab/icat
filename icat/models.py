@@ -358,7 +358,7 @@ class icat():
         # create neighbor graph for control+perturbed combined data
         self.neighbor_kws['use_rep'] = 'X'
         sc.pp.neighbors(combined, **self.neighbor_kws)
-        sc.tl.umap(combined, min_dist=0.0)
+        sc.tl.umap(combined)
         # grab connectivities of cells
         g = utils.igraph_from_adjacency(combined.uns['neighbors']['connectivities'])
         # instantiate semi-supervised Louvain model
@@ -385,7 +385,7 @@ class icat():
             utils.log_system_usage()
             sc.pp.pca(adata, **self.pca_kws)
             sc.pp.neighbors(adata, **self.neighbor_kws)
-            sc.tl.umap(adata, min_dist=0.0)
+            sc.tl.umap(adata)
             if self.clustering == 'louvain':
                 sc.tl.louvain(adata, **self.cluster_kws)
                 self.cluster_col = 'louvain'
