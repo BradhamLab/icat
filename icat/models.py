@@ -23,6 +23,7 @@ Example:
 
 import inspect
 import warnings
+import logging
 
 import numpy as np
 import pandas as pd
@@ -77,9 +78,11 @@ class icat():
     """
 
     def __init__(self, clustering='louvain', treatment_col='treatment',
+                 reference='controls',
                  ncfs_kws=None, cluster_kws=None, cluster_col=None,
                  weight_threshold=1.0, neighbor_kws=None,
                  sslouvain_kws=None, pca_kws=None):
+        self.reference = reference
         self.clustering = clustering
         self.treatment_col = treatment_col
         self.ncfs_kws = ncfs_kws
@@ -89,6 +92,7 @@ class icat():
         self.neighbor_kws = neighbor_kws
         self.sslouvain_kws = sslouvain_kws
         self.pca_kws = pca_kws
+        utils.set_log()
     
     @property
     def clustering(self):
@@ -114,6 +118,17 @@ class icat():
     @treatment_col.setter
     def treatment_col(self, value):
         self._treatment_col = value
+
+    @property
+    def reference(self):
+        """Reference data set. Acceptable values 'all' or 'controls'."""
+        return self._reference
+
+    @reference.setter
+    def reference(self, value):
+        if value not in ['all', 'controls']:
+            raise ValueError("`reference` value should be either 'all' or 'controls'")
+        self._reference = value
 
     @property
     def ncfs_kws(self):
@@ -152,6 +167,7 @@ class icat():
     def neighbor_kws(self, value):
         default_kws = utils.get_default_kwargs(sc.pp.neighbors,
                                                ['adata', 'copy'])
+        default_kws['metric'] = ncfs.distances.phi_s
         if value is not None:
             value = utils.check_kws(default_kws, value, 'neighbor_kws')
         else:
@@ -253,67 +269,84 @@ class icat():
                 for x in perturbed]):
                     raise ValueError("Gene columns do not match between control"
                                      " and perturbed cells.")
-                perturbed = perturbed[0].concatenate(*perturbed[1:])
+                if not all([self.treatment_col in x.obs.columns\
+                            for x in perturbed]):
+                    raise ValueError("Expected {} column in perturbed data.".format(
+                                     self.treatment_col))
             else:
                 raise ValueError("Unexpected input type for `perturbed`: "
                                  "{}. Expected list of sc.AnnData objects or "
                                  "a single sc.AnnData object".\
                                  format(type(perturbed)))
-        if utils.check_matching_genes(controls, perturbed):
-            raise ValueError("Gene columns do not match between control and"
-                                " perturbed cells.")
-        if self.treatment_col not in perturbed.obs.columns:
-            raise ValueError("Expected {} column in perturbed data.".format(
-                                self.treatment_col))
+        else:
+            if utils.check_matching_genes(controls, perturbed):
+                raise ValueError("Gene columns do not match between control and"
+                                    " perturbed cells.")
+            if self.treatment_col not in perturbed.obs.columns:
+                raise ValueError("Expected {} column in perturbed data.".format(
+                                    self.treatment_col))
+        if self.reference == 'all':
+            logging.info('Using all datasets as references.')
+            if isinstance(perturbed, list):
+                reference = [controls.copy()] + [x.copy() for x in perturbed]
+            else:
+                reference = [controls.copy()] + [perturbed.copy()]
+        else:
+            logging.info("Using control samples as references.")
+            reference = [controls.copy()]
+        # if distance function is from ncfs.distances, expects feature weights 
+        # check to see if they were provided, otherwise set weights to 1 
+        if self.neighbor_kws['metric'].__module__ == 'ncfs.distances':
+            try:
+                self.neighbor_kws['metric_kwds']['w']
+            except NameError:
+                self.neighbor_kws['metric_kwds']['w'] = np.ones(controls.X.shape[1])
         
         # change numeric indices to strings
         for each in [controls, perturbed]:
             if isinstance(each.obs.index, pd.RangeIndex):
-                print("WARNING: Numeric index used for cell ids. "
-                      "Converting to strings.")
+                warnings.warn("WARNING: Numeric index used for cell ids. " \
+                              "Converting to strings.")
                 each.obs.index = each.obs.index.map(str)
             if isinstance(each.var.index, pd.RangeIndex):
-                print("WARNING: Numeric index used for gene ids. "
-                      "Converting to strings.")
+                warnings.warn("WARNING: Numeric index used for gene ids. " \
+                              "Converting to strings.")
                 each.var.index = each.var.index.map(str)
-        # no previous clustering provided, cluster using louvain or leiden
-        if self.cluster_col is None:
-            sc.pp.pca(controls, **self.pca_kws)
-            sc.pp.neighbors(controls, **self.neighbor_kws)
-            sc.tl.umap(controls, min_dist=0.0)
-            if self.clustering == 'louvain':
-                sc.tl.louvain(controls, **self.cluster_kws)
-                self.cluster_col = 'louvain'
-            elif self.clustering == 'leiden':
-                sc.tl.leiden(controls, **self.cluster_kws)
-                self.cluster_col = 'leiden'
-        else:
-            if self.cluster_col not in controls.obs.columns:
-                raise ValueError(f"`cluster_col` - {self.cluster_col} not found"
-                                  " in control data.")
-            if np.any([pd.isnull(x) for x in controls.obs[self.cluster_col]]):
-                raise ValueError("Expected labelled cells by passing "\
-                                 "`cluster_col`={}. ".format(self.cluster_col) +
-                                 "Received atleast one unannotated cell.")
-        # combine control and perturbed data
-        combined = controls.concatenate(perturbed, join='outer')
+
+        if self.cluster_col is not None:
+            for adata in reference:
+                if self.cluster_col not in adata.obs.columns:
+                    raise ValueError(f"`cluster_col` - {self.cluster_col} not found"
+                                    " in control data.")
+                if np.any([pd.isnull(x) for x in adata.obs[self.cluster_col]]):
+                    raise ValueError("Expected labelled cells by passing "\
+                                     "`cluster_col`={}. ".format(self.cluster_col) +
+                                     "Received atleast one unannotated cell.")
+
         # fit scale function to scale features between 0 and 1
         scaler = preprocessing.MinMaxScaler()
-        scaler.fit(controls.X)
-        # instantiate ncfs model
-        model = ncfs.NCFS(**self.ncfs_kws)
-        fit_X = scaler.transform(controls.X).astype(np.float64)
-        
-        # fit gene weights using control dataset
-        model.fit(fit_X, np.array(controls.obs[self.cluster_col].values),
-                  sample_weights='balanced')
+        if self.reference == 'all':
+            scaler.fit(reference[0].concatenate(reference[1:], join='outer').X)
+        else:
+            scaler.fit(controls.X)
+        if self.cluster_col is None:
+            self.__cluster_references(reference)
+        logging.info("-" * 20 + " Starting NCFS Fitting " + "-" * 20)
+        model = self.__ncfs_fit(reference, scaler)
+        # copy control clusters over to control dataset 
+        controls.obs[self.cluster_col] = reference[0].obs[self.cluster_col]
+        logging.info('Removing reference data sets. Combining across treatments.')
+        del reference
+        utils.log_system_usage()
+        # combine treatment datasets into single anndata object
+        combined = controls.concatenate(perturbed, join='outer')
         # scale combined matrix between 0 and 1 and apply learned weights
         # across gene expression matrix
         combined.X = model.transform(scaler.transform(combined.X))
         # save genes weights
         combined.var['ncfs.weights'] = model.coef_
-        combined.var['informative'] = combined.var['ncfs.weights'].apply(lambda x: x > self.weight_threshold)
         n_clusters = len(controls.obs[self.cluster_col].unique())
+        combined.var['informative'] = combined.var['ncfs.weights'].apply(lambda x: x > self.weight_threshold)
         informative = combined.var['informative'].sum()
         if sum(model.coef_ > self.weight_threshold) < n_clusters:
             warnings.warn("Number of informative genes less "
@@ -334,6 +367,7 @@ class icat():
         except KeyError:
             resolution = 1.0
         y_, mutables = utils.format_labels(combined.obs[self.cluster_col])
+        logging.info("Runing sslouvain")
         part = sslouvain.find_partition(g,
                                         sslouvain.RBConfigurationVertexPartition,
                                         initial_membership=y_,
@@ -342,4 +376,39 @@ class icat():
         # store new cluster labels in cell metadata
         combined.obs['sslouvain'] = part.membership
         return combined
+
+    def __cluster_references(self, reference):
+        logging.info('Clustering reference datasets.')
+        utils.log_system_usage()
+        for i, adata in enumerate(reference):
+            logging.info("Clustering cells in reference {}".format(i + 1))
+            utils.log_system_usage()
+            sc.pp.pca(adata, **self.pca_kws)
+            sc.pp.neighbors(adata, **self.neighbor_kws)
+            sc.tl.umap(adata, min_dist=0.0)
+            if self.clustering == 'louvain':
+                sc.tl.louvain(adata, **self.cluster_kws)
+                self.cluster_col = 'louvain'
+            elif self.clustering == 'leiden':
+                sc.tl.leiden(adata, **self.cluster_kws)
+                self.cluster_col = 'leiden'
+        logging.info('Cells clustered')
+        utils.log_system_usage()
+
+    def __ncfs_fit(self, reference, scaler):
+        # no previous clustering provided, cluster using louvain or leiden
+        weights = np.zeros((len(reference), reference[0].shape[1]))
+        for i, adata in enumerate(reference):
+            # fit gene weights using control dataset
+            logging.info("Starting NCFS Gradient Ascent")
+            utils.log_system_usage()
+            model = ncfs.NCFS(**self.ncfs_kws)
+            model.fit(scaler.transform(adata.X),
+                    np.array(adata.obs[self.cluster_col].values),
+                    sample_weights='balanced')
+            weights[i, :] = model.coef_
+        model.coef_ = np.max(weights, axis=0)
+        return model
+
+
 
