@@ -332,7 +332,7 @@ class icat():
         if self.cluster_col is None:
             self.__cluster_references(reference)
         logging.info("-" * 20 + " Starting NCFS Fitting " + "-" * 20)
-        model = self.__ncfs_fit(reference, scaler)
+        model, weights = self.__ncfs_fit(reference, scaler)
         # copy control clusters over to control dataset 
         controls.obs[self.cluster_col] = reference[0].obs[self.cluster_col]
         logging.info('Removing reference data sets. Combining across treatments.')
@@ -345,6 +345,10 @@ class icat():
         combined.X = model.transform(scaler.transform(combined.X))
         # save genes weights
         combined.var['ncfs.weights'] = model.coef_
+        if self.reference == 'all':
+            for i in range(weights.shape[0]):
+                col = reference[i].obs['Treatment'].values[0]
+                combined.var[col] = weights[i, :]
         n_clusters = len(controls.obs[self.cluster_col].unique())
         combined.var['informative'] = combined.var['ncfs.weights'].apply(lambda x: x > self.weight_threshold)
         informative = combined.var['informative'].sum()
@@ -374,7 +378,8 @@ class icat():
                                         mutable_nodes=mutables,
                                         resolution_parameter=resolution)
         # store new cluster labels in cell metadata
-        combined.obs['sslouvain'] = part.membership
+        combined.obs['sslouvain'] = part.membership.astype('o')
+        utils.close_log()
         return combined
 
     def __cluster_references(self, reference):
@@ -408,7 +413,7 @@ class icat():
                     sample_weights='balanced')
             weights[i, :] = model.coef_
         model.coef_ = np.max(weights, axis=0)
-        return model
+        return model, weights
 
 
 
