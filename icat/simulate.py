@@ -402,8 +402,6 @@ class SingleCellDataset():
         return sc.AnnData(X=X, obs=obs, var=var)
 
 
-
-
 class Experiment(object):
     """Class to simulate scRNA experiments with perturbations."""
 
@@ -461,72 +459,6 @@ class Experiment(object):
     def simulate_controls(self):
         adata = SingleCellDataset(**self.control_kwargs).simulate()
         return adata
-
-    def new_population(self, adata, n_cells, perturbed=False, pop_id=None):
-        """
-        Add a new population to a previously simulated single-cell dataset.
-        
-        Parameters
-        ----------
-        adata : sc.AnnData
-            Previously simulated single-cell dataset.
-        n_cells : int
-            Number of cells to simulate.
-        perturbed : bool, optional
-            Whether the previously simulated dataset is a perturbed dataset.
-            Default is False.
-        pop_id : int, optional
-            Id to denote new population. Default is None, and the id will be
-            incremented from the previously simulated.
-        
-        Returns
-        -------
-        sc.AnnData
-            Previously simulated single-cell dataset with new population
-            appended.
-        
-        Raises
-        ------
-        ValueError
-            Raised is provided `pop_id` is non-unique.
-        """
-        mus = adata.var['Base.Mu'].values
-        if perturbed:
-            mus *= adata.var['Perturbation.Shift'].values
-        previous_markers = np.hstack([x for x in\
-                                      population_markers(adata).values()])
-        # don't set markers to perturbed genes, goal is to simulate an
-        # unperturbed cell identity
-        if perturbed:
-            p_genes = adata.var.index[adata.var['Perturbation.Shift'] != 1]\
-                           .values
-            previous_markers = np.hstack([previous_markers, p_genes])
-        n_markers = np.random.binomial(adata.shape[1],
-                                       self.control_kwargs['p_marker'])
-        new_markers = np.random.choice(list(set(range(adata.shape[1]))
-                                            - set(previous_markers)),
-                                       n_markers)
-        pop_markers = np.array([False]*adata.shape[1])
-        pop_markers[new_markers] = True
-        gamma = stats.gamma(a=2, scale=2)
-        mus[new_markers] *= gamma.rvs(len(new_markers))
-        counts, *__ = simulate_counts(n_cells, mus,
-                                      adata.var['Base.Dispersion'].values,
-                                      1, [n_cells])
-        if pop_id is None:
-            c_pops = adata.obs['Population'].unique()
-            try:
-                pop_id = c_pops.max() + 1
-            except TypeError:
-                pop_id = len(c_pops) + 1
-        else:
-            if pop_id in adata.obs['Population']:
-                raise ValueError("Non-unique population id: {}".format(pop_id))
-        pop_var = pd.DataFrame({'Pop.{}.Mu'.format(pop_id): mus,
-                                'Pop.{}.Marker'.format(pop_id): pop_markers})
-        pop_obs = pd.DataFrame({'Population': np.array([pop_id]*n_cells)})
-        new_adata = sc.AnnData(X=counts, obs=pop_obs, var=pop_var)
-        return adata.concatenate(new_adata, join='outer')
         
     def run(self, simulations=1, replications=1, controls=None,
             pop_targets=None):
@@ -594,6 +526,57 @@ class Experiment(object):
         return out
 
 
+def new_population(adata, n_cells, p_marker=None,
+                   perturbed=False, pop_id=None, treatment_key=None):
+    if p_marker is None:
+        p_marker = 10 / adata.shape[1]
+    if not 0 < p_marker < 1:
+        raise ValueError("Expected `p_marker` between 0 and 1.")
+    mus = adata.var['Base.Mu'].values
+    if perturbed:
+        mus *= adata.var['Perturbation.Shift'].values
+    previous_markers = np.hstack([x for x in\
+                                  population_markers(adata).values()])
+    # don't set markers to perturbed genes, goal is to simulate an
+    # unperturbed cell identity
+#         if perturbed:
+#             p_genes = adata.var.index[adata.var['Perturbation.Shift'] != 1]\
+#                            .values
+#             previous_markers = np.hstack([previous_markers, p_genes])
+    n_markers = np.random.binomial(adata.shape[1], p_marker)
+    new_markers = np.random.choice(list(set(adata.var.index)
+                                        - set(previous_markers)),
+                                    n_markers)
+    marker_idxs = np.where(adata.var.index.isin(new_markers))[0]
+    pop_markers = np.array([False]*adata.shape[1])
+    pop_markers[marker_idxs] = True
+    gamma = stats.gamma(a=2, scale=2)
+    mus[marker_idxs] *= gamma.rvs(len(new_markers))
+    counts, dropout, __ = simulate_counts(n_cells, mus,
+                                          adata.var['Base.Dispersion'].values,
+                                          1, [n_cells])
+    if pop_id is None:
+        c_pops = adata.obs['Population'].unique()
+        try:
+            pop_id = c_pops.max() + 1
+        except TypeError:
+            pop_id = len(c_pops) + 1
+    else:
+        if pop_id in adata.obs['Population']:
+            raise ValueError("Non-unique population id: {}".format(pop_id))
+    pop_var = adata.var.copy()
+    pop_var['Pop.{}.Mu'.format(pop_id)] = mus
+    pop_var['Pop.{}.Marker'.format(pop_id)] = pop_markers
+    pop_var['Pop.{}.Dropout'.format(pop_id)] = dropout.flatten()
+    obs_idx = ['cell-{}'.format(i + 1) for i in range(adata.shape[0], adata.shape[0] + n_cells)]
+    pop_obs = pd.DataFrame({'Population': np.array([pop_id]*n_cells),
+                            'Treatment': np.array([treatment_key] * n_cells)},
+                            index=obs_idx)
+    X = np.vstack((adata.X, counts))
+    obs = pd.concat([adata.obs, pop_obs], axis=0, join='outer')
+    return sc.AnnData(X, obs=obs, var=pop_var)
+
+
 def dispersions(size, a=1, b=5):
     """
     Randomly choose dispersion parameter 'r' for simulating cell counts.
@@ -614,11 +597,13 @@ def dispersions(size, a=1, b=5):
     """
     return np.random.choice(range(a, b), size=size)
 
+
 def population_markers(adata):
     marker_cols = [x for x in adata.var.columns if 'Marker' in x]
     markers = {i + 1: adata.var[adata.var[x]].index.values\
                for i, x in enumerate(marker_cols)}
     return markers
+
 
 # TODO: add option to simulate untargetted populations/ add treatment
 # specific populations
@@ -765,7 +750,7 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
                               len(pop_targets), pop_sizes,
                               percentile=percentile,
                               dropout=var_[pop_dropout].values)
-    if perturbation_key is not None:
+    if perturbation_key is None:
         obs_['Treatment'] = 'Perturbed'
     else:
         obs_['Treatment'] = perturbation_key
