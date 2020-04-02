@@ -547,7 +547,7 @@ def new_population(adata, n_cells, p_marker=None,
     new_markers = np.random.choice(list(set(adata.var.index)
                                         - set(previous_markers)),
                                     n_markers)
-    marker_idxs = np.where(adata.var.index.isin(new_markers))[0]
+    marker_idxs = np.array([int(x.split('-')[-1]) - 1 for x in new_markers])
     pop_markers = np.array([False]*adata.shape[1])
     pop_markers[marker_idxs] = True
     gamma = stats.gamma(a=2, scale=2)
