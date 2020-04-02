@@ -36,6 +36,9 @@ def log_system_usage():
     memory_use = py.memory_info().rss / 2 ** 30 
     logging.info("Memory usage: {:0.03} GB".format(memory_use))
 
+def close_log():
+    logging.getLogger().close()
+
 def check_kws(reference_dict, new_dict, name):
     if not isinstance(new_dict, dict):
         raise ValueError("Expected dictionary of keyword arguments for "
@@ -44,8 +47,8 @@ def check_kws(reference_dict, new_dict, name):
         if key not in reference_dict.keys():
             raise ValueError("Unsupported keyword argument `{}` for "
                              "{} keywords.".format(key, name))
-        new_dict[key] = item
-    return new_dict
+        reference_dict[key] = item
+    return reference_dict
 
 
 def get_default_kwargs(func, ignore_params=[]):
