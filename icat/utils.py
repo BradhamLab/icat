@@ -6,15 +6,35 @@ Utility functions for icat module.
 """
 import collections
 import inspect
+import sys
 import os
 import re
 import warnings
+import logging
 
+import psutil 
 import numpy as np
 import pandas as pd
 
 import igraph as ig
 
+def set_log():
+    logging.basicConfig(filename='icat.log', level=logging.DEBUG, filemode='w')
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s\t%(name)s\t%(levelname)s\t%(message)s')
+    handler.setFormatter(formatter)
+    root.addHandler(handler)
+    logging.info("System Usage upon startup")
+    log_system_usage()
+
+def log_system_usage():
+    pid = os.getpid()
+    py = psutil.Process(pid)
+    memory_use = py.memory_info().rss / 2 ** 30 
+    logging.info("Memory usage: {:0.03} GB".format(memory_use))
 
 def check_kws(reference_dict, new_dict, name):
     if not isinstance(new_dict, dict):
