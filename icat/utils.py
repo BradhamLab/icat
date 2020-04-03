@@ -36,7 +36,7 @@ def log_system_usage():
     memory_use = py.memory_info().rss / 2 ** 30 
     logging.info("Memory usage: {:0.03} GB".format(memory_use))
 
-def close_log():
+def close_log(): # this doesn't work
     logging.getLogger().close()
 
 def check_kws(reference_dict, new_dict, name):
