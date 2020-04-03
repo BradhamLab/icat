@@ -297,10 +297,17 @@ class icat():
         # if distance function is from ncfs.distances, expects feature weights 
         # check to see if they were provided, otherwise set weights to 1 
         if self.neighbor_kws['metric'].__module__ == 'ncfs.distances':
+            print(self.neighbor_kws)
             try:
                 self.neighbor_kws['metric_kwds']['w']
-            except NameError:
-                self.neighbor_kws['metric_kwds']['w'] = np.ones(controls.X.shape[1])
+            except KeyError:
+                # check for dict to update previously specified values
+                if isinstance(self.neighbor_kws['metric_kwds'], dict):
+                    self.neighbor_kws['metric_kwds'].update(
+                                            {'w': np.ones(controls.X.shape[1])})
+                else:
+                    self.neighbor_kws['metric_kwds'] = {'w': np.ones(controls.X.shape[1])}
+                    
         
         # change numeric indices to strings
         for each in [controls, perturbed]:
@@ -335,8 +342,11 @@ class icat():
         model, weights = self.__ncfs_fit(reference, scaler)
         # copy control clusters over to control dataset 
         controls.obs[self.cluster_col] = reference[0].obs[self.cluster_col]
-        logging.info('Removing reference data sets. Combining across treatments.')
+        if self.reference == 'all':
+            treatments = [each.obs[self.treatment_col].values[0]\
+                          for each in reference]
         del reference
+        logging.info('Removing reference data sets. Combining across treatments.')
         utils.log_system_usage()
         # combine treatment datasets into single anndata object
         combined = controls.concatenate(perturbed, join='outer')
@@ -346,9 +356,8 @@ class icat():
         # save genes weights
         combined.var['ncfs.weights'] = model.coef_
         if self.reference == 'all':
-            for i in range(weights.shape[0]):
-                col = reference[i].obs['Treatment'].values[0]
-                combined.var[col] = weights[i, :]
+            for i, value in enumerate(treatments):
+                combined.var["{}.weights".format(value)] = weights[i, :]
         n_clusters = len(controls.obs[self.cluster_col].unique())
         combined.var['informative'] = combined.var['ncfs.weights'].apply(lambda x: x > self.weight_threshold)
         informative = combined.var['informative'].sum()
@@ -378,8 +387,9 @@ class icat():
                                         mutable_nodes=mutables,
                                         resolution_parameter=resolution)
         # store new cluster labels in cell metadata
-        combined.obs['sslouvain'] = part.membership.astype('o')
-        utils.close_log()
+        combined.obs['sslouvain'] = part.membership
+        combined.obs['sslouvain'] = combined.obs['sslouvain'].astype('category')
+        # utils.close_log()
         return combined
 
     def __cluster_references(self, reference):
