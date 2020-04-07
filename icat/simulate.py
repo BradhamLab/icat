@@ -454,16 +454,13 @@ class Experiment(object):
             value = default_kws
         if 'percentile' not in value and 'percentile' in self.control_kwargs:
             value['percentile'] = self.control_kwargs['percentile']
-        if 'add_populations' not in value:
-            value['add_populations'] = 0
         self._perturb_kwargs = value
 
     def simulate_controls(self):
         adata = SingleCellDataset(**self.control_kwargs).simulate()
         return adata
         
-    def run(self, simulations=1, replications=1, controls=None,
-            pop_targets=None):
+    def run(self, simulations=1, replications=1, controls=None):
         """
         Simulate control and perturbed datasets under experimental conditions.
 
@@ -480,11 +477,6 @@ class Experiment(object):
             A dataset of simulated control cells to perturb. Default is None,
             and a control dataset will be simulated according to parameters
             defined by `control_kwargs`.
-        pop_targets : list-like, optional
-            Populations to target during perturbation. Default is None, and
-            perturbed genes will be randomly selected. If a list of populations
-            is provided, marker genes for these populations will be targeted
-            instead. 
         
         Returns
         -------
@@ -500,24 +492,6 @@ class Experiment(object):
             if not isinstance(controls, sc.AnnData):
                 raise ValueError("Unexpected type for `controls`: {}".format(
                                   type(controls)))
-            markers = population_markers(controls)
-            if pop_targets is not None:
-                self.perturb_kwargs['gene_targets'] = []
-                for each in pop_targets:
-                    self.perturb_kwargs['gene_targets'] += list(markers[each])
-            else:
-                markers = np.hstack([x for x in markers.values()])
-                possible = set(controls.var.index).difference(markers)
-                try:
-                    p = self.perturb_kwargs['percent_perturb']
-                except KeyError:
-                    p = None
-                if p is None:
-                    p = 0.20
-                targets = np.random.choice(list(possible),
-                                           int(p * controls.shape[1]))
-                self.perturb_kwargs['gene_targets'] = targets
-                self.perturb_kwargs['percent_perturb'] = None
             for __ in range(replications):
                 treated = perturb(controls, **self.perturb_kwargs)
                 combined = controls.concatenate(treated)
@@ -663,7 +637,7 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
     if perturbation_key is None:
         perturbation_key = 'Perturbed'
     if new_pop_ids is None:
-        new_pop_ids = [f"{perturbation_key}.added.{i + 1}"\
+        new_pop_ids = [f"{perturbation_key}-added-{i + 1}"\
                        for i in range(len(new_pop_cells))]
     if gene_targets is None:
         gene_targets = []
@@ -723,10 +697,10 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
     # log population identity in perturbed data
     # if marker gene is modified, populations is considered perturbed
     populations = []
-    for i, each in enumerate(pop_targets):
+    for i, each in enumerate(adata.obs['Population'].unique()):
         markers_i = markers[each]
         if len(set(markers_i).intersection(gene_targets)) != 0:
-            name = 'Perturbed.{}'.format(each)
+            name = 'Perturbed-{}'.format(each)
         else:
             name = str(each)
         populations += [name] * pop_sizes[i]
@@ -748,8 +722,8 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
     adata = sc.AnnData(X=X_, obs=obs_, var=var_)
     for size, pmarker, pid in zip(new_pop_cells, new_pop_pmarker, new_pop_ids):
         adata = new_population(adata, size, p_marker=pmarker,
-                                 perturbed=True, pop_id=pid,
-                                 treatment_key=perturbation_key)
+                               perturbed=True, pop_id=pid,
+                               treatment_key=perturbation_key)
     return adata
 
 
