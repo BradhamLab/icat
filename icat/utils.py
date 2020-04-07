@@ -20,13 +20,13 @@ import igraph as ig
 
 def set_log():
     logging.basicConfig(filename='icat.log', level=logging.DEBUG, filemode='w')
-    root = logging.getLogger()
-    root.setLevel(logging.DEBUG)
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s\t%(name)s\t%(levelname)s\t%(message)s')
-    handler.setFormatter(formatter)
-    root.addHandler(handler)
+    # root = logging.getLogger()
+    # root.setLevel(logging.DEBUG)
+    # handler = logging.StreamHandler(sys.stdout)
+    # handler.setLevel(logging.DEBUG)
+    # formatter = logging.Formatter('%(asctime)s\t%(name)s\t%(levelname)s\t%(message)s')
+    # handler.setFormatter(formatter)
+    # root.addHandler(handler)
     logging.info("System Usage upon startup")
     log_system_usage()
 
