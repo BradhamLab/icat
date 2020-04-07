@@ -78,7 +78,7 @@ class icat():
     """
 
     def __init__(self, clustering='louvain', treatment_col='treatment',
-                 reference='controls',
+                 reference='all',
                  ncfs_kws=None, cluster_kws=None, cluster_col=None,
                  weight_threshold=1.0, neighbor_kws=None,
                  sslouvain_kws=None, pca_kws=None):
