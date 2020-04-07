@@ -525,7 +525,6 @@ class Experiment(object):
             out.append(sim_out)
         return out
 
-
 def new_population(adata, n_cells, p_marker=None,
                    perturbed=False, pop_id=None, treatment_key=None):
     if p_marker is None:
@@ -533,14 +532,22 @@ def new_population(adata, n_cells, p_marker=None,
     if not 0 < p_marker < 1:
         raise ValueError("Expected `p_marker` between 0 and 1.")
     mus = adata.var['Base.Mu'].values
+    if pop_id is None:
+        c_pops = adata.obs['Population'].unique()
+        try:
+            pop_id = c_pops.max() + 1
+        except TypeError:
+            pop_id = len(c_pops) + 1
+    if pop_id in adata.obs['Population']:
+        raise ValueError("Non-unique population id: {}".format(pop_id))
     if perturbed:
         mus *= adata.var['Perturbation.Shift'].values
     previous_markers = np.hstack([x for x in\
                                   population_markers(adata).values()])
     n_markers = np.random.binomial(adata.shape[1], p_marker)
     new_markers = np.random.choice(list(set(adata.var.index)
-                                        - set(previous_markers)),
-                                    n_markers)
+                                   - set(previous_markers)),
+                                   n_markers)
     marker_idxs = np.array([int(x.split('-')[-1]) - 1 for x in new_markers])
     pop_markers = np.array([False]*adata.shape[1])
     pop_markers[marker_idxs] = True
@@ -549,15 +556,6 @@ def new_population(adata, n_cells, p_marker=None,
     counts, dropout, __ = simulate_counts(n_cells, mus,
                                           adata.var['Base.Dispersion'].values,
                                           1, [n_cells])
-    if pop_id is None:
-        c_pops = adata.obs['Population'].unique()
-        try:
-            pop_id = c_pops.max() + 1
-        except TypeError:
-            pop_id = len(c_pops) + 1
-    else:
-        if pop_id in adata.obs['Population']:
-            raise ValueError("Non-unique population id: {}".format(pop_id))
     pop_var = adata.var.copy()
     pop_var['Pop.{}.Mu'.format(pop_id)] = mus
     pop_var['Pop.{}.Marker'.format(pop_id)] = pop_markers
@@ -565,7 +563,7 @@ def new_population(adata, n_cells, p_marker=None,
     obs_idx = ['cell-{}'.format(i + 1) for i in range(adata.shape[0], adata.shape[0] + n_cells)]
     pop_obs = pd.DataFrame({'Population': np.array([pop_id]*n_cells),
                             'Treatment': np.array([treatment_key] * n_cells)},
-                            index=obs_idx)
+                           index=obs_idx)
     X = np.vstack((adata.X, counts))
     obs = pd.concat([adata.obs, pop_obs], axis=0, join='outer')
     return sc.AnnData(X, obs=obs, var=pop_var)
@@ -600,7 +598,7 @@ def population_markers(adata):
 
 
 def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
-            percent_perturb=None, pop_sizes=None, percentile=50,
+            percent_perturb=0.2, pop_sizes=None, percentile=50,
             new_pop_cells=[], new_pop_pmarker=[], new_pop_ids=None,
             perturbation_key=None):
     r"""
@@ -650,20 +648,6 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
     -------
     sc.AnnData
         Perturbed single-cell dataset.
-    
-    Raises
-    ------
-    ValueError
-        Raised if a list-like argument is not castable to a numpy.ndarray.
-    ValueError
-        Raised target populations are not contained in provied annotated
-        dataframe
-    ValueError
-        Raised if provided population sizes do not sum to number of samples
-        passed.
-    ValueError
-        Raised if provided gene targets are not contained in the provided
-        annotated dataframe.
     """
     if isinstance(new_pop_pmarker, float):
         new_pop_pmarker = [new_pop_pmarker for x in new_pop_cells]
@@ -679,31 +663,36 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
     if perturbation_key is None:
         perturbation_key = 'Perturbed'
     if new_pop_ids is None:
-        new_pop_ids = [f"{perturbation_key}-added-{i + 1}"\
-                       for i in new_pop_cells]
-    # check pop_targets in adata
-    if pop_targets is None:
-        pop_targets = adata.obs['Population'].unique()
-        pop_ratios = adata.obs['Population'].value_counts().values
-        pop_ratios = pop_ratios / pop_ratios.sum()
+        new_pop_ids = [f"{perturbation_key}.added.{i + 1}"\
+                       for i in range(len(new_pop_cells))]
+    if gene_targets is None:
+        gene_targets = []
     else:
+        try:
+            gene_targets = list(gene_targets)
+        except TypeError:
+            raise ValueError("Expected list-like for `gene_targets`.")
+    # get marker genes for reference dataset
+    markers = population_markers(adata)
+    if pop_targets is not None:
         pop_targets = utils.check_np_castable(pop_targets, 'pop_targets')
+        # ensure specified populations exist in provided adata
         if not set(pop_targets).issubset(adata.obs['Population']):
             diff = set(pop_targets).difference(adata.obs['Population'])
             raise ValueError("Undefined populations: {}".format(diff))
+        for each in pop_targets:
+            gene_targets += list(markers[each])
     # check population sizes, if none, match with ratio in adata
     if pop_sizes is None:
-        try:
-            pop_ratios
-        except NameError:
-            pop_ratios = np.ones(pop_targets.size) * 1 / len(pop_targets)
-        pop_sizes = (pop_ratios * samples).astype(int)
+        pop_counts = adata.obs['Population'].value_counts().values
+        pop_sizes = (pop_counts / pop_counts.sum() * samples).astype(int)
         if samples % pop_sizes.sum() != 0:
             remainder = samples % pop_sizes.sum()
             iters = 0
             while remainder != 0:
                 pop_sizes[iters % len(pop_sizes)] += 1
                 remainder = samples % pop_sizes.sum()
+                iters += 1
     else:
         pop_sizes = utils.check_np_castable(pop_sizes, 'pop_sizes')
         if pop_sizes.sum() != samples:
@@ -714,24 +703,18 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
             raise ValueError("Unrecognized gene targets: {}".format(
                           set(gene_targets).difference(adata.var.index)))
         gene_targets = utils.check_np_castable(gene_targets, 'gene_targets')
-            
-    if percent_perturb is not None and gene_targets is not None:
-        n_genes = int(percent_perturb * adata.shape[1])
-        if len(gene_targets) < n_genes:
-            n_genes -= len(gene_targets)
-            markers = population_markers(adata)
-            ignore_genes = gene_targets
-            for x in markers.values():
-                ignore_genes = np.hstack((ignore_genes, x))
-            p_genes = list(set(adata.var.index).difference(ignore_genes))
-            targets = np.random.choice(p_genes, n_genes)
-            gene_targets = np.hstack((targets, gene_targets))
-    elif gene_targets is None:
-        if percent_perturb is None:
-            percent_perturb = 0.2
-        gene_targets = np.random.choice(adata.var.index,
-                                        int(adata.shape[1] * percent_perturb))
-    markers = population_markers(adata)
+    n_genes = int(percent_perturb * adata.shape[1])
+    # perturb remaining genes not specified by `gene_targets`.
+    if len(gene_targets) < n_genes:
+        n_genes -= len(gene_targets)
+        ignore_genes = gene_targets
+        for x in markers.values():
+            ignore_genes = np.hstack((ignore_genes, x))
+        p_genes = list(set(adata.var.index).difference(ignore_genes))
+        targets = np.random.choice(p_genes, n_genes)
+        gene_targets = np.hstack((targets, gene_targets))
+
+
     disp_ = adata.var['Base.Dispersion'].values.reshape((-1, 1))
     var_ = adata.var.copy()
     var_['Perturbation.Shift'] = np.ones((adata.shape[1], 1))
@@ -765,9 +748,9 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
     adata = sc.AnnData(X=X_, obs=obs_, var=var_)
     for size, pmarker, pid in zip(new_pop_cells, new_pop_pmarker, new_pop_ids):
         adata = new_population(adata, size, p_marker=pmarker,
-                               perturbed=True, pop_id=pid,
-                               treatment_key=perturbation_key)
-    return sc.AnnData(X=X_, obs=obs_, var=var_)
+                                 perturbed=True, pop_id=pid,
+                                 treatment_key=perturbation_key)
+    return adata
 
 
 def average_exp(scale_factor, n=1):
