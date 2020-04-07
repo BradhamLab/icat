@@ -599,8 +599,6 @@ def population_markers(adata):
     return markers
 
 
-# TODO: add option to simulate untargetted populations/ add treatment
-# specific populations
 def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
             percent_perturb=None, pop_sizes=None, percentile=50,
             new_pop_cells=[], new_pop_pmarker=[], new_pop_ids=None,
