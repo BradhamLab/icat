@@ -416,7 +416,9 @@ class Experiment(object):
             See `SingleCellDataSet` for more infomration. By default None, and
             default parameters for SingleCellDataSet will be used. 
         perturb_kwargs : dict, optional
-            [description], by default None
+            Dictionary of keyword argument that specify perturbation paramters.
+            By default None, and default parameters will be used. See 
+            `perturb()` for more information.
         """
 
         self.control_kwargs = control_kwargs
@@ -435,7 +437,6 @@ class Experiment(object):
             value = utils.check_kws(default_kws, value, 'control_kwargs')
         else:
             value = default_kws
-        self._pca_kws = value
         self._control_kwargs = value
 
     @property
@@ -451,9 +452,10 @@ class Experiment(object):
             value = utils.check_kws(default_kws, value, 'perturb_kwargs')
         else:
             value = default_kws
-        self._pca_kws = value
         if 'percentile' not in value and 'percentile' in self.control_kwargs:
             value['percentile'] = self.control_kwargs['percentile']
+        if 'add_populations' not in value:
+            value['add_populations'] = 0
         self._perturb_kwargs = value
 
     def simulate_controls(self):
@@ -518,8 +520,6 @@ class Experiment(object):
                 self.perturb_kwargs['percent_perturb'] = None
             for __ in range(replications):
                 treated = perturb(controls, **self.perturb_kwargs)
-                controls.obs['Treatment'] = 'Control'
-                treated.obs['Treatment'] = 'Perturbed'
                 combined = controls.concatenate(treated)
                 sim_out.append(combined)
             out.append(sim_out)
@@ -537,12 +537,6 @@ def new_population(adata, n_cells, p_marker=None,
         mus *= adata.var['Perturbation.Shift'].values
     previous_markers = np.hstack([x for x in\
                                   population_markers(adata).values()])
-    # don't set markers to perturbed genes, goal is to simulate an
-    # unperturbed cell identity
-#         if perturbed:
-#             p_genes = adata.var.index[adata.var['Perturbation.Shift'] != 1]\
-#                            .values
-#             previous_markers = np.hstack([previous_markers, p_genes])
     n_markers = np.random.binomial(adata.shape[1], p_marker)
     new_markers = np.random.choice(list(set(adata.var.index)
                                         - set(previous_markers)),
@@ -609,6 +603,7 @@ def population_markers(adata):
 # specific populations
 def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
             percent_perturb=None, pop_sizes=None, percentile=50,
+            new_pop_cells=[], new_pop_pmarker=[], new_pop_ids=None,
             perturbation_key=None):
     r"""
     Perturb a simulated single-cell dataset.
@@ -650,6 +645,8 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
     percentile : float, optional
         Percentile to use when calculationg dropout probabilities. Default is
         0.5, and the median will be used.
+    new_populations : int, optional
+        Number of unique populations to add to perturbed dataset. Default is 0.
     
     Returns
     -------
@@ -670,6 +667,22 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
         Raised if provided gene targets are not contained in the provided
         annotated dataframe.
     """
+    if isinstance(new_pop_pmarker, float):
+        new_pop_pmarker = [new_pop_pmarker for x in new_pop_cells]
+    for p in new_pop_pmarker:
+        if not 0 < p < 1:
+            raise ValueError("Expected marker probabilities between 0 and 1.")
+    if len(new_pop_pmarker) != len(new_pop_cells):
+        raise ValueError("Number of new populations and marker gene probabilites "\
+                         "do not align.")
+    if new_pop_ids is not None and len(new_pop_ids) != len(new_pop_cells):
+        raise ValueError("Number of specified ids does not match number of "\
+                         "new populations")
+    if perturbation_key is None:
+        perturbation_key = 'Perturbed'
+    if new_pop_ids is None:
+        new_pop_ids = [f"{perturbation_key}-added-{i + 1}"\
+                       for i in new_pop_cells]
     # check pop_targets in adata
     if pop_targets is None:
         pop_targets = adata.obs['Population'].unique()
@@ -750,10 +763,12 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
                               len(pop_targets), pop_sizes,
                               percentile=percentile,
                               dropout=var_[pop_dropout].values)
-    if perturbation_key is None:
-        obs_['Treatment'] = 'Perturbed'
-    else:
-        obs_['Treatment'] = perturbation_key
+    obs_['Treatment'] = perturbation_key
+    adata = sc.AnnData(X=X_, obs=obs_, var=var_)
+    for size, pmarker, pid in zip(new_pop_cells, new_pop_pmarker, new_pop_ids):
+        adata = new_population(adata, size, p_marker=pmarker,
+                               perturbed=True, pop_id=pid,
+                               treatment_key=perturbation_key)
     return sc.AnnData(X=X_, obs=obs_, var=var_)
 
 
