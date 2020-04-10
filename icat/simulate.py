@@ -697,27 +697,38 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
     # log population identity in perturbed data
     # if marker gene is modified, populations is considered perturbed
     populations = []
-    for i, each in enumerate(adata.obs['Population'].unique()):
+    sim_pops = adata.obs['Population'].unique()
+    n_pops = len(sim_pops)
+    pop_columns = []
+    pop_dropout = []
+    pop_mapping = {}
+    for i, each in enumerate(sim_pops):
         markers_i = markers[each]
         if len(set(markers_i).intersection(gene_targets)) != 0:
             name = 'Perturbed-{}'.format(each)
         else:
             name = str(each)
+        pop_mapping[each] = name
+        pop_columns.append(f'Pop.{each}.Mu')
+        pop_dropout.append(f'Pop.{each}.Dropout')
         populations += [name] * pop_sizes[i]
     obs_ = pd.DataFrame(populations, columns=['Population'],
                         index=["cell-{}".format(i + 1) for i in\
-                               range(len(populations))])
-    pop_columns = [f'Pop.{x}.Mu' for x in pop_targets]
-    pop_dropout = [f'Pop.{x}.Dropout' for x in pop_targets]
+                               range(samples)])
     # # calculate average expression values for each gene in each population
     # in perturbed dataset
     mus = adata.var[pop_columns].values \
-        * np.ones((adata.shape[1], len(pop_columns))) \
+        * np.ones((adata.shape[1], n_pops)) \
         * var_['Perturbation.Shift'].values.reshape(-1, 1)
-    X_, *__ = simulate_counts(samples, mus, disp_,
-                              len(pop_targets), pop_sizes,
-                              percentile=percentile,
-                              dropout=var_[pop_dropout].values)
+    X_, dropout, __ = simulate_counts(samples, mus, disp_,
+                                      n_pops, pop_sizes,
+                                      percentile=percentile,
+                                      dropout=var_[pop_dropout].values)
+    for i, pop in enumerate(sim_pops):
+        if pop_mapping[pop] != pop:
+            var_[f'Pop.{pop_mapping[pop]}.Mu'] = mus[:, i]
+            var_[f'Pop.{pop_mapping[pop]}.Dropout'] = dropout[:, i]
+
     obs_['Treatment'] = perturbation_key
     adata = sc.AnnData(X=X_, obs=obs_, var=var_)
     for size, pmarker, pid in zip(new_pop_cells, new_pop_pmarker, new_pop_ids):
