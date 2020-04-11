@@ -721,9 +721,7 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
         * np.ones((adata.shape[1], n_pops)) \
         * var_['Perturbation.Shift'].values.reshape(-1, 1)
     X_, dropout, __ = simulate_counts(samples, mus, disp_,
-                                      n_pops, pop_sizes,
-                                      percentile=percentile,
-                                      dropout=var_[pop_dropout].values)
+                                      n_pops, pop_sizes)
     for i, pop in enumerate(sim_pops):
         if pop_mapping[pop] != pop:
             var_[f'Pop.{pop_mapping[pop]}.Mu'] = mus[:, i]
