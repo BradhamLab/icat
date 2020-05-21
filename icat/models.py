@@ -396,11 +396,18 @@ class icat():
             vertex = self.sslouvain_kws['partition_type']
         except KeyError:
             vertex = sslouvain.RBConfigurationVertexPartition
+        if not isinstance(vertex, utils.ig.VertexClustering):
+            vertex = sslouvain.RBConfigurationVertexPartition
 
         y_, mutables = utils.format_labels(combined.obs[self.cluster_col])
         if verbose:
             print("Running semi-supervised louvain community detection")
         # logging.info("Runing sslouvain")
+        print("vertex:", vertex)
+        print(resolution)
+        print(y_)
+        print(mutables)
+        # print(g)
         part = sslouvain.find_partition(g,
                                         vertex,
                                         # sslouvain.CPMVertexPartition,
