@@ -11,6 +11,7 @@ import os
 import re
 import warnings
 import logging
+import time
 
 import psutil 
 import numpy as np
@@ -18,7 +19,11 @@ import pandas as pd
 
 import igraph as ig
 
+def ftime(seconds):
+    return time.strftime("%Hh:%Mm:%Ss", time.gmtime(seconds))
+
 def set_log():
+    # logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
     logging.basicConfig(filename='icat.log', level=logging.DEBUG, filemode='w')
     # root = logging.getLogger()
     # root.setLevel(logging.DEBUG)
