@@ -403,11 +403,6 @@ class icat():
         if verbose:
             print("Running semi-supervised louvain community detection")
         # logging.info("Runing sslouvain")
-        print("vertex:", vertex)
-        print(resolution)
-        print(y_)
-        print(mutables)
-        # print(g)
         part = sslouvain.find_partition(g,
                                         vertex,
                                         # sslouvain.CPMVertexPartition,
