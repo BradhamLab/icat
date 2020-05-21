@@ -94,7 +94,7 @@ class icat():
         self.neighbor_kws = neighbor_kws
         self.sslouvain_kws = sslouvain_kws
         self.pca_kws = pca_kws
-        utils.set_log()
+        # utils.set_log()
     
     @property
     def clustering(self):
@@ -292,7 +292,7 @@ class icat():
         if self.reference == 'all':
             if verbose:
                 print("Using all datasets as reference sets.")
-            logging.info('Using all datasets as references.')
+            # logging.info('Using all datasets as references.')
             if isinstance(perturbed, list):
                 reference = [controls.copy()] + [x.copy() for x in perturbed]
             else:
@@ -300,7 +300,7 @@ class icat():
         else:
             if verbose:
                 print("Using control samples as reference.")
-            logging.info("Using control samples as references.")
+            # logging.info("Using control samples as references.")
             reference = [controls.copy()]
         # if distance function is from ncfs.distances, expects feature weights 
         # check to see if they were provided, otherwise set weights to 1 
@@ -355,8 +355,8 @@ class icat():
             treatments = [each.obs[self.treatment_col].values[0]\
                           for each in reference]
         del reference
-        logging.info('Removing reference data sets. Combining across treatments.')
-        utils.log_system_usage()
+        # logging.info('Removing reference data sets. Combining across treatments.')
+        # utils.log_system_usage()
         # combine treatment datasets into single anndata object
         combined = controls.concatenate(perturbed, join='outer')
         # scale combined matrix between 0 and 1 and apply learned weights
@@ -392,12 +392,17 @@ class icat():
             resolution = self.sslouvain_kws['resolution_parameter']
         except KeyError:
             resolution = 1.0
+        try:
+            vertex = self.sslouvain_kws['partition_type']
+        except KeyError:
+            vertex = sslouvain.RBConfigurationVertexPartition
+
         y_, mutables = utils.format_labels(combined.obs[self.cluster_col])
         if verbose:
             print("Running semi-supervised louvain community detection")
-        logging.info("Runing sslouvain")
+        # logging.info("Runing sslouvain")
         part = sslouvain.find_partition(g,
-                                        sslouvain.RBConfigurationVertexPartition,
+                                        vertex,
                                         # sslouvain.CPMVertexPartition,
                                         # sslouvain.RBERVertexPartition,
                                         initial_membership=y_,
@@ -414,11 +419,12 @@ class icat():
     def __cluster_references(self, reference, verbose):
         if verbose:
             print("Clustering reference datasets...")
-        logging.info('Clustering reference datasets.')
-        utils.log_system_usage()
+            # logging.info('Clustering reference datasets.')
+        # utils.log_system_usage()
         for i, adata in enumerate(reference):
-            print("Clustering cells in reference {}".format(i + 1))
-            logging.info("Clustering cells in reference {}".format(i + 1))
+            if verbose:
+                print("Clustering cells in reference {}".format(i + 1))
+                # logging.info("Clustering cells in reference {}".format(i + 1))
             utils.log_system_usage()
             sc.pp.pca(adata, **self.pca_kws)
             sc.pp.neighbors(adata, **self.neighbor_kws)
@@ -429,8 +435,8 @@ class icat():
             elif self.clustering == 'leiden':
                 sc.tl.leiden(adata, **self.cluster_kws)
                 self.cluster_col = 'leiden'
-        logging.info('Cells clustered')
-        utils.log_system_usage()
+        # logging.info('Cells clustered')
+        # utils.log_system_usage()
 
     def __ncfs_fit(self, reference, scaler, verbose):
         # no previous clustering provided, cluster using louvain or leiden
@@ -440,8 +446,8 @@ class icat():
             start = time.time()
             if verbose:
                 print(f"Starting NCFS gradient ascent for dataset {i + 1}")
-            logging.info(f"Starting NCFS gradient ascent for dataset {i + 1}")
-            utils.log_system_usage()
+            # logging.info(f"Starting NCFS gradient ascent for dataset {i + 1}")
+            # utils.log_system_usage()
             model = ncfs.NCFS(**self.ncfs_kws)
             model.fit(scaler.transform(adata.X),
                     np.array(adata.obs[self.cluster_col].values),
@@ -449,7 +455,7 @@ class icat():
             weights[i, :] = model.coef_
             msg = "Dataset {} NCFS complete: {} to convergence".format(i + 1, 
                                               utils.ftime(time.time() - start))
-            logging.info(msg)
+            # logging.info(msg)
             if verbose:
                 print(msg)
         model.coef_ = np.max(weights, axis=0)
