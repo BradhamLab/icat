@@ -24,6 +24,8 @@ Example:
 import inspect
 import warnings
 import logging
+import time
+from distutils.version import StrictVersion
 
 import numpy as np
 import pandas as pd
@@ -240,7 +242,7 @@ class icat():
             value = default_kws
         self._pca_kws = value
 
-    def cluster(self, controls, perturbed):
+    def cluster(self, controls, perturbed, verbose=False):
         """
         Cluster cells in control and experimental conditions.
         
@@ -250,6 +252,8 @@ class icat():
             Annotated dataframe of control cells.
         perturbed : sc.AnnData
             Annotated dataframe of treated/perturbed cells.
+        verbose : boolean, optional
+            Whether to print progress through clustering step. 
         
         Returns
         -------
@@ -286,18 +290,21 @@ class icat():
                 raise ValueError("Expected {} column in perturbed data.".format(
                                     self.treatment_col))
         if self.reference == 'all':
+            if verbose:
+                print("Using all datasets as reference sets.")
             logging.info('Using all datasets as references.')
             if isinstance(perturbed, list):
                 reference = [controls.copy()] + [x.copy() for x in perturbed]
             else:
                 reference = [controls.copy()] + [perturbed.copy()]
         else:
+            if verbose:
+                print("Using control samples as reference.")
             logging.info("Using control samples as references.")
             reference = [controls.copy()]
         # if distance function is from ncfs.distances, expects feature weights 
         # check to see if they were provided, otherwise set weights to 1 
         if self.neighbor_kws['metric'].__module__ == 'ncfs.distances':
-            print(self.neighbor_kws)
             try:
                 self.neighbor_kws['metric_kwds']['w']
             except KeyError:
@@ -337,9 +344,11 @@ class icat():
         else:
             scaler.fit(controls.X)
         if self.cluster_col is None:
-            self.__cluster_references(reference)
-        logging.info("-" * 20 + " Starting NCFS Fitting " + "-" * 20)
-        model, weights = self.__ncfs_fit(reference, scaler)
+            self.__cluster_references(reference, verbose)
+        if verbose:
+            print("-" * 20 + " Starting NCFS Fitting " + "-" * 20)
+        # logging.info("-" * 20 + " Starting NCFS Fitting " + "-" * 20)
+        model, weights = self.__ncfs_fit(reference, scaler, verbose)
         # copy control clusters over to control dataset 
         controls.obs[self.cluster_col] = reference[0].obs[self.cluster_col]
         if self.reference == 'all':
@@ -373,29 +382,42 @@ class icat():
         sc.pp.neighbors(combined, **self.neighbor_kws)
         sc.tl.umap(combined)
         # grab connectivities of cells
-        g = utils.igraph_from_adjacency(combined.uns['neighbors']['connectivities'])
+        if StrictVersion(sc.__version__) < StrictVersion("1.5.0"):
+            A = combined.uns['neighbors']['connectivities']
+        else:
+            A = combined.obsp['connectivities']
+        g = utils.igraph_from_adjacency(A)
         # instantiate semi-supervised Louvain model
         try:
             resolution = self.sslouvain_kws['resolution_parameter']
         except KeyError:
             resolution = 1.0
         y_, mutables = utils.format_labels(combined.obs[self.cluster_col])
+        if verbose:
+            print("Running semi-supervised louvain community detection")
         logging.info("Runing sslouvain")
         part = sslouvain.find_partition(g,
                                         sslouvain.RBConfigurationVertexPartition,
+                                        # sslouvain.CPMVertexPartition,
+                                        # sslouvain.RBERVertexPartition,
                                         initial_membership=y_,
                                         mutable_nodes=mutables,
                                         resolution_parameter=resolution)
         # store new cluster labels in cell metadata
         combined.obs['sslouvain'] = part.membership
         combined.obs['sslouvain'] = combined.obs['sslouvain'].astype('category')
+        if verbose:
+            print("ICAT complete.")
         # utils.close_log()
         return combined
 
-    def __cluster_references(self, reference):
+    def __cluster_references(self, reference, verbose):
+        if verbose:
+            print("Clustering reference datasets...")
         logging.info('Clustering reference datasets.')
         utils.log_system_usage()
         for i, adata in enumerate(reference):
+            print("Clustering cells in reference {}".format(i + 1))
             logging.info("Clustering cells in reference {}".format(i + 1))
             utils.log_system_usage()
             sc.pp.pca(adata, **self.pca_kws)
@@ -410,18 +432,26 @@ class icat():
         logging.info('Cells clustered')
         utils.log_system_usage()
 
-    def __ncfs_fit(self, reference, scaler):
+    def __ncfs_fit(self, reference, scaler, verbose):
         # no previous clustering provided, cluster using louvain or leiden
         weights = np.zeros((len(reference), reference[0].shape[1]))
         for i, adata in enumerate(reference):
             # fit gene weights using control dataset
-            logging.info("Starting NCFS Gradient Ascent")
+            start = time.time()
+            if verbose:
+                print(f"Starting NCFS gradient ascent for dataset {i + 1}")
+            logging.info(f"Starting NCFS gradient ascent for dataset {i + 1}")
             utils.log_system_usage()
             model = ncfs.NCFS(**self.ncfs_kws)
             model.fit(scaler.transform(adata.X),
                     np.array(adata.obs[self.cluster_col].values),
                     sample_weights='balanced')
             weights[i, :] = model.coef_
+            msg = "Dataset {} NCFS complete: {} to convergence".format(i + 1, 
+                                              utils.ftime(time.time() - start))
+            logging.info(msg)
+            if verbose:
+                print(msg)
         model.coef_ = np.max(weights, axis=0)
         return model, weights
 
