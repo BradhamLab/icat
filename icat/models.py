@@ -25,7 +25,7 @@ import inspect
 import warnings
 import logging
 import time
-from distutils.version import StrictVersion
+from pkg_resources import parse_version
 
 import numpy as np
 import pandas as pd
@@ -382,7 +382,7 @@ class icat():
         sc.pp.neighbors(combined, **self.neighbor_kws)
         sc.tl.umap(combined)
         # grab connectivities of cells
-        if StrictVersion(sc.__version__) < StrictVersion("1.5.0"):
+        if parse_version(sc.__version__) < parse_version("1.5.0"):
             A = combined.uns['neighbors']['connectivities']
         else:
             A = combined.obsp['connectivities']
@@ -445,8 +445,8 @@ class icat():
         weights = np.zeros((len(reference), reference[0].shape[1]))
         for i, adata in enumerate(reference):
             # fit gene weights using control dataset
-            start = time.time()
             if verbose:
+                start = time.time()
                 print(f"Starting NCFS gradient ascent for dataset {i + 1}")
             # logging.info(f"Starting NCFS gradient ascent for dataset {i + 1}")
             # utils.log_system_usage()
@@ -455,10 +455,10 @@ class icat():
                     np.array(adata.obs[self.cluster_col].values),
                     sample_weights='balanced')
             weights[i, :] = model.coef_
-            msg = "Dataset {} NCFS complete: {} to convergence".format(i + 1, 
-                                              utils.ftime(time.time() - start))
             # logging.info(msg)
             if verbose:
+                msg = "Dataset {} NCFS complete: {} to convergence".format(i + 1, 
+                                               utils.ftime(time.time() - start))
                 print(msg)
         model.coef_ = np.max(weights, axis=0)
         return model, weights
