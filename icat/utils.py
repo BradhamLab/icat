@@ -61,6 +61,15 @@ def get_default_kwargs(func, ignore_params=[]):
     kwargs = {x:params[x].default for x in params if x not in ignore_params}
     return kwargs
 
+def check_string_ids(adata):
+    if isinstance(adata.obs.index, pd.RangeIndex):
+        warnings.warn("WARNING: Numeric index used for cell ids. " \
+                      "Converting to strings.")
+        adata.obs.index = adata.obs.index.map(str)
+    if isinstance(adata.var.index, pd.RangeIndex):
+        warnings.warn("WARNING: Numeric index used for gene ids. " \
+                      "Converting to strings.")
+        adata.var.index = adata.var.index.map(str)
 
 def check_matching_genes(ref, new):
     """Ensure two AnnData objects have shared genes."""
