@@ -264,6 +264,8 @@ class icat():
             raise ValueError("Expected AnnData object for `controls`.")
         if self.treatment_col not in controls.obs.columns:
             controls.obs[self.treatment_col] = 'Control'
+        # change numeric indices to strings
+        utils.check_string_ids(controls)
         if not isinstance(perturbed, sc.AnnData):
             if isinstance(perturbed, list):
                 if not all([isinstance(x, sc.AnnData) for x in perturbed]):
@@ -277,6 +279,8 @@ class icat():
                             for x in perturbed]):
                     raise ValueError("Expected {} column in perturbed data.".format(
                                      self.treatment_col))
+                for each in perturbed:
+                    utils.check_string_ids(each)
             else:
                 raise ValueError("Unexpected input type for `perturbed`: "
                                  "{}. Expected list of sc.AnnData objects or "
@@ -289,6 +293,7 @@ class icat():
             if self.treatment_col not in perturbed.obs.columns:
                 raise ValueError("Expected {} column in perturbed data.".format(
                                     self.treatment_col))
+            utils.check_string_ids(perturbed)
         if self.reference == 'all':
             if verbose:
                 print("Using all datasets as reference sets.")
@@ -316,16 +321,7 @@ class icat():
                     self.neighbor_kws['metric_kwds'] = {'w': np.ones(controls.X.shape[1])}
                     
         
-        # change numeric indices to strings
-        for each in [controls, perturbed]:
-            if isinstance(each.obs.index, pd.RangeIndex):
-                warnings.warn("WARNING: Numeric index used for cell ids. " \
-                              "Converting to strings.")
-                each.obs.index = each.obs.index.map(str)
-            if isinstance(each.var.index, pd.RangeIndex):
-                warnings.warn("WARNING: Numeric index used for gene ids. " \
-                              "Converting to strings.")
-                each.var.index = each.var.index.map(str)
+
 
         if self.cluster_col is not None:
             for adata in reference:
