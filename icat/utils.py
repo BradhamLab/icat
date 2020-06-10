@@ -64,7 +64,7 @@ def get_default_kwargs(func, ignore_params=[]):
 
 def check_matching_genes(ref, new):
     """Ensure two AnnData objects have shared genes."""
-    return set(ref.var.index.values).difference(new.var.index.values) == 0
+    return all(ref.var.index == new.var.index)
 
 
 def check_np_castable(obj, name):
