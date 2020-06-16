@@ -32,6 +32,7 @@ import pandas as pd
 import scanpy as sc
 import sslouvain
 from sklearn import preprocessing
+from sklearn.model_selection import train_test_split
 
 import ncfs
 
@@ -50,6 +51,17 @@ class icat():
     treatment_col : str, optional
         Column name in oberservation data annotating treatment type between
         datasets, by default 'treatment'.
+    reference : str, optional
+        Which data partitions to use for when learning gene weights. Default is 
+        'all' and all partions by treatment type will be used (as defined by 
+        values in `treatment_col`). Acceptable values are 'all' and 'controls'.
+    sub_sample : bool, optional
+        Whether to perform NCFS training on a sample of the data. Default is
+        False, and training will be performed on the entire dataset.
+    train_size : float, optional.
+        Proportion of data to train on if `sub_sample==True`. Values should be
+        between 0 and 1. Default is 0.1, and training will be performed on 10%
+        of the data.
     ncfs_kws : dict, optional
         Keyword arguments to pass to `ncfs.NCFS` model, by default None and
         default parameters are used. See `ncfs.NCFS` for more information.
@@ -80,13 +92,15 @@ class icat():
     """
 
     def __init__(self, clustering='louvain', treatment_col='treatment',
-                 reference='all',
+                 reference='all', sub_sample=False, train_size=0.1,
                  ncfs_kws=None, cluster_kws=None, cluster_col=None,
                  weight_threshold=1.0, neighbor_kws=None,
                  sslouvain_kws=None, pca_kws=None):
-        self.reference = reference
         self.clustering = clustering
         self.treatment_col = treatment_col
+        self.reference = reference
+        self.sub_sample = sub_sample
+        self.train_size = train_size
         self.ncfs_kws = ncfs_kws
         self.cluster_kws = cluster_kws
         self.cluster_col = cluster_col
@@ -131,6 +145,28 @@ class icat():
         if value not in ['all', 'controls']:
             raise ValueError("`reference` value should be either 'all' or 'controls'")
         self._reference = value
+
+    @property
+    def sub_sample(self):
+        "Whether to perform NCFS training on a sample of the data."
+        return self._sub_sample
+    
+    @sub_sample.setter
+    def sub_sample(self, value):
+        if not isinstance(value, bool):
+            raise ValueError('Expected bool for `sub_sample`')
+        self._sub_sample = value
+
+    @property
+    def train_size(self):
+        "Proportion of data to train on. Default is 0.1"
+        return self._train_size
+    
+    @train_size.setter
+    def train_size(self, value):
+        if not 0 < value < 1:
+            raise ValueError("Expected value between 0 and 1 for `train_size`.")
+        self._train_size = value
 
     @property
     def ncfs_kws(self):
@@ -347,10 +383,10 @@ class icat():
             self.__cluster_references(reference, verbose)
         if verbose:
             print("-" * 20 + " Starting NCFS Fitting " + "-" * 20)
-        # logging.info("-" * 20 + " Starting NCFS Fitting " + "-" * 20)
-        model, weights = self.__ncfs_fit(reference, scaler, verbose)
         # copy control clusters over to control dataset 
         controls.obs[self.cluster_col] = reference[0].obs[self.cluster_col]
+        # logging.info("-" * 20 + " Starting NCFS Fitting " + "-" * 20)
+        model, weights = self.__ncfs_fit(reference, scaler, verbose)
         if self.reference == 'all':
             treatments = [each.obs[self.treatment_col].values[0]\
                           for each in reference]
@@ -445,20 +481,29 @@ class icat():
         weights = np.zeros((len(reference), reference[0].shape[1]))
         for i, adata in enumerate(reference):
             # fit gene weights using control dataset
-            start = time.time()
             if verbose:
+                start = time.time()
                 print(f"Starting NCFS gradient ascent for dataset {i + 1}")
+            X_train = adata.X
+            y_train = adata.obs[self.cluster_col].values
+            if self.sub_sample:
+                splits = train_test_split(adata.X,
+                                          adata.obs[self.cluster_col],
+                                          train_size=self.train_size,
+                                          stratify=adata.obs[self.cluster_col])
+                X_train = splits[0]
+                y_train = splits[2].values
             # logging.info(f"Starting NCFS gradient ascent for dataset {i + 1}")
             # utils.log_system_usage()
             model = ncfs.NCFS(**self.ncfs_kws)
-            model.fit(scaler.transform(adata.X),
-                    np.array(adata.obs[self.cluster_col].values),
-                    sample_weights='balanced')
+            model.fit(scaler.transform(X_train),
+                      np.array(y_train),
+                      sample_weights='balanced')
             weights[i, :] = model.coef_
-            msg = "Dataset {} NCFS complete: {} to convergence".format(i + 1, 
-                                              utils.ftime(time.time() - start))
             # logging.info(msg)
             if verbose:
+                msg = "Dataset {} NCFS complete: {} to convergence".format(i + 1, 
+                              utils.ftime(time.time() - start))
                 print(msg)
         model.coef_ = np.max(weights, axis=0)
         return model, weights
