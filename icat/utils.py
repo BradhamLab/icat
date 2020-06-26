@@ -35,10 +35,12 @@ def set_log():
     logging.info("System Usage upon startup")
     log_system_usage()
 
-def log_system_usage():
+def log_system_usage(msg=None):
     pid = os.getpid()
     py = psutil.Process(pid)
     memory_use = py.memory_info().rss / 2 ** 30 
+    if msg is not None:
+        logging.info(msg)
     logging.info("Memory usage: {:0.03} GB".format(memory_use))
 
 def close_log(): # this doesn't work
@@ -75,6 +77,12 @@ def check_matching_genes(ref, new):
     """Ensure two AnnData objects have shared genes."""
     return all(ref.var.index == new.var.index)
 
+def subset_cells(adata, vector, value, copy=True):
+    """Subset cells by finding indices in `vector` where `value` occurs."""
+    idxs = np.where(vector == value)[0]
+    if copy:
+        return adata[idxs, :].copy()
+    return adata[idxs, :]
 
 def check_np_castable(obj, name):
     """Check whether an object is castable to a numpy.ndarray."""
@@ -83,7 +91,7 @@ def check_np_castable(obj, name):
             obj = np.array(obj)
         except:
             raise ValueError("Expected numpy.ndarray castable object for "
-                            "`{}`. Got {}.".format(obj, type(obj)))
+                            "`{}`. Got {}.".format(name, type(obj)))
     return obj
 
 

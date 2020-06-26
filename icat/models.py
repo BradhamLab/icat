@@ -29,11 +29,13 @@ from pkg_resources import parse_version
 
 import numpy as np
 import pandas as pd
-import scanpy as sc
-import sslouvain
 from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
+from sklearn.neighbors import KNeighborsTransformer
+import apricot
+import scanpy as sc
 
+import sslouvain
 import ncfs
 
 from . import utils
@@ -55,11 +57,11 @@ class icat():
         Which data partitions to use for when learning gene weights. Default is 
         'all' and all partions by treatment type will be used (as defined by 
         values in `treatment_col`). Acceptable values are 'all' and 'controls'.
-    sub_sample : bool, optional
+    subsample : bool, optional
         Whether to perform NCFS training on a sample of the data. Default is
         False, and training will be performed on the entire dataset.
     train_size : float, optional.
-        Proportion of data to train on if `sub_sample==True`. Values should be
+        Proportion of data to train on if `subsample==True`. Values should be
         between 0 and 1. Default is 0.1, and training will be performed on 10%
         of the data.
     ncfs_kws : dict, optional
@@ -91,24 +93,34 @@ class icat():
         more information.
     """
 
-    def __init__(self, clustering='louvain', treatment_col='treatment',
-                 reference='all', sub_sample=False, train_size=0.1,
+    def __init__(self, ctrl_value, clustering='louvain',
+                 reference='all', subsample=False, train_size=0.1,
                  ncfs_kws=None, cluster_kws=None, cluster_col=None,
-                 weight_threshold=1.0, neighbor_kws=None,
-                 sslouvain_kws=None, pca_kws=None):
+                 neighbor_kws=None,
+                 sslouvain_kws=None, pca_kws=None, subsample_kws=None):
+        self.ctrl_value = ctrl_value
         self.clustering = clustering
-        self.treatment_col = treatment_col
         self.reference = reference
-        self.sub_sample = sub_sample
+        self.subsample = subsample
         self.train_size = train_size
         self.ncfs_kws = ncfs_kws
         self.cluster_kws = cluster_kws
         self.cluster_col = cluster_col
-        self.weight_threshold = weight_threshold
         self.neighbor_kws = neighbor_kws
         self.sslouvain_kws = sslouvain_kws
         self.pca_kws = pca_kws
+        self.subsample_kws = subsample_kws
         # utils.set_log()
+
+    @property
+    def ctrl_value(self):
+        return self._ctrl_value
+    
+    @ctrl_value.setter
+    def ctrl_value(self, value):
+        if not isinstance(value, str):
+            raise ValueError("Expected string for `ctrl_value` parameter")
+        self._ctrl_value = value
     
     @property
     def clustering(self):
@@ -125,17 +137,6 @@ class icat():
         self._clustering = value
 
     @property
-    def treatment_col(self):
-        """
-        Column in control and perturbed datasets annotated treatment.
-        """
-        return self._treatment_col
-
-    @treatment_col.setter
-    def treatment_col(self, value):
-        self._treatment_col = value
-
-    @property
     def reference(self):
         """Reference data set. Acceptable values 'all' or 'controls'."""
         return self._reference
@@ -147,15 +148,15 @@ class icat():
         self._reference = value
 
     @property
-    def sub_sample(self):
+    def subsample(self):
         "Whether to perform NCFS training on a sample of the data."
-        return self._sub_sample
+        return self._subsample
     
-    @sub_sample.setter
-    def sub_sample(self, value):
+    @subsample.setter
+    def subsample(self, value):
         if not isinstance(value, bool):
-            raise ValueError('Expected bool for `sub_sample`')
-        self._sub_sample = value
+            raise ValueError('Expected bool for `subsample`')
+        self._subsample = value
 
     @property
     def train_size(self):
@@ -183,18 +184,6 @@ class icat():
         else:
             value = default_kws
         self._ncfs_kws = value
-    
-    @property
-    def weight_threshold(self):
-        """ Weight threshold for genes to be considered informative."""
-        return self._weight_threshold
-    
-    @weight_threshold.setter
-    def weight_threshold(self, value):
-        if not isinstance(value, (float, int, np.float, np.integer)):
-            raise ValueError("Expected numerical value for `weight_threshold`."
-                             "Received: {}".format(value))
-        self._weight_threshold = value
 
     @property
     def neighbor_kws(self):
@@ -278,71 +267,67 @@ class icat():
             value = default_kws
         self._pca_kws = value
 
-    def cluster(self, controls, perturbed, verbose=False):
+    
+    @property
+    def subsample_kws(self):
+        """Keyword arguments for `select_cells()`"""
+        return self._subsample_kws
+    
+    @subsample_kws.setter
+    def subsample_kws(self, value):
+        default_kws = utils.get_default_kwargs(self.select_cells, ['adata',
+                                                                   'label_col'])
+        if value is not None:
+            if "selector" in value:
+                if not any([value["selector"] == x for x in 
+                           [apricot.MaxCoverageSelection,
+                            apricot.MixtureSelection,
+                            apricot.SumRedundancySelection,
+                            apricot.FacilityLocationSelection,
+                            apricot.FeatureBasedSelection,
+                            apricot.GraphCutSelection,
+                            apricot.SaturatedCoverageSelection]]):
+                    raise ValueError("Expected `apricot` submodular "\
+                                     "optimization method for `selector`.")
+            value = utils.check_kws(default_kws, value, "subsample_kws")
+        else:
+            value = default_kws
+        self._subsample_kws = value
+
+
+    def cluster(self, adata, treatment, verbose=False):
         """
         Cluster cells in control and experimental conditions.
         
         Parameters
         ----------
-        controls : sc.AnnData
-            Annotated dataframe of control cells.
-        perturbed : sc.AnnData
-            Annotated dataframe of treated/perturbed cells.
+        adata : sc.AnnData
+            Annotated dataframe of cells.
+        perturbed : pd.Series, numpy.ndarray, list-like
+            Treatment labels for each cell in `adata`.
         verbose : boolean, optional
             Whether to print progress through clustering step. 
         
         Returns
         -------
         sc.AnnData
-            Annotated dataframe of combined cells in NCFS space. 
+            Annotated dataframe of out cells in NCFS space. 
         """
-        if not isinstance(controls, sc.AnnData):
+        self.log_ = True
+        if self.log_:
+            utils.set_log()
+            utils.log_system_usage('Instantiation')
+
+        self.verbose_ = verbose
+        if not isinstance(adata, sc.AnnData):
             raise ValueError("Expected AnnData object for `controls`.")
-        if self.treatment_col not in controls.obs.columns:
-            controls.obs[self.treatment_col] = 'Control'
-        # change numeric indices to strings
-        utils.check_string_ids(controls)
-        if not isinstance(perturbed, sc.AnnData):
-            if isinstance(perturbed, list):
-                if not all([isinstance(x, sc.AnnData) for x in perturbed]):
-                    raise ValueError("Expected all perturbed datasets to be "
-                                     "sc.AnnData objects.")
-                if not all([utils.check_matching_genes(controls, x)\
-                for x in perturbed]):
-                    raise ValueError("Gene columns do not match between control"
-                                     " and perturbed cells.")
-                if not all([self.treatment_col in x.obs.columns\
-                            for x in perturbed]):
-                    raise ValueError("Expected {} column in perturbed data.".format(
-                                     self.treatment_col))
-                for each in perturbed:
-                    utils.check_string_ids(each)
-            else:
-                raise ValueError("Unexpected input type for `perturbed`: "
-                                 "{}. Expected list of sc.AnnData objects or "
-                                 "a single sc.AnnData object".\
-                                 format(type(perturbed)))
+        if isinstance(treatment, pd.Series):
+            treatment = treatment.values
         else:
-            if utils.check_matching_genes(controls, perturbed):
-                raise ValueError("Gene columns do not match between control and"
-                                    " perturbed cells.")
-            if self.treatment_col not in perturbed.obs.columns:
-                raise ValueError("Expected {} column in perturbed data.".format(
-                                    self.treatment_col))
-            utils.check_string_ids(perturbed)
-        if self.reference == 'all':
-            if verbose:
-                print("Using all datasets as reference sets.")
-            # logging.info('Using all datasets as references.')
-            if isinstance(perturbed, list):
-                reference = [controls.copy()] + [x.copy() for x in perturbed]
-            else:
-                reference = [controls.copy()] + [perturbed.copy()]
-        else:
-            if verbose:
-                print("Using control samples as reference.")
-            # logging.info("Using control samples as references.")
-            reference = [controls.copy()]
+            treatment = utils.check_np_castable(treatment, 'treatment')
+        if not self.ctrl_value in treatment:
+            raise ValueError(f"Control value {self.ctrl_value} not found " \
+                              "in treatment array.")
         # if distance function is from ncfs.distances, expects feature weights 
         # check to see if they were provided, otherwise set weights to 1 
         if self.neighbor_kws['metric'].__module__ == 'ncfs.distances':
@@ -352,72 +337,45 @@ class icat():
                 # check for dict to update previously specified values
                 if isinstance(self.neighbor_kws['metric_kwds'], dict):
                     self.neighbor_kws['metric_kwds'].update(
-                                            {'w': np.ones(controls.X.shape[1])})
+                                            {'w': np.ones(adata.shape[1])})
                 else:
-                    self.neighbor_kws['metric_kwds'] = {'w': np.ones(controls.X.shape[1])}
+                    self.neighbor_kws['metric_kwds'] = {'w': np.ones(adata.shape[1])}
+        utils.log_system_usage("Starting NCFS transformation.")
+        self.__learn_weights(adata, treatment)
                     
+        # n_clusters = len(controls.obs[self.cluster_col].unique())
+        adata.var['informative'] = adata.var['ncfs.weights'].apply(lambda x: x > 1)
+        informative = adata.var['informative'].sum()
+        if self.verbose_:
+            print(f"Found {informative} informative features.")
         
+        # self.neighbor_kws['use_rep'] = 'X_icat'
+        # return adata
+        # if informative < n_clusters:
+        #     warnings.warn("Number of informative genes less "
+        #                   "than the number of identified control clusters: "
+        #                   f"informative genes: {informative}, "
+        #                   f"number of clusters: {n_clusters}. Consider "
+        #                   "increasing `sigma` or decreasing `reg` for better "
+        #                   "performance.")
+        # scikit-learn 0.22, umap==0.4.4
+        if self.log_:
+            utils.log_system_usage("Before NCFS neighbors.")
+        # A = KNeighborsTransformer(mode='connectivity',
+        #                           n_neighbors=self.neighbor_kws['n_neighbors'])\
+        #                          .fit_transform(adata.obsm['X_icat'])
 
-
-        if self.cluster_col is not None:
-            for adata in reference:
-                if self.cluster_col not in adata.obs.columns:
-                    raise ValueError(f"`cluster_col` - {self.cluster_col} not found"
-                                    " in control data.")
-                if np.any([pd.isnull(x) for x in adata.obs[self.cluster_col]]):
-                    raise ValueError("Expected labelled cells by passing "\
-                                     "`cluster_col`={}. ".format(self.cluster_col) +
-                                     "Received atleast one unannotated cell.")
-
-        # fit scale function to scale features between 0 and 1
-        scaler = preprocessing.MinMaxScaler()
-        if self.reference == 'all':
-            scaler.fit(reference[0].concatenate(reference[1:], join='outer').X)
-        else:
-            scaler.fit(controls.X)
-        if self.cluster_col is None:
-            self.__cluster_references(reference, verbose)
-        if verbose:
-            print("-" * 20 + " Starting NCFS Fitting " + "-" * 20)
-        # copy control clusters over to control dataset 
-        controls.obs[self.cluster_col] = reference[0].obs[self.cluster_col]
-        # logging.info("-" * 20 + " Starting NCFS Fitting " + "-" * 20)
-        model, weights = self.__ncfs_fit(reference, scaler, verbose)
-        if self.reference == 'all':
-            treatments = [each.obs[self.treatment_col].values[0]\
-                          for each in reference]
-        del reference
-        # logging.info('Removing reference data sets. Combining across treatments.')
-        # utils.log_system_usage()
-        # combine treatment datasets into single anndata object
-        combined = controls.concatenate(perturbed, join='outer')
-        # scale combined matrix between 0 and 1 and apply learned weights
-        # across gene expression matrix
-        combined.X = model.transform(scaler.transform(combined.X))
-        # save genes weights
-        combined.var['ncfs.weights'] = model.coef_
-        if self.reference == 'all':
-            for i, value in enumerate(treatments):
-                combined.var["{}.weights".format(value)] = weights[i, :]
-        n_clusters = len(controls.obs[self.cluster_col].unique())
-        combined.var['informative'] = combined.var['ncfs.weights'].apply(lambda x: x > self.weight_threshold)
-        informative = combined.var['informative'].sum()
-        if sum(model.coef_ > self.weight_threshold) < n_clusters:
-            warnings.warn("Number of informative genes less "
-                          "than the number of identified control clusters: "
-                          f"informative genes: {informative}, "
-                          f"number of clusters:  {n_clusters}. Consider "
-                          "increasing `sigma` or decreasing `reg` for better "
-                          "performance.")
-        # create neighbor graph for control+perturbed combined data
-        self.neighbor_kws['use_rep'] = 'X'
-        sc.pp.neighbors(combined, **self.neighbor_kws)
-        sc.tl.umap(combined)
+        # sc.pp.neighbors(adata, **self.neighbor_kws)
+        sc.pp.neighbors(adata, n_neighbors=self.neighbor_kws['n_neighbors'])
+        sc.pp.neighbors(adata)
+        if self.log_:
+            utils.log_system_usage("After NCFS neighbors.")
+        sc.tl.umap(adata)
         # grab connectivities of cells
         if parse_version(sc.__version__) < parse_version("1.5.0"):
-            A = combined.uns['neighbors']['connectivities']
+            A = adata.uns['neighbors']['connectivities']
         else:
-            A = combined.obsp['connectivities']
+            A = adata.obsp['connectivities']
         g = utils.igraph_from_adjacency(A)
         # instantiate semi-supervised Louvain model
         try:
@@ -431,77 +389,218 @@ class icat():
         if not isinstance(vertex, utils.ig.VertexClustering):
             vertex = sslouvain.RBConfigurationVertexPartition
 
-        y_, mutables = utils.format_labels(combined.obs[self.cluster_col])
-        if verbose:
+        y_, mutables = utils.format_labels(adata.obs[self.cluster_col_])
+        if self.verbose_:
             print("Running semi-supervised louvain community detection")
         # logging.info("Runing sslouvain")
         part = sslouvain.find_partition(g,
                                         vertex,
-                                        # sslouvain.CPMVertexPartition,
-                                        # sslouvain.RBERVertexPartition,
                                         initial_membership=y_,
                                         mutable_nodes=mutables,
                                         resolution_parameter=resolution)
         # store new cluster labels in cell metadata
-        combined.obs['sslouvain'] = part.membership
-        combined.obs['sslouvain'] = combined.obs['sslouvain'].astype('category')
-        if verbose:
+        adata.obs['sslouvain'] = part.membership
+        adata.obs['sslouvain'] = adata.obs['sslouvain'].astype('category')
+        if self.verbose_:
             print("ICAT complete.")
         # utils.close_log()
-        return combined
+        return adata
 
-    def __cluster_references(self, reference, verbose):
-        if verbose:
-            print("Clustering reference datasets...")
-            # logging.info('Clustering reference datasets.')
+    def __learn_weights(self, adata, treatment):
+        reference = [utils.subset_cells(adata, treatment, self.ctrl_value)]
+        scaler = preprocessing.MinMaxScaler()
+        if self.reference == 'all':
+            if self.verbose_:
+                print("Using all datasets as reference sets.")
+            reference += [utils.subset_cells(adata, treatment, x, False) \
+                          for x in np.unique(treatment) if x != self.ctrl_value]
+            scaler.fit(adata.X)
+        else:
+            if self.verbose_:
+                print("Using control samples as reference.")
+            scaler.fit(reference[0].X)
+        reference = self.__cluster_references(reference)
+        model, weights = self.__ncfs_fit(reference, scaler)
+        if self.verbose_:
+            print("-" * 20 + " Finished NCFS Fitting " + "-" * 20)
+
+        adata.obs[self.cluster_col_] = None
+        adata.obs.loc[reference[0].obs.index, self.cluster_col_] \
+            = reference[0].obs[self.cluster_col_]
+        del reference
+        adata.obsm['X_icat'] = model.transform(scaler.transform(adata.X))
+
+        # copy control clusters over to control dataset
+
+
+        # save genes weights
+        adata.var['ncfs.weights'] = model.coef_
+        if self.reference == 'all':
+            for i, value in enumerate(np.unique(treatment)):
+                if value != self.ctrl_value:
+                    adata.var["{}.weights".format(value)] = weights[i, :]
+        # free up memory by deleting unecessary objects
+        del model
+        del adata.uns
+        del adata.obsm['X_umap']
+        if self.log_:
+            utils.log_system_usage('NCFS transform complete.')
+
+
+        
+    def __cluster_references(self, reference):
+        # logging.info('Clustering reference datasets.')
         # utils.log_system_usage()
-        for i, adata in enumerate(reference):
-            if verbose:
-                print("Clustering cells in reference {}".format(i + 1))
+        for i, ref in enumerate(reference):
+            if self.verbose_:
+                print("Clustering cells in reference {}.".format(i + 1))
                 # logging.info("Clustering cells in reference {}".format(i + 1))
-            utils.log_system_usage()
-            sc.pp.pca(adata, **self.pca_kws)
-            sc.pp.neighbors(adata, **self.neighbor_kws)
-            sc.tl.umap(adata)
+            # utils.log_system_usage()
+            sc.pp.pca(ref, **self.pca_kws)
+            sc.pp.neighbors(ref, **self.neighbor_kws)
+            sc.tl.umap(ref)
             if self.clustering == 'louvain':
-                sc.tl.louvain(adata, **self.cluster_kws)
-                self.cluster_col = 'louvain'
+                sc.tl.louvain(ref, **self.cluster_kws)
+                self.cluster_col_ = 'louvain'
             elif self.clustering == 'leiden':
-                sc.tl.leiden(adata, **self.cluster_kws)
-                self.cluster_col = 'leiden'
+                sc.tl.leiden(ref, **self.cluster_kws)
+                self.cluster_col_ = 'leiden'
+        if self.log_:
+            utils.log_system_usage("Clustered reference datasets.")
+        return reference
         # logging.info('Cells clustered')
         # utils.log_system_usage()
 
-    def __ncfs_fit(self, reference, scaler, verbose):
+    def select_cells(self, adata, label_col, method='submodular',
+                     selector=apricot.MaxCoverageSelection,
+                     by_cluster=True, stratified=False):
+        """
+        Select cells to train NCFS weights on.
+
+        Parameters
+        ----------
+        adata : sc.AnnData
+            Annotated dataframe containing cell labels and expression values.
+        label_col : str
+            Column in `adata.obs` containing labels to use during NCFS.
+        method : str, optional
+            Method to select training cells. Possible values are 'submodular' 
+            and 'random'. By default 'submodular', and sobmodular optimization
+            will be used to find the "best" cells to train on.
+        selector : apricot.Function, optional
+            Sub-optimal optimizer function from `apricot`. Default is
+            `apricot.MaxCoverageSelection`. 
+        by_cluster : bool, optional
+            Whether to perform submodular optimization on a per cluster basis.
+            Otherwise perform on the whole dataset with labels provided. By
+            default true.
+        stratified : bool, optional
+            Whether to select cells in a stratified manner. By default False,
+            and for `by_cluster` submodular optimization, an equal number of
+            cells from each cluster will be chosen. Otherwise, a number
+            proportional to the label prevalence will be chosen.
+
+        Returns
+        -------
+        (X_train, y_train) : (np.ndarray, np.ndarray)
+            A tuple of the data matrix X and observation labels y to be used
+            during NCFS training.
+        """
+
+        if method == 'submodular':
+            if self.verbose_:
+                print('Selecting training cells using submodular optimization...')
+            if by_cluster:
+                labels, counts = np.unique(adata.obs[label_col].sort_values(),
+                                           return_counts=True)
+                train_X = []
+                train_y = []
+                for label, count in zip(labels, counts):
+                    cluster_X = adata[adata.obs[label_col] == label, :].X
+                    n_samples = int(adata.shape[0] / len(labels) * self.train_size)
+                    # will have to check to see if n_samples > count
+                    if stratified:
+                        n_samples = int(count * self.train_size)
+                    if n_samples < cluster_X.shape[0]:
+                        model = selector(n_samples)
+                        X = model.fit_transform(cluster_X)
+                        train_X.append(X)
+                        train_y.append([label] * X.shape[0])
+                    else:
+                        msg = "Number of samples to select exceeds number of "\
+                              "cells in provided cluster. Selecting all " \
+                              "samples in cluster {}".format(label)
+                        warnings.warn(msg)
+                        train_X.append(cluster_X)
+                        train_y.append([label] * cluster_X.shape[0])
+                    print(f"cluster {label} size: {count}, train_size: {train_X[-1].shape[0]}")
+                train_X = np.vstack(train_X)
+                train_y = np.hstack(train_y)
+            else:
+                select_model = selector(int(adata.shape[0] * self.train_size))
+                train_X, train_y = select_model.fit_transform(
+                                        adata[adata.obs[label_col] == label, :].X,
+                                        adata.obs[label_col].values)
+                print(f"cluster {label} size: {count}, train_size: {train_X.shape[0]}")
+        elif method == 'random':
+            if self.verbose_:
+                print('Randomly selecting training cells.')
+            if stratified:
+                stratified = adata.obs[label_col].values
+            splits = train_test_split(adata.X,
+                                      adata.obs[label_col].values,
+                                      train_size=self.train_size,
+                                      stratify=stratified)
+            train_X = splits[0]
+            train_y = splits[2]
+        elif method == 'centroid':
+            train_X = []
+            for label in np.unique(adata.obs[label_col]):
+                cluster_X = adata[adata.obs[label_col] == label].X
+                train_X.append(cluster_X.median(axis=0))
+                train_y.append([label])
+        else:
+            raise NotImplementedError(f"No support for method {method}. "\
+                                      "Supported methods are 'submodular' and "\
+                                      "random'.")
+        if self.log_:
+            utils.log_system_usage('After cell selection.')
+        return train_X, train_y
+
+    def __ncfs_fit(self, reference, scaler):
         # no previous clustering provided, cluster using louvain or leiden
         weights = np.zeros((len(reference), reference[0].shape[1]))
-        for i, adata in enumerate(reference):
+        for i, ref in enumerate(reference):
+            ref.X = scaler.transform(ref.X)
             # fit gene weights using control dataset
-            if verbose:
+            if self.verbose_:
                 start = time.time()
-                print(f"Starting NCFS gradient ascent for dataset {i + 1}")
-            X_train = adata.X
-            y_train = adata.obs[self.cluster_col].values
-            if self.sub_sample:
-                splits = train_test_split(adata.X,
-                                          adata.obs[self.cluster_col],
-                                          train_size=self.train_size,
-                                          stratify=adata.obs[self.cluster_col])
-                X_train = splits[0]
-                y_train = splits[2].values
+                print(f"Starting NCFS gradient ascent for dataset {i + 1}/{len(reference)}")
+            X_train = ref.X
+            y_train = ref.obs[self.cluster_col_].values
+            if self.subsample:
+                print(np.min(ref.X))
+                print(np.max(ref.X))
+                X_train, y_train = self.select_cells(ref,
+                                                     self.cluster_col_,
+                                                     **self.subsample_kws)
+                if self.verbose_:
+                    print(f"Training NCFS on {X_train.shape[0]} samples out of "+\
+                          f"{ref.shape[0]}")
+
             # logging.info(f"Starting NCFS gradient ascent for dataset {i + 1}")
             # utils.log_system_usage()
             model = ncfs.NCFS(**self.ncfs_kws)
-            model.fit(scaler.transform(X_train),
-                      np.array(y_train),
-                      sample_weights='balanced')
+            model.fit(X_train, y_train, sample_weights='balanced')
             weights[i, :] = model.coef_
             # logging.info(msg)
-            if verbose:
-                msg = "Dataset {} NCFS complete: {} to convergence".format(i + 1, 
+            if self.verbose_:
+                msg = "Dataset {} NCFS complete: {} to convergence".format(i+1, 
                               utils.ftime(time.time() - start))
                 print(msg)
         model.coef_ = np.max(weights, axis=0)
+        if self.log_:
+            utils.log_system_usage('After NCFS fitting.')
         return model, weights
 
 
