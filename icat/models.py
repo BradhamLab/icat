@@ -361,21 +361,21 @@ class icat():
         # scikit-learn 0.22, umap==0.4.4
         if self.log_:
             utils.log_system_usage("Before NCFS neighbors.")
-        # A = KNeighborsTransformer(mode='connectivity',
-        #                           n_neighbors=self.neighbor_kws['n_neighbors'])\
-        #                          .fit_transform(adata.obsm['X_icat'])
+        A = KNeighborsTransformer(mode='connectivity',
+                                  n_neighbors=self.neighbor_kws['n_neighbors'])\
+                                 .fit_transform(adata.obsm['X_icat'])
 
         # sc.pp.neighbors(adata, **self.neighbor_kws)
-        sc.pp.neighbors(adata, n_neighbors=self.neighbor_kws['n_neighbors'])
-        sc.pp.neighbors(adata)
+        # sc.pp.neighbors(adata, n_neighbors=self.neighbor_kws['n_neighbors'])
+        # sc.pp.neighbors(adata)
         if self.log_:
             utils.log_system_usage("After NCFS neighbors.")
-        sc.tl.umap(adata)
-        # grab connectivities of cells
-        if parse_version(sc.__version__) < parse_version("1.5.0"):
-            A = adata.uns['neighbors']['connectivities']
-        else:
-            A = adata.obsp['connectivities']
+
+        # # grab connectivities of cells
+        # if parse_version(sc.__version__) < parse_version("1.5.0"):
+        #     A = adata.uns['neighbors']['connectivities']
+        # else:
+        #     A = adata.obsp['connectivities']
         g = utils.igraph_from_adjacency(A)
         # instantiate semi-supervised Louvain model
         try:
@@ -458,7 +458,7 @@ class icat():
             # utils.log_system_usage()
             sc.pp.pca(ref, **self.pca_kws)
             sc.pp.neighbors(ref, **self.neighbor_kws)
-            sc.tl.umap(ref)
+            # sc.tl.umap(ref)
             if self.clustering == 'louvain':
                 sc.tl.louvain(ref, **self.cluster_kws)
                 self.cluster_col_ = 'louvain'
@@ -472,7 +472,7 @@ class icat():
         # utils.log_system_usage()
 
     def select_cells(self, adata, label_col, method='submodular',
-                     selector=apricot.MaxCoverageSelection,
+                     selector=apricot.FacilityLocationSelection,
                      by_cluster=True, stratified=False):
         """
         Select cells to train NCFS weights on.
