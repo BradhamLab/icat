@@ -441,7 +441,14 @@ class icat():
                     adata.var["{}.weights".format(value)] = weights[i, :]
         # free up memory by deleting unecessary objects
         del model
-        del adata.uns
+        try:
+            del adata.uns['neighbors']
+        except (AttributeError, KeyError):
+            pass
+        try:
+            del adata.obsp['neighbors']
+        except (AttributeError, KeyError):
+            pass
         del adata.obsm['X_umap']
         if self.log_:
             utils.log_system_usage('NCFS transform complete.')
