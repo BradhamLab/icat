@@ -449,7 +449,6 @@ class icat():
             del adata.obsp['neighbors']
         except (AttributeError, KeyError):
             pass
-        del adata.obsm['X_umap']
         if self.log_:
             utils.log_system_usage('NCFS transform complete.')
 
