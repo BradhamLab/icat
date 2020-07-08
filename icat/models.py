@@ -313,7 +313,7 @@ class icat():
         sc.AnnData
             Annotated dataframe of out cells in NCFS space. 
         """
-        self.log_ = True
+        self.log_ = False
         if self.log_:
             utils.set_log()
             utils.log_system_usage('Instantiation')
@@ -340,7 +340,8 @@ class icat():
                                             {'w': np.ones(adata.shape[1])})
                 else:
                     self.neighbor_kws['metric_kwds'] = {'w': np.ones(adata.shape[1])}
-        utils.log_system_usage("Starting NCFS transformation.")
+        if self.log_:
+            utils.log_system_usage("Starting NCFS transformation.")
         self.__learn_weights(adata, treatment)
                     
         # n_clusters = len(controls.obs[self.cluster_col].unique())
@@ -464,13 +465,19 @@ class icat():
             # utils.log_system_usage()
             sc.pp.pca(ref, **self.pca_kws)
             sc.pp.neighbors(ref, **self.neighbor_kws)
-            # sc.tl.umap(ref)
-            if self.clustering == 'louvain':
-                sc.tl.louvain(ref, **self.cluster_kws)
-                self.cluster_col_ = 'louvain'
-            elif self.clustering == 'leiden':
-                sc.tl.leiden(ref, **self.cluster_kws)
-                self.cluster_col_ = 'leiden'
+            if self.cluster_col is not None:
+                print(f"Using provided cell labels in {self.cluster_col}.")
+                if self.cluster_col not in ref.obs.columns:
+                    raise ValueError(f"Provided cluster column {self.cluster_col} "\
+                                      "not found in observation data.")
+                self.cluster_col_ = self.cluster_col
+            else:
+                if self.clustering == 'louvain':
+                    sc.tl.louvain(ref, **self.cluster_kws)
+                    self.cluster_col_ = 'louvain'
+                elif self.clustering == 'leiden':
+                    sc.tl.leiden(ref, **self.cluster_kws)
+                    self.cluster_col_ = 'leiden'
         if self.log_:
             utils.log_system_usage("Clustered reference datasets.")
         return reference
