@@ -214,7 +214,6 @@ def format_labels(clusters):
         clusters = np.array(clusters)
     elif not isinstance(clusters, np.ndarray):
         warnings.warn(f"Unsupport type {type(clusters)} for `clusters`")
-    clusters = clusters.astype(float)
     mutables = [True] * len(clusters)
     labels = [None] * len(clusters)
     label_to_int = {x: i for i, x in enumerate(sorted(np.unique(clusters)))}
