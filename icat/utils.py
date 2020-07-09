@@ -216,13 +216,14 @@ def format_labels(clusters):
         warnings.warn(f"Unsupport type {type(clusters)} for `clusters`")
     mutables = [True] * len(clusters)
     labels = [None] * len(clusters)
-    label_to_int = {x: i for i, x in enumerate(sorted(np.unique(clusters)))}
+    named_clusters = set([x for x in clusters if not is_none(x)])
+    label_to_int = {x: i for i, x in enumerate(sorted(named_clusters))}
     start_label = len(label_to_int)
     for i, x in enumerate(clusters):
         if is_none(x):
             labels[i] = start_label
             start_label += 1
         else:
-            labels[i] = label_to_int(x)
+            labels[i] = label_to_int[x]
             mutables[i] = False
     return (labels, mutables)
