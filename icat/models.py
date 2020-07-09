@@ -603,6 +603,7 @@ class icat():
 
             # logging.info(f"Starting NCFS gradient ascent for dataset {i + 1}")
             # utils.log_system_usage()
+            y_train, __ = utils.format_labels(y_train)
             model = ncfs.NCFS(**self.ncfs_kws)
             model.fit(X_train, y_train, sample_weights='balanced')
             weights[i, :] = model.coef_
