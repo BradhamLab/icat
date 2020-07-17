@@ -543,7 +543,8 @@ class icat():
                         warnings.warn(msg)
                         train_X.append(adata_subset.X)
                         train_y.append([label] * adata_subset.shape[0])
-                    print(f"cluster {label} size: {count}, train_size: {train_X[-1].shape[0]}")
+                    if self.verbose_:
+                        print(f"cluster {label} size: {count}, train_size: {train_X[-1].shape[0]}")
                 train_X = np.vstack(train_X)
                 train_y = np.hstack(train_y)
             else:
@@ -553,7 +554,11 @@ class icat():
                                           self.neighbor_kws['metric_kwds'])
                 train_X, train_y = select_model.fit_transform(D,
                                                     adata.obs[label_col].values)
-                print(f"cluster {label} size: {count}, train_size: {train_X.shape[0]}")
+                if self.verbose_:
+                    print("Selected {} cells".format(train_X.shape[0]))
+                    labels, counts = np.unqiue(train_y, return_counts=True)
+                    for label, count in zip(labels, counts):
+                        print(f"cluster {label} size: {count}")
         elif method == 'random':
             if self.verbose_:
                 print('Randomly selecting training cells.')
