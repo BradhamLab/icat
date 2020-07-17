@@ -25,7 +25,6 @@ import inspect
 import warnings
 import logging
 import time
-from pkg_resources import parse_version
 
 import numpy as np
 import pandas as pd
@@ -371,12 +370,8 @@ class icat():
         # sc.pp.neighbors(adata)
         if self.log_:
             utils.log_system_usage("After NCFS neighbors.")
-
         # grab connectivities of cells
-        if parse_version(sc.__version__) < parse_version("1.5.0"):
-            A = adata.uns['neighbors']['connectivities']
-        else:
-            A = adata.obsp['connectivities']
+        A = utils.get_neighbors(adata, 'connectivities')
         g = utils.igraph_from_adjacency(A)
         # instantiate semi-supervised Louvain model
         try:
@@ -486,7 +481,7 @@ class icat():
 
     def select_cells(self, adata, label_col, method='submodular',
                      selector=apricot.FacilityLocationSelection,
-                     by_cluster=True, stratified=False):
+                     by_cluster=False, stratified=True):
         """
         Select cells to train NCFS weights on.
 
@@ -529,14 +524,16 @@ class icat():
                 train_X = []
                 train_y = []
                 for label, count in zip(labels, counts):
-                    cluster_X = adata[adata.obs[label_col] == label, :].X
+                    adata_subset = adata[adata.obs[label_col] == label, :]
+                    D = utils.distance_matrix(adata, self.neighbor_kws['metric'],
+                                              self.neighbor_kws['metric_kwds'])
                     n_samples = int(adata.shape[0] / len(labels) * self.train_size)
                     # will have to check to see if n_samples > count
                     if stratified:
                         n_samples = int(count * self.train_size)
-                    if n_samples < cluster_X.shape[0]:
-                        model = selector(n_samples)
-                        X = model.fit_transform(cluster_X)
+                    if n_samples < adata_subset.shape[0]:
+                        model = selector(n_samples, metric='precomputed')
+                        X = model.fit_transform(D)
                         train_X.append(X)
                         train_y.append([label] * X.shape[0])
                     else:
@@ -544,16 +541,18 @@ class icat():
                               "cells in provided cluster. Selecting all " \
                               "samples in cluster {}".format(label)
                         warnings.warn(msg)
-                        train_X.append(cluster_X)
-                        train_y.append([label] * cluster_X.shape[0])
+                        train_X.append(adata_subset.X)
+                        train_y.append([label] * adata_subset.shape[0])
                     print(f"cluster {label} size: {count}, train_size: {train_X[-1].shape[0]}")
                 train_X = np.vstack(train_X)
                 train_y = np.hstack(train_y)
             else:
-                select_model = selector(int(adata.shape[0] * self.train_size))
-                train_X, train_y = select_model.fit_transform(
-                                        adata[adata.obs[label_col] == label, :].X,
-                                        adata.obs[label_col].values)
+                select_model = selector(int(adata.shape[0] * self.train_size),
+                                        metric='precomputed')
+                D = utils.distance_matrix(adata, self.neighbor_kws['metric'],
+                                          self.neighbor_kws['metric_kwds'])
+                train_X, train_y = select_model.fit_transform(D,
+                                                    adata.obs[label_col].values)
                 print(f"cluster {label} size: {count}, train_size: {train_X.shape[0]}")
         elif method == 'random':
             if self.verbose_:
