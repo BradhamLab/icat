@@ -12,12 +12,17 @@ import re
 import warnings
 import logging
 import time
+from pkg_resources import parse_version
 
 import psutil 
 import numpy as np
 import pandas as pd
+import scanpy as sc 
+from scipy import spatial
 
 import igraph as ig
+
+from ncfs import distances 
 
 def ftime(seconds):
     return time.strftime("%Hh:%Mm:%Ss", time.gmtime(seconds))
@@ -93,6 +98,33 @@ def check_np_castable(obj, name):
             raise ValueError("Expected numpy.ndarray castable object for "
                             "`{}`. Got {}.".format(name, type(obj)))
     return obj
+
+
+def get_neighbors(adata, measure='connectivities'):
+    # grab connectivities of cells
+    if measure not in ['connectivities', 'distances']:
+        raise ValueError("`measure` should be either 'connectivities or " \
+                         "or 'distances. Received {}.".format(measure))
+    if parse_version(sc.__version__) < parse_version("1.5.0"):
+        return adata.uns['neighbors'][measure]
+    else:
+        return adata.obsp[measure]
+
+
+def distance_matrix(adata, metric, kws={}):
+    D = np.zeros((adata.shape[0], adata.shape[0]))
+    if isinstance(metric, str):
+        try:
+            dist_func = distances.supported_distances[metric]
+            distances.pdist(adata.X, np.ones(adata.shape[1]),
+                            D, dist_func)
+        except KeyError:
+            D = spatial.distance.pdist(adata.X, metric=metric, **kws)
+    else:
+        distances.pdist(adata.X, np.ones(adata.shape[1]),
+                        D, metric)
+    return D
+
 
 
 def __evaluate_key(key, sep):
