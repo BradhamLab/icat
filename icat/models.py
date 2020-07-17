@@ -555,7 +555,7 @@ class icat():
                                           self.neighbor_kws['metric_kwds'])
                 train_X, train_y = model.fit_transform(D,
                                                     adata.obs[label_col].values)
-                utils.assign_selected(adata, select_model.ranking)
+                utils.assign_selected(adata, model.ranking)
                 if self.verbose_:
                     print("Selected {} cells".format(train_X.shape[0]))
                     labels, counts = np.unique(train_y, return_counts=True)
