@@ -29,7 +29,7 @@ import time
 import numpy as np
 import pandas as pd
 from sklearn import preprocessing
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.neighbors import KNeighborsTransformer
 import apricot
 import scanpy as sc
@@ -545,18 +545,20 @@ class icat():
                         train_y.append([label] * adata_subset.shape[0])
                     if self.verbose_:
                         print(f"cluster {label} size: {count}, train_size: {train_X[-1].shape[0]}")
+                    utils.assign_selected(adata, model.ranking, adata_subset)
                 train_X = np.vstack(train_X)
                 train_y = np.hstack(train_y)
             else:
-                select_model = selector(int(adata.shape[0] * self.train_size),
-                                        metric='precomputed')
+                model = selector(int(adata.shape[0] * self.train_size),
+                                 metric='precomputed')
                 D = utils.distance_matrix(adata, self.neighbor_kws['metric'],
                                           self.neighbor_kws['metric_kwds'])
-                train_X, train_y = select_model.fit_transform(D,
+                train_X, train_y = model.fit_transform(D,
                                                     adata.obs[label_col].values)
+                utils.assign_selected(adata, select_model.ranking)
                 if self.verbose_:
                     print("Selected {} cells".format(train_X.shape[0]))
-                    labels, counts = np.unqiue(train_y, return_counts=True)
+                    labels, counts = np.unique(train_y, return_counts=True)
                     for label, count in zip(labels, counts):
                         print(f"cluster {label} size: {count}")
         elif method == 'random':
@@ -564,12 +566,13 @@ class icat():
                 print('Randomly selecting training cells.')
             if stratified:
                 stratified = adata.obs[label_col].values
-            splits = train_test_split(adata.X,
-                                      adata.obs[label_col].values,
-                                      train_size=self.train_size,
-                                      stratify=stratified)
-            train_X = splits[0]
-            train_y = splits[2]
+            split = StratifiedShuffleSplit(n_splits=1,
+                                           train_size=self.train_size)
+            train_idxs, __ = next(split.split(adata.X,
+                                              adata.obs[label_col].values))
+            train_X = adata.X[train_idxs, :]
+            train_y = adata.obs[label_col].values[train_idxs]
+            utils.assign_selected(adata, train_idxs)
         elif method == 'centroid':
             train_X = []
             for label in np.unique(adata.obs[label_col]):
