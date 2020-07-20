@@ -126,6 +126,14 @@ def distance_matrix(adata, metric, kws={}):
     return D
 
 
+def assign_selected(adata, indices, subset_indices=None):
+    selected = adata.obs.index.values[indices]
+    if subset is not None:
+        selected = adata.obs.index.values[subset.indices[indices]]
+    if 'selected' not in adata.obs.columns:
+        adata.obs['selected'] = False
+    adata.obs.loc[selected, 'selected'] = True
+
 
 def __evaluate_key(key, sep):
     if not isinstance(key, str):
