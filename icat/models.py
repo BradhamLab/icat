@@ -481,6 +481,7 @@ class icat():
 
     def select_cells(self, adata, label_col, method='submodular',
                      selector=apricot.FacilityLocationSelection,
+                     use_rep='X',
                      by_cluster=False, stratified=True):
         """
         Select cells to train NCFS weights on.
@@ -514,24 +515,33 @@ class icat():
             A tuple of the data matrix X and observation labels y to be used
             during NCFS training.
         """
-
+        if use_rep == 'X':
+            X = adata.X
+        else:
+            if use_rep not in adata.obsm.keys():
+                raise KeyError(f"Data representation {use_rep} not found.")
+            X = adata.obsm[use_rep]
+        y = adata.obs[label_col]
         if method == 'submodular':
             if self.verbose_:
                 print('Selecting training cells using submodular optimization...')
             if by_cluster:
+                if self.verbose_:
+                    print('Selecting cells for each cluster individually...')
                 labels, counts = np.unique(adata.obs[label_col].sort_values(),
                                            return_counts=True)
                 train_X = []
                 train_y = []
                 for label, count in zip(labels, counts):
-                    adata_subset = adata[adata.obs[label_col] == label, :]
-                    D = utils.distance_matrix(adata, self.neighbor_kws['metric'],
+                    label_idxs = np.where(y == label)[0]
+                    subset = X[label_idxs, :]
+                    D = utils.distance_matrix(subset, self.neighbor_kws['metric'],
                                               self.neighbor_kws['metric_kwds'])
-                    n_samples = int(adata.shape[0] / len(labels) * self.train_size)
+                    n_samples = int(X.shape[0] / len(labels) * self.train_size)
                     # will have to check to see if n_samples > count
                     if stratified:
                         n_samples = int(count * self.train_size)
-                    if n_samples < adata_subset.shape[0]:
+                    if n_samples < subset.shape[0]:
                         model = selector(n_samples, metric='precomputed')
                         X = model.fit_transform(D)
                         train_X.append(X)
@@ -541,19 +551,21 @@ class icat():
                               "cells in provided cluster. Selecting all " \
                               "samples in cluster {}".format(label)
                         warnings.warn(msg)
-                        train_X.append(adata_subset.X)
-                        train_y.append([label] * adata_subset.shape[0])
+                        train_X.append(subset)
+                        train_y.append([label] * subset.shape[0])
                     if self.verbose_:
                         print(f"cluster {label} size: {count}, train_size: {train_X[-1].shape[0]}")
+                    
                 train_X = np.vstack(train_X)
                 train_y = np.hstack(train_y)
             else:
-                select_model = selector(int(adata.shape[0] * self.train_size),
+                if self.verbose_:
+                    print('Selecting cells over entire dataset...')
+                select_model = selector(int(X.shape[0] * self.train_size),
                                         metric='precomputed')
-                D = utils.distance_matrix(adata, self.neighbor_kws['metric'],
+                D = utils.distance_matrix(X, self.neighbor_kws['metric'],
                                           self.neighbor_kws['metric_kwds'])
-                train_X, train_y = select_model.fit_transform(D,
-                                                    adata.obs[label_col].values)
+                train_X, train_y = select_model.fit_transform(D, y)
                 if self.verbose_:
                     print("Selected {} cells".format(train_X.shape[0]))
                     labels, counts = np.unqiue(train_y, return_counts=True)
@@ -571,11 +583,26 @@ class icat():
             train_X = splits[0]
             train_y = splits[2]
         elif method == 'centroid':
+            if self.verbose_:
+                print("Collapsing cells down to their centroids")
+            if use_rep != 'X':
+                warnings.warn("`centroid` was passed to `select_cells()`, but "
+                              "`use_rep` was not set to X. As ncfs finds "
+                              "informative features, data matrix `X` was used.")
             train_X = []
+            train_y = []
             for label in np.unique(adata.obs[label_col]):
                 cluster_X = adata[adata.obs[label_col] == label].X
                 train_X.append(cluster_X.median(axis=0))
                 train_y.append([label])
+        elif method == 'centroid_knn':
+            train_X = []
+            train_y = []
+            for label in np.unique(adata.obs[label_col]):
+                cluster_X = adata[adata.obs[label_col] == label].X
+                centroid = cluster_X.median(axis=0)
+                distances = spatial.distance.cdist(cluster_X, centroid)
+                nearest = 
         else:
             raise NotImplementedError(f"No support for method {method}. "\
                                       "Supported methods are 'submodular' and "\
@@ -588,22 +615,20 @@ class icat():
         # no previous clustering provided, cluster using louvain or leiden
         weights = np.zeros((len(reference), reference[0].shape[1]))
         for i, ref in enumerate(reference):
-            ref.X = scaler.transform(ref.X)
+            X_train = ref.X
+            y_train = ref.obs[self.cluster_col_].values
+            if self.subsample:
+                X_train, y_train = self.select_cells(ref,
+                                                     self.cluster_col_,
+                                                     **self.subsample_kws)
+            if self.verbose_:
+                print(f"Training NCFS on {X_train.shape[0]} samples out of "+\
+                        f"{ref.shape[0]}")
+            X_train = scaler.transform(X_train)
             # fit gene weights using control dataset
             if self.verbose_:
                 start = time.time()
                 print(f"Starting NCFS gradient ascent for dataset {i + 1}/{len(reference)}")
-            X_train = ref.X
-            y_train = ref.obs[self.cluster_col_].values
-            if self.subsample:
-                print(np.min(ref.X))
-                print(np.max(ref.X))
-                X_train, y_train = self.select_cells(ref,
-                                                     self.cluster_col_,
-                                                     **self.subsample_kws)
-                if self.verbose_:
-                    print(f"Training NCFS on {X_train.shape[0]} samples out of "+\
-                          f"{ref.shape[0]}")
 
             # logging.info(f"Starting NCFS gradient ascent for dataset {i + 1}")
             # utils.log_system_usage()
