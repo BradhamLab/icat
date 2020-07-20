@@ -111,17 +111,17 @@ def get_neighbors(adata, measure='connectivities'):
         return adata.obsp[measure]
 
 
-def distance_matrix(adata, metric, kws={}):
-    D = np.zeros((adata.shape[0], adata.shape[0]))
+def distance_matrix(X, metric, kws={}):
+    D = np.zeros((X.shape[0], X.shape[0]))
     if isinstance(metric, str):
         try:
             dist_func = distances.supported_distances[metric]
-            distances.pdist(adata.X, np.ones(adata.shape[1]),
+            distances.pdist(X, np.ones(adata.shape[1]),
                             D, dist_func)
         except KeyError:
-            D = spatial.distance.pdist(adata.X, metric=metric, **kws)
+            D = spatial.distance.pdist(X, metric=metric, **kws)
     else:
-        distances.pdist(adata.X, np.ones(adata.shape[1]),
+        distances.pdist(X, np.ones(adata.shape[1]),
                         D, metric)
     return D
 
