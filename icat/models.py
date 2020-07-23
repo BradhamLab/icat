@@ -29,7 +29,7 @@ import time
 import numpy as np
 import pandas as pd
 from sklearn import preprocessing
-from sklearn.model_selection import StratifiedShuffleSplit
+
 from sklearn.neighbors import KNeighborsTransformer
 import apricot
 import scanpy as sc
@@ -449,7 +449,6 @@ class icat():
             utils.log_system_usage('NCFS transform complete.')
 
 
-        
     def __cluster_references(self, reference):
         # logging.info('Clustering reference datasets.')
         # utils.log_system_usage()
@@ -515,95 +514,34 @@ class icat():
             A tuple of the data matrix X and observation labels y to be used
             during NCFS training.
         """
-        if use_rep == 'X':
-            X = adata.X
-        else:
-            if use_rep not in adata.obsm.keys():
-                raise KeyError(f"Data representation {use_rep} not found.")
-            X = adata.obsm[use_rep]
-        y = adata.obs[label_col]
+
+        y = adata.obs[label_col].values
         if method == 'submodular':
-            if self.verbose_:
-                print('Selecting training cells using submodular optimization...')
-            if by_cluster:
-                if self.verbose_:
-                    print('Selecting cells for each cluster individually...')
-                labels, counts = np.unique(adata.obs[label_col].sort_values(),
-                                           return_counts=True)
-                train_X = []
-                train_y = []
-                for label, count in zip(labels, counts):
-                    label_idxs = np.where(y == label)[0]
-                    subset = X[label_idxs, :]
-                    D = utils.distance_matrix(subset, self.neighbor_kws['metric'],
-                                              self.neighbor_kws['metric_kwds'])
-                    n_samples = int(X.shape[0] / len(labels) * self.train_size)
-                    # will have to check to see if n_samples > count
-                    if stratified:
-                        n_samples = int(count * self.train_size)
-                    if n_samples < subset.shape[0]:
-                        model = selector(n_samples, metric='precomputed')
-                        X = model.fit_transform(D)
-                        train_X.append(X)
-                        train_y.append([label] * X.shape[0])
-                    else:
-                        msg = "Number of samples to select exceeds number of "\
-                              "cells in provided cluster. Selecting all " \
-                              "samples in cluster {}".format(label)
-                        warnings.warn(msg)
-                        train_X.append(subset)
-                        train_y.append([label] * subset.shape[0])
-                    if self.verbose_:
-                        print(f"cluster {label} size: {count}, train_size: {train_X[-1].shape[0]}")
-                    utils.assign_selected(adata, model.ranking, subset_idxs)
-                train_X = np.vstack(train_X)
-                train_y = np.hstack(train_y)
-            else:
-                model = selector(int(adata.shape[0] * self.train_size),
-                                 metric='precomputed')
-                D = utils.distance_matrix(adata, self.neighbor_kws['metric'],
-                                          self.neighbor_kws['metric_kwds'])
-                train_X, train_y = model.fit_transform(D,
-                                                    adata.obs[label_col].values)
-                utils.assign_selected(adata, model.ranking)
-                if self.verbose_:
-                    print("Selected {} cells".format(train_X.shape[0]))
-                    labels, counts = np.unique(train_y, return_counts=True)
-                    for label, count in zip(labels, counts):
-                        print(f"cluster {label} size: {count}")
+            train_X, train_y = utils.submodular_select(adata, y, by_cluster,
+                                                       stratified,
+                                                       self.train_size,
+                                                       self.neighbor_kws['metric'],
+                                                       selector,
+                                                       self.neighbor_kws['metric_kwargs'],
+                                                       use_rep=use_rep,
+                                                       verbose=self.verbose_)
         elif method == 'random':
-            if self.verbose_:
-                print('Randomly selecting training cells.')
-            if stratified:
-                stratified = adata.obs[label_col].values
-            split = StratifiedShuffleSplit(n_splits=1,
-                                           train_size=self.train_size)
-            train_idxs, __ = next(split.split(adata.X,
-                                              adata.obs[label_col].values))
-            train_X = adata.X[train_idxs, :]
-            train_y = adata.obs[label_col].values[train_idxs]
-            utils.assign_selected(adata, train_idxs)
+            train_X, train_y = utils.random_select(adata, y, self.train_size,
+                                                   stratified,
+                                                   use_rep=use_rep,
+                                                   verbose=self.verbose_)
         elif method == 'centroid':
-            if self.verbose_:
-                print("Collapsing cells down to their centroids")
-            if use_rep != 'X':
-                warnings.warn("`centroid` was passed to `select_cells()`, but "
-                              "`use_rep` was not set to X. As ncfs finds "
-                              "informative features, data matrix `X` was used.")
-            train_X = []
-            train_y = []
-            for label in np.unique(adata.obs[label_col]):
-                cluster_X = adata[adata.obs[label_col] == label].X
-                train_X.append(cluster_X.median(axis=0))
-                train_y.append([label])
+            train_X, train_y = utils.centroid_collapse(adata, y,
+                                                       use_rep=use_rep,
+                                                       verbose=self.verbose_)
+
         elif method == 'centroid_knn':
-            train_X = []
-            train_y = []
-            for label in np.unique(adata.obs[label_col]):
-                cluster_X = adata[adata.obs[label_col] == label].X
-                centroid = cluster_X.median(axis=0)
-                distances = spatial.distance.cdist(cluster_X, centroid)
-                nearest = 
+            train_X, train_y = utils.centroid_neighbors(adata, y, self.train_size,
+                                                        self.neighbor_kws['metric'],
+                                                        stratified,
+                                                        self.neighbor_kws['metric_kwds'],
+                                                        use_rep=use_rep,
+                                                        verbose=self.verbose_)
         else:
             raise NotImplementedError(f"No support for method {method}. "\
                                       "Supported methods are 'submodular' and "\

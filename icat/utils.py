@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 import scanpy as sc 
 from scipy import spatial
+from sklearn import model_selection
 
 import igraph as ig
 
@@ -100,6 +101,7 @@ def check_np_castable(obj, name):
     return obj
 
 
+# --------------------------- Cell subselection Method -------------------------
 def get_neighbors(adata, measure='connectivities'):
     # grab connectivities of cells
     if measure not in ['connectivities', 'distances']:
@@ -116,23 +118,146 @@ def distance_matrix(X, metric, kws={}):
     if isinstance(metric, str):
         try:
             dist_func = distances.supported_distances[metric]
-            distances.pdist(X, np.ones(adata.shape[1]),
-                            D, dist_func)
+            distances.pdist(X, np.ones(X.shape[1]), D, dist_func)
         except KeyError:
             D = spatial.distance.pdist(X, metric=metric, **kws)
     else:
-        distances.pdist(X, np.ones(adata.shape[1]),
-                        D, metric)
+        distances.pdist(X, np.ones(X.shape[1]), D, metric)
     return D
 
 
 def assign_selected(adata, indices, subset_indices=None):
     selected = adata.obs.index.values[indices]
-    if subset is not None:
-        selected = adata.obs.index.values[subset.indices[indices]]
+    if subset_indices is not None:
+        selected = adata.obs.index.values[subset_indices[indices]]
     if 'selected' not in adata.obs.columns:
         adata.obs['selected'] = False
     adata.obs.loc[selected, 'selected'] = True
+
+
+def get_data_representation(adata, use_rep):
+    if use_rep == 'X':
+        X = adata.X
+    else:
+        if use_rep not in adata.obsm.keys():
+            raise KeyError(f"Data representation {use_rep} not found.")
+        X = adata.obsm[use_rep]
+    return X
+
+def submodular_select(adata, y, by_cluster, stratified, train_size,
+                      metric, selector, metric_kwargs={}, use_rep='X',
+                      verbose=True):
+    if verbose:
+        print('Selecting training cells using submodular optimization...')
+    X = get_data_representation(adata, use_rep)
+    if by_cluster:
+        if verbose:
+            print('Selecting cells for each cluster individually...')
+        labels, counts = np.unique(y, return_counts=True)
+        train_X = []
+        train_y = []
+        for label, count in zip(labels, counts):
+            subset_idxs = np.where(y == label)[0]
+            subset = X[subset_idxs, :]
+            D = distance_matrix(subset, metric, metric_kwargs)
+            n_samples = int(X.shape[0] / len(labels) * train_size)
+            # will have to check to see if n_samples > count
+            if stratified:
+                n_samples = int(count * train_size)
+            if n_samples < subset.shape[0]:
+                model = selector(n_samples, metric='precomputed')
+                X = model.fit_transform(D)
+                train_X.append(X)
+                train_y.append([label] * X.shape[0])
+            else:
+                msg = "Number of samples to select exceeds number of "\
+                      "cells in provided cluster. Selecting all " \
+                      "samples in cluster {}".format(label)
+                warnings.warn(msg)
+                train_X.append(subset)
+                train_y.append([label] * subset.shape[0])
+            if verbose:
+                print(f"cluster {label} size: {count}, train_size: {train_X[-1].shape[0]}")
+            assign_selected(adata, model.ranking, subset_idxs)
+        train_X = np.vstack(train_X)
+        train_y = np.hstack(train_y)
+    else:
+        model = selector(int(X.shape[0] * train_size),
+                            metric='precomputed')
+        D = distance_matrix(X, metric, metric_kwargs)
+        train_X, train_y = model.fit_transform(D, y)
+        assign_selected(adata, model.ranking)
+        if verbose:
+            print("Selected {} cells".format(train_X.shape[0]))
+            labels, counts = np.unique(train_y, return_counts=True)
+            for label, count in zip(labels, counts):
+                print(f"cluster {label} size: {count}")
+    return (train_X, train_y)
+
+
+def random_select(adata, y, train_size, stratified, use_rep='X', verbose=True):
+    X = get_data_representation(adata, use_rep)
+    if verbose:
+        print('Randomly selecting training cells.')
+    if stratified:
+        split = model_selection.StratifiedShuffleSplit(n_splits=1,
+                                                       train_size=train_size)
+    else:
+        split = model_selection.ShuffleSplit(n_splits=1, train_size=train_size)
+    train_idxs, __ = next(split.split(X, y))
+    train_X = X[train_idxs, :]
+    train_y = y[train_idxs]
+    assign_selected(adata, train_idxs)
+    return (train_X, train_y)
+
+
+def centroid_collapse(adata, y, use_rep='X', verbose=True):
+    if verbose:
+        print("Collapsing clusters to their median centroid")
+    if use_rep != 'X':
+        warnings.warn("`centroid` was passed to `select_cells()`, but "
+                      "`use_rep` was not set to X. As ncfs finds "
+                      "informative features, data matrix `X` was used.")
+    X = adata.X
+    train_X = []
+    train_y = []
+    for label in np.unique(y):
+        subset_idxs = np.where(y == label)[0]
+        subset = X[subset_idxs, :]
+        train_X.append(np.median(subset, axis=0).reshape(1, -1))
+        train_y.append([label])
+    return(np.vstack(train_X), np.hstack(train_y))
+    
+
+def centroid_neighbors(adata, y, train_size, metric, stratified,
+                       metric_kwargs={}, use_rep='X', verbose=True):
+    if verbose:
+        print("Selecting nearest neighbors to cluster centroids.")
+    train_X = []
+    train_y = []
+    X = get_data_representation(adata, use_rep)
+    labels, counts = np.unique(y, return_counts=True)
+    for label, count in zip(labels, counts):
+        subset_idxs = np.where(y == label)[0]
+        subset = X[subset_idxs, :]
+        centroid = np.median(subset, axis=0).reshape(1, -1)
+        n_samples = int(X.shape[0] / len(labels) * train_size)
+        if stratified:
+            n_samples = int(count * train_size)
+        if n_samples > subset.shape[0]:
+            train_X.append([subset])
+            train_y.append([label] * subset.shape[0])
+        if metric == 'manhattan':
+            metric = 'cityblock'
+        cdistances = spatial.distance.cdist(subset, centroid, metric=metric,
+                                            **metric_kwargs).flatten()
+        neighbors = np.argsort(cdistances)[:n_samples]
+        assign_selected(adata, neighbors, subset_idxs)
+        train_X.append(subset[neighbors, :])
+        train_y.append([label] * n_samples)
+        if verbose:
+            print(f"Selected {n_samples} cells for cluster {label}")
+    return(np.vstack(train_X), np.hstack(train_y))
 
 
 def __evaluate_key(key, sep):
