@@ -522,7 +522,7 @@ class icat():
                                                        self.train_size,
                                                        self.neighbor_kws['metric'],
                                                        selector,
-                                                       self.neighbor_kws['metric_kwargs'],
+                                                       self.neighbor_kws['metric_kwds'],
                                                        use_rep=use_rep,
                                                        verbose=self.verbose_)
         elif method == 'random':
