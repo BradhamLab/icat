@@ -182,10 +182,11 @@ def submodular_select(adata, y, by_cluster, stratified, train_size,
         train_X = np.vstack(train_X)
         train_y = np.hstack(train_y)
     else:
-        model = selector(int(X.shape[0] * train_size),
-                            metric='precomputed')
+        model = selector(int(X.shape[0] * train_size), metric='precomputed')
         D = distance_matrix(X, metric, metric_kwargs)
-        train_X, train_y = model.fit_transform(D, y)
+        model.fit(D)
+        train_X = X[model.ranking, :]
+        train_y = y[model.ranking]
         assign_selected(adata, model.ranking)
         if verbose:
             print("Selected {} cells".format(train_X.shape[0]))
