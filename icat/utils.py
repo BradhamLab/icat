@@ -353,6 +353,8 @@ def is_none(x):
     """Check whether a value is a null value."""
     if isinstance(x, float):
         return np.isnan(x)
+    if isinstance(x, str):
+        return x.lower() in ['none', 'nan', 'na']
     return x is None
 
 def format_labels(clusters):
