@@ -40,6 +40,7 @@ import ncfs
 from . import utils
 
 
+
 class icat():
     """
     Model to identify clusters across treatments.
@@ -293,7 +294,7 @@ class icat():
             value = default_kws
         self._subsample_kws = value
 
-
+    # @profile
     def cluster(self, adata, treatment, verbose=False):
         """
         Cluster cells in control and experimental conditions.
@@ -349,7 +350,7 @@ class icat():
         if self.verbose_:
             print(f"Found {informative} informative features.")
         
-        # self.neighbor_kws['use_rep'] = 'X_icat'
+        
         # return adata
         # if informative < n_clusters:
         #     warnings.warn("Number of informative genes less "
@@ -359,6 +360,7 @@ class icat():
         #                   "increasing `sigma` or decreasing `reg` for better "
         #                   "performance.")
         # scikit-learn 0.22, umap==0.4.4
+        self.neighbor_kws['use_rep'] = 'X_icat'
         if self.log_:
             utils.log_system_usage("Before NCFS neighbors.")
         # A = KNeighborsTransformer(mode='connectivity',
@@ -386,8 +388,6 @@ class icat():
             vertex = sslouvain.RBConfigurationVertexPartition
 
         y_, mutables = utils.format_labels(adata.obs[self.cluster_col_])
-        if self.verbose_:
-            print("Running semi-supervised louvain community detection")
         # logging.info("Runing sslouvain")
         part = sslouvain.find_partition(g,
                                         vertex,
@@ -402,6 +402,7 @@ class icat():
         # utils.close_log()
         return adata
 
+    # @profile
     def __learn_weights(self, adata, treatment):
         reference = [utils.subset_cells(adata, treatment, self.ctrl_value)]
         scaler = preprocessing.MinMaxScaler()
@@ -420,9 +421,10 @@ class icat():
         if self.verbose_:
             print("-" * 20 + " Finished NCFS Fitting " + "-" * 20)
 
+        # set default label to None, supply reference cluster labels
         adata.obs[self.cluster_col_] = None
-        adata.obs.loc[reference[0].obs.index, self.cluster_col_] \
-            = reference[0].obs[self.cluster_col_]
+        for ref in reference:
+            adata.obs.loc[ref.obs.index, self.cluster_col_] = ref.obs[self.cluster_col_]
         del reference
         adata.obsm['X_icat'] = model.transform(scaler.transform(adata.X))
 
@@ -448,7 +450,7 @@ class icat():
         if self.log_:
             utils.log_system_usage('NCFS transform complete.')
 
-
+    # @profile
     def __cluster_references(self, reference):
         # logging.info('Clustering reference datasets.')
         # utils.log_system_usage()
@@ -464,7 +466,8 @@ class icat():
                 if self.cluster_col not in ref.obs.columns:
                     raise ValueError(f"Provided cluster column {self.cluster_col} "\
                                       "not found in observation data.")
-                self.cluster_col_ = self.cluster_col
+                ref.obs[self.cluster_col + '-copy'] = ref.obs[self.cluster_col].copy()
+                self.cluster_col_ = self.cluster_col + '-copy'
             else:
                 if self.clustering == 'louvain':
                     sc.tl.louvain(ref, **self.cluster_kws)
@@ -478,6 +481,7 @@ class icat():
         # logging.info('Cells clustered')
         # utils.log_system_usage()
 
+    # @profile
     def select_cells(self, adata, label_col, method='submodular',
                      selector=apricot.FacilityLocationSelection,
                      use_rep='X',
@@ -550,6 +554,7 @@ class icat():
             utils.log_system_usage('After cell selection.')
         return train_X, train_y
 
+    # @profile
     def __ncfs_fit(self, reference, scaler):
         # no previous clustering provided, cluster using louvain or leiden
         weights = np.zeros((len(reference), reference[0].shape[1]))
@@ -562,7 +567,7 @@ class icat():
                                                      **self.subsample_kws)
             if self.verbose_:
                 print(f"Training NCFS on {X_train.shape[0]} samples out of "+\
-                        f"{ref.shape[0]}")
+                      f"{ref.shape[0]}")
             X_train = scaler.transform(X_train)
             # fit gene weights using control dataset
             if self.verbose_:
@@ -584,6 +589,3 @@ class icat():
         if self.log_:
             utils.log_system_usage('After NCFS fitting.')
         return model, weights
-
-
-
