@@ -386,8 +386,12 @@ class icat():
             vertex = sslouvain.RBConfigurationVertexPartition
         if not isinstance(vertex, utils.ig.VertexClustering):
             vertex = sslouvain.RBConfigurationVertexPartition
-
+        
+        adata.obs.loc[[x != self.ctrl_value for x in treatment],
+                      self.cluster_col_] = None
         y_, mutables = utils.format_labels(adata.obs[self.cluster_col_])
+        if self.verbose_:
+            print(f"{sum(mutables)} cells set as mutable out of {len(y_)}")
         # logging.info("Runing sslouvain")
         part = sslouvain.find_partition(g,
                                         vertex,
@@ -435,8 +439,7 @@ class icat():
         adata.var['ncfs.weights'] = model.coef_
         if self.reference == 'all':
             for i, value in enumerate(np.unique(treatment)):
-                if value != self.ctrl_value:
-                    adata.var["{}.weights".format(value)] = weights[i, :]
+                adata.var["{}.weights".format(value)] = weights[i, :]
         # free up memory by deleting unecessary objects
         del model
         try:
