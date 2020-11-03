@@ -330,7 +330,8 @@ class icat():
                               "in treatment array.")
         # if distance function is from ncfs.distances, expects feature weights 
         # check to see if they were provided, otherwise set weights to 1 
-        if self.neighbor_kws['metric'].__module__ == 'ncfs.distances':
+        metric = self.neighbor_kws['metric']
+        if not isinstance(metric, str) and metric.__module__ == 'ncfs.distances':
             try:
                 self.neighbor_kws['metric_kwds']['w']
             except KeyError:
