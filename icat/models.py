@@ -378,7 +378,7 @@ class icat():
         g = utils.igraph_from_adjacency(A)
         # instantiate semi-supervised Louvain model
         try:
-            resolution = self.sslouvain_kws['resolution_parameter']
+            resolution = self.cluster_kws['resolution']
         except KeyError:
             resolution = 1.0
         try:
