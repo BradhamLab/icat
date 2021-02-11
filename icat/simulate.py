@@ -538,9 +538,10 @@ def new_population(adata, n_cells, p_marker=None,
     pop_obs = pd.DataFrame({'Population': np.array([pop_id]*n_cells),
                             'Treatment': np.array([treatment_key] * n_cells)},
                            index=obs_idx)
-    X = np.vstack((adata.X, counts))
-    obs = pd.concat([adata.obs, pop_obs], axis=0, join='outer')
-    return sc.AnnData(X, obs=obs, var=pop_var)
+    return(sc.AnnData(counts, pop_obs, pop_var))
+    # X = np.vstack((adata.X, counts))
+    # obs = pd.concat([adata.obs, pop_obs], axis=0, join='outer')
+    # return sc.AnnData(X, obs=obs, var=pop_var)
 
 
 def dispersions(size, a=1, b=5):
@@ -731,10 +732,20 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
 
     obs_['Treatment'] = perturbation_key
     adata = sc.AnnData(X=X_, obs=obs_, var=var_)
+    new_adatas = []
     for size, pmarker, pid in zip(new_pop_cells, new_pop_pmarker, new_pop_ids):
-        adata = new_population(adata, size, p_marker=pmarker,
-                               perturbed=True, pop_id=pid,
-                               treatment_key=perturbation_key)
+        new_pop = new_population(adata, size, p_marker=pmarker,
+                                 perturbed=True, pop_id=pid,
+                                 treatment_key=perturbation_key)
+        mu = 'Pop.{}.Mu'.format(pid),
+        marker = 'Pop.{}.Marker'.format(pid)
+        drop = 'Pop.{}.Dropout'.format(pid)
+        adata.var[mu] = new_pop.var[mu]
+        adata.var[marker] = new_pop.var[marker]
+        adata.var[drop] = new_pop.var[drop]
+        new_adatas.append(new_pop)
+    if len(new_adatas) > 0:
+        adata = adata.concatenate(new_adatas)
     return adata
 
 
