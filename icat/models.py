@@ -219,7 +219,7 @@ class icat():
                                  'not support Leiden clustering. If you wish '\
                                  'to use Leiden clustering, try upgrading your'\
                                  'version of Scanpy.')
-
+        default_kws['resolution'] = 1.0
         if value is not None:
             value = utils.check_kws(default_kws[self.clustering],
                                     value, 'cluster.' + self.clustering)
@@ -379,6 +379,8 @@ class icat():
         # instantiate semi-supervised Louvain model
         try:
             resolution = self.cluster_kws['resolution']
+            if resolution is None:
+                resolution = 1
         except KeyError:
             resolution = 1.0
         try:
@@ -387,7 +389,6 @@ class icat():
             vertex = sslouvain.RBConfigurationVertexPartition
         if not isinstance(vertex, utils.ig.VertexClustering):
             vertex = sslouvain.RBConfigurationVertexPartition
-        
         adata.obs.loc[[x != self.ctrl_value for x in treatment],
                       self.cluster_col_] = None
         y_, mutables = utils.format_labels(adata.obs[self.cluster_col_])
