@@ -682,7 +682,7 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
         pop_sizes = utils.check_np_castable(pop_sizes, 'pop_sizes')
         if pop_sizes.sum() != samples:
             raise ValueError('Population sizes do not sum to number of samples.')
-    if new_pop_cells is not None:
+    if new_pop_cells is not None and len(new_pop_cells) > 0:
         new_pop_cells = utils.check_np_castable(new_pop_cells, 'new_pop_cells')
         pop_sizes = np.hstack([pop_sizes, new_pop_cells])
         samples += sum(new_pop_cells)
@@ -703,18 +703,22 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
         targets = np.random.choice(p_genes, n_genes)
         gene_targets = np.hstack((targets, gene_targets))
 
-
+    all_markers = set(np.hstack(list(markers.values())))
     disp_ = adata.var['Base.Dispersion'].values.reshape((-1, 1))
     var_ = adata.var.copy()
     var_['Perturbation.Shift'] = np.ones((adata.shape[1], 1))
+    #TODO shifting the preturbation by a large degree makes marker genes more
+    # likely to dropout in perturbation dataset, pass dropout
+    # setting alpha = 1, beta = 1 puts mean at (1 * 1) -- meaning on average
+    # there won't be an increase or decrease in the read counts present in the
+    # dataset
     var_.loc[gene_targets, 'Perturbation.Shift'] = stats.gamma(a=2, scale=2).\
                                                    rvs(size=gene_targets.size)
+    var_.loc[all_markers, 'Perturbation.Shift'] *= 4
     # log population identity in perturbed data
     # if marker gene is modified, populations is considered perturbed
     populations = []
     sim_pops = adata.obs['Population'].unique()
-    print(adata.obs['Population'].unique())
-    print(markers)
     if len(new_pop_ids) > 0:
         sim_pops = np.hstack([sim_pops, new_pop_ids])
                          
@@ -722,10 +726,7 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
     pop_columns = []
     # pop_dropout = []
     pop_mapping = {}
-    all_markers = set(np.hstack(list(markers.values())))
     possible_new_markers = set(adata.var.index) - all_markers - set(gene_targets)
-    print(markers)
-    print(sim_pops)
     for i, each in enumerate(sim_pops):
         if each in new_pop_ids:
             print(f'Adding new population {each}...')
@@ -758,14 +759,15 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
     mus = var_[pop_columns].values \
         * np.ones((adata.shape[1], n_pops)) \
         * var_['Perturbation.Shift'].values.reshape(-1, 1)
+    # TODO pass marker gene dropouts
     X_, dropout, __ = simulate_counts(samples, mus, disp_,
                                       n_pops, pop_sizes,
                                       percentile=percentile)
                                     #   n_pops, pop_sizes)
     # get new pop dropout, seach backwards b/c new pops were appended to the
     # back
-    for i, each in enumerate(new_pop_ids[::-1]):
-        var_[f'Pop.{each}.Dropout'] = dropout[:, -(i + 1)]
+    for i, each in enumerate(sim_pops):
+        var_[f'Pop.{each}.Dropout-Prtb'] = dropout[:, i]
     # for i, pop in enumerate(sim_pops):
     #     if pop_mapping[pop] != pop:
     #         var_[f'Pop.{pop_mapping[pop]}.Mu'] = mus[:, i]
@@ -963,49 +965,3 @@ def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes,
             dropped = stats.bernoulli(p=1 - p_dropout[j, i]).rvs(pop_sizes[i])
             X_[start:start + pop_sizes[i], j] = dist.rvs(pop_sizes[i]) * dropped
     return X_, p_dropout, labels_
-
-
-if __name__ == "__main__":
-    params = {"control_kwargs": {
-                    "dispersion": 1,
-                    "genes": 1500,
-                    "p_marker": 0.01,
-                    "pop_sizes": [
-                        25,
-                        100,
-                        175
-                    ],
-                    "populations": 3,
-                    "samples": 300,
-                    "scalar": 100
-                },
-                "perturb_kwargs": {
-                    "gene_targets": None,
-                    "new_pop_cells": [75],
-                    "new_pop_pmarker": 0.01,
-                    # "new_pop_cells": [
-                    #     25,
-                    #     175
-                    # ],
-                    # "new_pop_pmarker": 0.007,
-                    "percent_perturb": 0.2,
-                    "pop_sizes": [
-                        25,
-                        100,
-                        175
-                    ],
-                    "pop_targets": [
-                        '1'
-                    ],
-                    "samples": 300
-                }
-            }
-    adata = Experiment(**params).run()[0][0]
-    ctrls = adata[adata.obs.Treatment == 'Control', :].copy()
-    sc.pp.neighbors(ctrls)
-    sc.tl.umap(ctrls)
-    sc.pl.umap(ctrls, color='Population')
-    prtbs = adata[adata.obs.Treatment != 'Control', :].copy()
-    sc.pp.neighbors(prtbs)
-    sc.tl.umap(prtbs)
-    sc.pl.umap(prtbs, color='Population')
