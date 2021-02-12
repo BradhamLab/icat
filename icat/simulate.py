@@ -666,7 +666,7 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
     # there won't be an increase or decrease in the read counts present in the
     # dataset, alpha=2, beta=2 shifts on average by 4, so multiply markers by
     # average to maintain signal
-    a, b = 2, 2
+    a, b = 1, 1
     var_.loc[gene_targets, 'Perturbation.Shift'] = stats.gamma(a=a, scale=b).\
                                                    rvs(size=gene_targets.size)
     var_.loc[all_markers, 'Perturbation.Shift'] *= a * b
