@@ -374,7 +374,7 @@ class SingleCellDataset():
         # must have at least 1 marker gene
         n_markers[n_markers == 0] = 1
         # distribution to sample expression shifts from 
-        gamma = stats.gamma(a=2, scale=2)
+        gamma = stats.gamma(a=3, scale=3)
         possible_markers = var.index.values
         for i, n in enumerate(n_markers):
             # pick marker genes and shift their expression in population i
@@ -666,10 +666,10 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
     # there won't be an increase or decrease in the read counts present in the
     # dataset, alpha=2, beta=2 shifts on average by 4, so multiply markers by
     # average to maintain signal
-    a, b = 1, 1
+    a, b = 2, 2
     var_.loc[gene_targets, 'Perturbation.Shift'] = stats.gamma(a=a, scale=b).\
                                                    rvs(size=gene_targets.size)
-    var_.loc[all_markers, 'Perturbation.Shift'] *= a * b
+    # var_.loc[all_markers, 'Perturbation.Shift'] *= a * b
 
     populations = []
     sim_pops = adata.obs['Population'].unique()
@@ -678,7 +678,7 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
                          
     n_pops = len(sim_pops)
     pop_columns = []
-    # pop_dropout = []
+    pop_dropout = []
     possible_new_markers = set(adata.var.index) - all_markers - set(gene_targets)
     for i, each in enumerate(sim_pops):
         if each in new_pop_ids:
@@ -687,13 +687,15 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
             n_markers = stats.binom(adata.shape[1], new_pop_pmarker).rvs(1)
             new_pop_markers = np.random.choice(list(possible_new_markers),
                                                n_markers)
-            shifts = stats.gamma(2, 2).rvs(n_markers)
+            shifts = stats.gamma(3, 3).rvs(n_markers)
             var_[f'Pop.{name}.Mu'] = adata.var['Base.Mu']
             # multiply MU values by (a * b) to maintain signal 
             var_.loc[new_pop_markers, f'Pop.{name}.Mu'] *= shifts * (a * b)
             var_[f'Pop.{name}.Marker'] = False 
             var_.loc[new_pop_markers, f'Pop.{name}.Marker'] = True
             possible_new_markers -= set(new_pop_markers)
+            # asymmetrical population, 
+            pop_dropout.append(None)
         else:
             markers_i = markers[each]
             # log population identity in perturbed data
@@ -703,6 +705,11 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
                 var_[f"Pop.{name}.Marker"] = var_[f"Pop.{each}.Marker"]
             else:
                 name = str(each)
+            markers_idx = np.array([var_.index.get_loc(x) for x in markers_i])
+            marker_dropout = var_.loc[markers_i, f"Pop.{each}.Dropout"].values
+            pop_dropout.append(np.hstack([markers_idx.reshape(-1, 1),
+                                          marker_dropout.reshape(-1, 1)]))
+            
         pop_columns.append(f'Pop.{each}.Mu')
         # pop_dropout.append(f'Pop.{each}.Dropout')
         populations += [name] * pop_sizes[i]
@@ -716,7 +723,8 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
         * var_['Perturbation.Shift'].values.reshape(-1, 1)
     X_, dropout, __ = simulate_counts(samples, mus, disp_,
                                       n_pops, pop_sizes,
-                                      percentile=percentile)
+                                      percentile=percentile,
+                                      dropout=pop_dropout)
                                     #   n_pops, pop_sizes)
     # perturb dropout
     for i, each in enumerate(sim_pops):
@@ -883,6 +891,13 @@ def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes,
             p_dropout = dropout_probability(means_, percentile_)
     elif method == 'uniform':
         p_dropout = np.ones_like(means_) * dropout
+    # marker gene dropouts were passed, conserve dropout probability between
+    # controls + treated
+    if isinstance(dropout, list):
+        for i, prev_drop in enumerate(dropout):
+            if prev_drop is not None:
+                # dropout is gene x pop
+                p_dropout[prev_drop[:, 0].astype(int), i] = prev_drop[:, 1]
     # simulate counts across populations
     for i in range(populations):
         if i == 0:
@@ -899,3 +914,20 @@ def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes,
             dropped = stats.bernoulli(p=1 - p_dropout[j, i]).rvs(pop_sizes[i])
             X_[start:start + pop_sizes[i], j] = dist.rvs(pop_sizes[i]) * dropped
     return X_, p_dropout, labels_
+
+
+if __name__ == '__main__':
+    ctrls = SingleCellDataset().simulate()
+    prtbs = perturb(ctrls)
+    sc.pp.pca(prtbs)
+    sc.pl.pca_scatter(prtbs, color='Population')
+    comb = ctrls.concatenate(prtbs)
+    sc.pp.neighbors(comb)
+    sc.tl.umap(comb)
+    sc.pl.umap(comb, color='Treatment', palette=['black', 'red'])
+    sc.pl.umap(comb, color='Population')
+    import icat
+    model = icat.icat('Control', ncfs_kws={'sigma': 3, 'reg': 3})
+    clustered = model.cluster(comb, comb.obs['Treatment'])
+    sc.tl.umap(clustered)
+    sc.pl.umap(clustered, color='Population')
