@@ -429,10 +429,13 @@ class icat():
 
         # set default label to None, supply reference cluster labels
         adata.obs[self.cluster_col_] = None
-        adata.obs['selected'] = True
+        # match selected cells in split reference datasets to combined
+        if self.subsample:
+            adata.obs['selected'] = None
         for ref in reference:
             adata.obs.loc[ref.obs.index, self.cluster_col_] = ref.obs[self.cluster_col_]
-            adata.obs.loc[ref.obs.index, 'selected'] = ref.obs['selected']
+            if self.subsample:
+                adata.obs.loc[ref.obs.index, 'selected'] = ref.obs['selected']
         del reference
         adata.obsm['X_icat'] = model.transform(scaler.transform(adata.X))
 
