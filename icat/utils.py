@@ -127,6 +127,25 @@ def distance_matrix(X, metric, kws={}):
 
 
 def assign_selected(adata, indices, subset_indices=None):
+    """
+    Specify which cells were selected to learn NCFS weights.
+
+    Parameters
+    ----------
+    adata : sc.AnnData
+        Single-cell dataset cells were selected from
+    indices : numpy.ndarray
+        Array specifying observation indices of selected cells. 
+    subset_indices : numpy.ndarray, optional
+        Used if `adata` is a subset view of a larger dataset. `subset_indices`
+        is therefore an array of indices pointing to original indices of the
+        view. By default None, and `adata` is assumed to be the complete dataset.
+
+    Returns
+    -------
+    None
+        Creates `selected` column in observation annotations.
+    """
     selected = adata.obs.index.values[indices]
     if subset_indices is not None:
         selected = adata.obs.index.values[subset_indices[indices]]
