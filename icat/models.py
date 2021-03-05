@@ -346,7 +346,7 @@ class icat():
         self.__learn_weights(adata, treatment)
                     
         # n_clusters = len(controls.obs[self.cluster_col].unique())
-        adata.var['informative'] = adata.var['ncfs.weights'].apply(lambda x: x > 1)
+        adata.var['informative'] = adata.var['ncfs_weights'].apply(lambda x: x > 1)
         informative = adata.var['informative'].sum()
         if self.verbose_:
             print(f"Found {informative} informative features.")
@@ -429,8 +429,10 @@ class icat():
 
         # set default label to None, supply reference cluster labels
         adata.obs[self.cluster_col_] = None
+        adata.obs['selected'] = True
         for ref in reference:
             adata.obs.loc[ref.obs.index, self.cluster_col_] = ref.obs[self.cluster_col_]
+            adata.obs.loc[ref.obs.index, 'selected'] = ref.obs['selected']
         del reference
         adata.obsm['X_icat'] = model.transform(scaler.transform(adata.X))
 
@@ -438,10 +440,10 @@ class icat():
 
 
         # save genes weights
-        adata.var['ncfs.weights'] = model.coef_
+        adata.var['ncfs_weights'] = model.coef_
         if self.reference == 'all':
             for i, value in enumerate(np.unique(treatment)):
-                adata.var["{}.weights".format(value)] = weights[i, :]
+                adata.var["{}_weights".format(value)] = weights[i, :]
         # free up memory by deleting unecessary objects
         del model
         try:
