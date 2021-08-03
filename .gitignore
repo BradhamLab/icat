@@ -12,3 +12,7 @@ plots/*
 snakejob*
 reports/*
 *.csv
+*egg-info/
+dist/*
+build/*
+*.log
