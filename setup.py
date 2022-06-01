@@ -15,7 +15,7 @@ setup(
     name="icat-sc",
     version=verstr,
     description="Identify cell-types across treatments in single-cell RNA sequencing data",
-    url="https://github.com/dakota-hawkins/icat",
+    url="https://github.com/BradhamLab/icat",
     author="Dakota Y. Hawkins",
     author_email="dyh0110@bu.edu",
     install_requires=[
