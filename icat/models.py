@@ -9,20 +9,27 @@ Example:
 .. code-block::python
     from icat import simulate
     from icat import models
-    data_model = simulate.SingleCellDataset()
+    import scanpy as sc
+    import numpy as np
+    data_model = simulate.SingleCellDataset(
+        populations=2,
+        genes=1000,
+        dispersion=np.random.choice([1, 2, 3], 1000)
+    )
     controls = data_model.simulate()
     controls.obs['treatment'] = 'control'
     perturbed = simulate.perturb(controls)
     perturbed.obs['treatment'] = 'perturbed'
-    adata = sc.concat([controls, perturbed])
+    adata = controls.concatenate([perturbed])
+    sc.pp.log1p(adata)
     model = models.icat(
         ctrl_value="control",
-        ncfs_kws={'reg': 0.5, 'sigma': 3},
-        weight_threshold=1,
-        neighbor_kws={'n_neighbors': 15, 'resolution_parameter': 0.75},
+        ncfs_kws={'reg': 1, 'sigma': 3},
+        neighbor_kws={'n_neighbors': 15}, 
+        cluster_kws={'resolution': 0.75},
     )
     out = model.cluster(adata, adata.obs['treatment'])
-    print(out.obs['sslouvain'])
+    print(out.obs['sslouvain'].unique())
 """
 
 import inspect
@@ -82,10 +89,6 @@ class icat():
         Optional column in observation data denoting pre-identified clusters.
         By default None, and clustering will be performed following
         `clustering` and `cluster_kws`. 
-    weight_threshold : float, optional
-        Heuristic to determine number of informative genes returned by NCFS.
-        Does not affect performance, but does help inform reasonable NCFS 
-        hyperparamters. Default is 1. 
     neighbor_kws : dict, optional
         Keyword arguments for identifying neighbors. By default None, and 
         default parameters are used. See `scanpy.pp.neighbors` for more
