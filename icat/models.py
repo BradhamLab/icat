@@ -16,7 +16,7 @@ Example:
     perturbed.obs['treatment'] = 'perturbed'
     adata = sc.concat([controls, perturbed])
     model = models.icat(
-        ctrl_value="control"
+        ctrl_value="control",
         ncfs_kws={'reg': 0.5, 'sigma': 3},
         weight_threshold=1,
         neighbor_kws={'n_neighbors': 15, 'resolution_parameter': 0.75},
