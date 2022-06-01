@@ -17,10 +17,10 @@ except ImportError:
     import utils
 
 
-class SingleCellDataset():
+class SingleCellDataset:
     """
     Class to simulate a single-cell RNA sequencing dataset.
-    
+
     Attributes
     ----------
     samples : int
@@ -42,15 +42,26 @@ class SingleCellDataset():
         estimate average gene expression for a simualted gene.
     Methods
     -------
-    
+
     get_params():
         Get model parameters used to simulate dataset.
     simulate():
         Simulate a single-cell RNA sequencing dataset with the set parameters.
     """
-    def __init__(self, samples=200, genes=1000, populations=2,
-                 pop_sizes=None, p_marker=None, dispersion=1, scalar=100,
-                 percentile=50, method='conditional', dropout=0.66):
+
+    def __init__(
+        self,
+        samples=200,
+        genes=1000,
+        populations=2,
+        pop_sizes=None,
+        p_marker=None,
+        dispersion=1,
+        scalar=100,
+        percentile=50,
+        method="conditional",
+        dropout=0.66,
+    ):
         """
         Parameters
         ----------
@@ -79,7 +90,7 @@ class SingleCellDataset():
         percentile : float, optional
             Float value between 0 and 100 denoting which percentile to use when
             calculating dropout probabilities. Default is 50, and the median
-            will be calculated. 
+            will be calculated.
         """
         self.samples = samples
         self.genes = genes
@@ -91,7 +102,7 @@ class SingleCellDataset():
         self.percentile = percentile
         self.method = method
         self.dropout = dropout
-        
+
     @property
     def samples(self):
         """Get samples attribute."""
@@ -120,46 +131,51 @@ class SingleCellDataset():
     def populations(self):
         """Get populations attribute."""
         return self._populations
-    
+
     @populations.setter
     def populations(self, value):
         """Set populations attribute."""
         if value < 0 and int(value) != value:
-            raise ValueError("Expected positive integer for number of "
-                             "populations.")
+            raise ValueError("Expected positive integer for number of " "populations.")
         self._populations = value
 
     @property
     def pop_sizes(self):
         """Get pop_sizes attribute."""
         return self._pop_sizes
-    
+
     @pop_sizes.setter
     def pop_sizes(self, value):
         """Set pop_sizes attribute."""
         if value is None:
-            value = np.array([self.samples // self.populations\
-                                    for each in range(self.populations)])
+            value = np.array(
+                [self.samples // self.populations for each in range(self.populations)]
+            )
             remainder = self.samples % self.populations
             if remainder != 0:
                 value[:remainder] += 1
         try:
             value = np.array(value, dtype=int)
         except TypeError:
-            raise ValueError('Expected numpy.array castable when setting '
-                             'population sizes.')
+            raise ValueError(
+                "Expected numpy.array castable when setting " "population sizes."
+            )
         except ValueError:
-            raise ValueError('Expected numpy.array castable when setting '
-                             'population sizes.')
+            raise ValueError(
+                "Expected numpy.array castable when setting " "population sizes."
+            )
         if len(value) != self.populations:
-            raise ValueError("Number of populations does not match number of "
-                             "populations passed. "
-                             "Populations set to {}".format(self.populations),
-                             ", but received "
-                             "{} population sizes.".format(self.pop_sizes))
+            raise ValueError(
+                "Number of populations does not match number of "
+                "populations passed. "
+                "Populations set to {}".format(self.populations),
+                ", but received " "{} population sizes.".format(self.pop_sizes),
+            )
         if value.sum() != self.samples:
-            raise ValueError("Expected population sizes to total to number of "
-                             "samples. Got {}".format(value.sum()))
+            raise ValueError(
+                "Expected population sizes to total to number of "
+                "samples. Got {}".format(value.sum())
+            )
         self._pop_sizes = value
 
     @property
@@ -173,8 +189,9 @@ class SingleCellDataset():
         if value is None:
             value = 10 / self.genes
         elif value < 0 or value > 1:
-            raise ValueError("Expected value for p_marker between 0 and 1. "
-                             "Got {}.".format(value))
+            raise ValueError(
+                "Expected value for p_marker between 0 and 1. " "Got {}.".format(value)
+            )
         self._p_marker = value
 
     @property
@@ -187,23 +204,31 @@ class SingleCellDataset():
         """Set dispersion parameter."""
         if isinstance(value, (list, np.ndarray)):
             if not len(value) == self.genes:
-                raise ValueError("Number of dispersions passed does not match "
-                                 "the number of genes passed. Dispersion should"
-                                 " either be a list-like of length `genes` or "
-                                 "a single integer value.")
+                raise ValueError(
+                    "Number of dispersions passed does not match "
+                    "the number of genes passed. Dispersion should"
+                    " either be a list-like of length `genes` or "
+                    "a single integer value."
+                )
             value = np.array(value, dtype=int)
             if not np.all(value > 0):
-                raise ValueError("Expected non-negative positive integer for "
-                                 "all dispersion parameters.")
+                raise ValueError(
+                    "Expected non-negative positive integer for "
+                    "all dispersion parameters."
+                )
         elif isinstance(value, (int, np.integer)):
             if value < 1:
-                raise ValueError("Dispersion must be a non-negative integer. "
-                                 "Received: {}".format(value))
+                raise ValueError(
+                    "Dispersion must be a non-negative integer. "
+                    "Received: {}".format(value)
+                )
             # cast to array of length `genes`
-            value = np.array([value]*self.genes) 
+            value = np.array([value] * self.genes)
         else:
-            raise ValueError("Expected integer value for dispersion parameter "
-                             "Received: {} - {}".format(value, type(value)))
+            raise ValueError(
+                "Expected integer value for dispersion parameter "
+                "Received: {} - {}".format(value, type(value))
+            )
 
         self._dispersion = value
 
@@ -216,18 +241,22 @@ class SingleCellDataset():
     def scalar(self, value):
         """Set scalar parameter."""
         if not isinstance(value, (float, int, np.float, np.integer)):
-            raise ValueError("Expected numerical value for `scalar` parameter."
-                             "Received: {}".format(type(value)))
+            raise ValueError(
+                "Expected numerical value for `scalar` parameter."
+                "Received: {}".format(type(value))
+            )
         if value < 1:
-            raise ValueError("Expected `scalar` value > 1: values less than one"
-                             " will result in average gene expressions < 1.")
+            raise ValueError(
+                "Expected `scalar` value > 1: values less than one"
+                " will result in average gene expressions < 1."
+            )
         self._scalar = value
-    
+
     @property
     def percentile(self):
         """Get percentile parameter."""
         return self._percentile
-    
+
     @percentile.setter
     def percentile(self, value):
         try:
@@ -241,14 +270,14 @@ class SingleCellDataset():
     @property
     def method(self):
         """
-        Which method to use to calculate gene dropout. Options are 
+        Which method to use to calculate gene dropout. Options are
         "conditional" and "uniform".
         """
         return self._method
 
     @method.setter
     def method(self, value):
-        if value not in ['conditional', 'uniform']:
+        if value not in ["conditional", "uniform"]:
             raise ValueError("Unsupported method {}.".format(value))
         self._method = value
 
@@ -259,33 +288,35 @@ class SingleCellDataset():
         if `method == uniform`.
         """
         return self._dropout
-    
+
     @dropout.setter
     def dropout(self, value):
         if value < 0 or value > 1:
-            raise ValueError("Expected values between zero and 1. "
-                             "Received {}.".format(value))
+            raise ValueError(
+                "Expected values between zero and 1. " "Received {}.".format(value)
+            )
         self._dropout = value
-        
 
     def __repr__(self):
         """Return string representation of SingleCellDataset object."""
         header = "Simulated Single-Cell Dataset\n"
         out = ["{}: {}".format(k, v) for k, v in self.get_params().items()]
-        return header + '\n'.join(out)
+        return header + "\n".join(out)
 
     def get_params(self):
         """Get parameter set used to simulate dataset."""
-        out_dict = {'samples': self.samples,
-                    'genes': self.genes,
-                    'populations': self.populations,
-                    'pop_sizes': self.pop_sizes,
-                    'p_marker': self.p_marker,
-                    'dispersion': self.dispersion,
-                    'scalar': self.scalar,
-                    'percentile': self.percentile,
-                    'method': self.method,
-                    'dropout': self.dropout}
+        out_dict = {
+            "samples": self.samples,
+            "genes": self.genes,
+            "populations": self.populations,
+            "pop_sizes": self.pop_sizes,
+            "p_marker": self.p_marker,
+            "dispersion": self.dispersion,
+            "scalar": self.scalar,
+            "percentile": self.percentile,
+            "method": self.method,
+            "dropout": self.dropout,
+        }
         return out_dict
 
     def simulate(self):
@@ -356,24 +387,24 @@ class SingleCellDataset():
         for marker genes are not taken into consideration.
         """
         # data frame to track cell annotations
-        obs = pd.DataFrame(index=range(self.samples),
-                           columns=["Population"])
+        obs = pd.DataFrame(index=range(self.samples), columns=["Population"])
         # data frame to track gene annotations
-        var = pd.DataFrame(index=range(self.genes),
-                           columns=['Pop.{}.Marker'.format(i + 1) for i in\
-                                                       range(self.populations)])
+        var = pd.DataFrame(
+            index=range(self.genes),
+            columns=["Pop.{}.Marker".format(i + 1) for i in range(self.populations)],
+        )
         var.fillna(False, inplace=True)
-        var['Base.Dispersion'] = self.dispersion
+        var["Base.Dispersion"] = self.dispersion
         # get baseline expression averages
         mus_ = average_exp(scale_factor=self.scalar, n=self.genes)
-        var['Base.Mu'] = mus_
+        var["Base.Mu"] = mus_
         # create gene x pop matrix to hold pop-specific expression averages
         mus = np.ones((mus_.size, self.populations)) * mus_.reshape(-1, 1)
         # get number of marker genes for each population
         n_markers = stats.binom(self.genes, self.p_marker).rvs(self.populations)
         # must have at least 1 marker gene
         n_markers[n_markers == 0] = 1
-        # distribution to sample expression shifts from 
+        # distribution to sample expression shifts from
         gamma = stats.gamma(a=3, scale=3)
         possible_markers = var.index.values
         for i, n in enumerate(n_markers):
@@ -381,28 +412,32 @@ class SingleCellDataset():
             markers = np.random.choice(possible_markers, n)
             mus[markers, i] = mus[markers, i] * gamma.rvs(n)
             # log marker genes in var data frame
-            var.loc[markers, 'Pop.{}.Marker'.format(i + 1)] = True
+            var.loc[markers, "Pop.{}.Marker".format(i + 1)] = True
             # remove selected markers from pool, so that populations don't
             # share marker genes
-            possible_markers = np.array(list(
-                                    set(possible_markers).difference(markers)))
-        
-        X, dropout, labels = simulate_counts(self.samples, mus, self.dispersion,
-                                             self.populations, self.pop_sizes,
-                                             percentile=self.percentile,
-                                             method=self.method,
-                                             dropout=self.dropout)
+            possible_markers = np.array(list(set(possible_markers).difference(markers)))
+
+        X, dropout, labels = simulate_counts(
+            self.samples,
+            mus,
+            self.dispersion,
+            self.populations,
+            self.pop_sizes,
+            percentile=self.percentile,
+            method=self.method,
+            dropout=self.dropout,
+        )
         # log population averages and dropout probabilities
         for i in range(self.populations):
-            var['Pop.{}.Mu'.format(i + 1)] = mus[:, i]
-            var['Pop.{}.Dropout'.format(i + 1)] = dropout[:, i]
+            var["Pop.{}.Mu".format(i + 1)] = mus[:, i]
+            var["Pop.{}.Dropout".format(i + 1)] = dropout[:, i]
 
-        obs['Population'] = labels
-        obs['Population'] = obs['Population'].astype(str)
-        obs['Treatment'] = 'Control'
+        obs["Population"] = labels
+        obs["Population"] = obs["Population"].astype(str)
+        obs["Treatment"] = "Control"
         # rename obs and var rows for clarity
-        obs.rename(index={i:'cell-{}'.format(i + 1) for i in obs.index}, inplace=True)
-        var.rename(index={i:'gene-{}'.format(i + 1) for i in var.index}, inplace=True)
+        obs.rename(index={i: "cell-{}".format(i + 1) for i in obs.index}, inplace=True)
+        var.rename(index={i: "gene-{}".format(i + 1) for i in var.index}, inplace=True)
         return sc.AnnData(X=X, obs=obs, var=var)
 
 
@@ -411,17 +446,17 @@ class Experiment(object):
 
     def __init__(self, control_kwargs=None, perturb_kwargs=None):
         """
-        Simulate a scRNAseq experiment with perturbations. 
-        
+        Simulate a scRNAseq experiment with perturbations.
+
         Parameters
         ----------
         control_kwargs : dict, optional
             Dictionary of keyword arguments that specify simulation parameters.
             See `SingleCellDataSet` for more infomration. By default None, and
-            default parameters for SingleCellDataSet will be used. 
+            default parameters for SingleCellDataSet will be used.
         perturb_kwargs : dict, optional
             Dictionary of keyword argument that specify perturbation paramters.
-            By default None, and default parameters will be used. See 
+            By default None, and default parameters will be used. See
             `perturb()` for more information.
         """
 
@@ -436,9 +471,9 @@ class Experiment(object):
     @control_kwargs.setter
     def control_kwargs(self, value):
         """Set control_kwargs attribute."""
-        default_kws = utils.get_default_kwargs(SingleCellDataset, ['self'])
+        default_kws = utils.get_default_kwargs(SingleCellDataset, ["self"])
         if value is not None:
-            value = utils.check_kws(default_kws, value, 'control_kwargs')
+            value = utils.check_kws(default_kws, value, "control_kwargs")
         else:
             value = default_kws
         self._control_kwargs = value
@@ -451,19 +486,19 @@ class Experiment(object):
     @perturb_kwargs.setter
     def perturb_kwargs(self, value):
         """Set perturb_kwargs attribute."""
-        default_kws = utils.get_default_kwargs(perturb, ['adata'])
+        default_kws = utils.get_default_kwargs(perturb, ["adata"])
         if value is not None:
-            value = utils.check_kws(default_kws, value, 'perturb_kwargs')
+            value = utils.check_kws(default_kws, value, "perturb_kwargs")
         else:
             value = default_kws
-        if 'percentile' not in value and 'percentile' in self.control_kwargs:
-            value['percentile'] = self.control_kwargs['percentile']
+        if "percentile" not in value and "percentile" in self.control_kwargs:
+            value["percentile"] = self.control_kwargs["percentile"]
         self._perturb_kwargs = value
 
     def simulate_controls(self):
         adata = SingleCellDataset(**self.control_kwargs).simulate()
         return adata
-        
+
     def run(self, simulations=1, replications=1, controls=None):
         """
         Simulate control and perturbed datasets under experimental conditions.
@@ -481,12 +516,12 @@ class Experiment(object):
             A dataset of simulated control cells to perturb. Default is None,
             and a control dataset will be simulated according to parameters
             defined by `control_kwargs`.
-        
+
         Returns
         -------
         list
             Two-dimensional list that is indexed first by simulation and second
-            by replicate. 
+            by replicate.
         """
         out = []
         for __ in range(simulations):
@@ -494,8 +529,9 @@ class Experiment(object):
             if controls is None:
                 controls = self.simulate_controls()
             if not isinstance(controls, sc.AnnData):
-                raise ValueError("Unexpected type for `controls`: {}".format(
-                                  type(controls)))
+                raise ValueError(
+                    "Unexpected type for `controls`: {}".format(type(controls))
+                )
             for __ in range(replications):
                 treated = perturb(controls, **self.perturb_kwargs)
                 combined = controls.concatenate(treated)
@@ -509,7 +545,7 @@ class Experiment(object):
 def dispersions(size, a=1, b=5):
     """
     Randomly choose dispersion parameter 'r' for simulating cell counts.
-    
+
     Parameters
     ----------
     size : int, tuple
@@ -518,7 +554,7 @@ def dispersions(size, a=1, b=5):
         Minimum dispersion value, by default 1.
     b : int, optional
         Maximum dispersion value, by default 5.
-    
+
     Returns
     -------
     numpy.ndarray
@@ -531,15 +567,26 @@ def population_markers(adata):
     # pop_regex = re.compile('(?<=\.)(.*)(?=\.)')
     # marker_cols = [x for x in adata.var.columns if 'Marker' in x]
     # marker_cols = [f"Pop.{x}.Marker" for x in ]
-    markers = {x: adata.var[adata.var[f"Pop.{x}.Marker" ]].index.values\
-               for x in adata.obs.Population.unique()}
+    markers = {
+        x: adata.var[adata.var[f"Pop.{x}.Marker"]].index.values
+        for x in adata.obs.Population.unique()
+    }
     return markers
 
 
-def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
-            percent_perturb=0.2, pop_sizes=None, percentile=50,
-            new_pop_cells=[], new_pop_pmarker=None, new_pop_ids=None,
-            perturbation_key=None):
+def perturb(
+    adata,
+    samples=200,
+    pop_targets=None,
+    gene_targets=None,
+    percent_perturb=0.2,
+    pop_sizes=None,
+    percentile=50,
+    new_pop_cells=[],
+    new_pop_pmarker=None,
+    new_pop_ids=None,
+    perturbation_key=None,
+):
     r"""
     Perturb a simulated single-cell dataset.
 
@@ -592,17 +639,20 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
     """
     adata.obs.Population = adata.obs.Population.astype(str)
     if new_pop_pmarker is not None:
-        if not isinstance(new_pop_pmarker, (float, np.number)) \
-        and not (0 < new_pop_pmarker < 1):
+        if not isinstance(new_pop_pmarker, (float, np.number)) and not (
+            0 < new_pop_pmarker < 1
+        ):
             raise ValueError("Expected marker probabilities between 0 and 1.")
     if new_pop_ids is not None and len(new_pop_ids) != len(new_pop_cells):
-        raise ValueError("Number of specified ids does not match number of "\
-                         "new populations")
+        raise ValueError(
+            "Number of specified ids does not match number of " "new populations"
+        )
     if perturbation_key is None:
-        perturbation_key = 'Perturbed'
+        perturbation_key = "Perturbed"
     if new_pop_ids is None:
-        new_pop_ids = [f"{perturbation_key}-added-{i + 1}"\
-                       for i in range(len(new_pop_cells))]
+        new_pop_ids = [
+            f"{perturbation_key}-added-{i + 1}" for i in range(len(new_pop_cells))
+        ]
     if gene_targets is None:
         gene_targets = []
     else:
@@ -613,16 +663,16 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
     # get marker genes for reference dataset
     markers = population_markers(adata)
     if pop_targets is not None:
-        pop_targets = utils.check_np_castable(pop_targets, 'pop_targets')
+        pop_targets = utils.check_np_castable(pop_targets, "pop_targets")
         # ensure specified populations exist in provided adata
-        if not set(pop_targets).issubset(adata.obs['Population']):
-            diff = set(pop_targets).difference(adata.obs['Population'])
+        if not set(pop_targets).issubset(adata.obs["Population"]):
+            diff = set(pop_targets).difference(adata.obs["Population"])
             raise ValueError("Undefined populations: {}".format(diff))
         for each in pop_targets:
             gene_targets += list(markers[each])
     # check population sizes, if none, match with ratio in adata
     if pop_sizes is None:
-        pop_counts = adata.obs['Population'].value_counts().values
+        pop_counts = adata.obs["Population"].value_counts().values
         pop_sizes = (pop_counts / pop_counts.sum() * samples).astype(int)
         if samples % pop_sizes.sum() != 0:
             remainder = samples % pop_sizes.sum()
@@ -632,19 +682,22 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
                 remainder = samples % pop_sizes.sum()
                 iters += 1
     else:
-        pop_sizes = utils.check_np_castable(pop_sizes, 'pop_sizes')
+        pop_sizes = utils.check_np_castable(pop_sizes, "pop_sizes")
         if pop_sizes.sum() != samples:
-            raise ValueError('Population sizes do not sum to number of samples.')
+            raise ValueError("Population sizes do not sum to number of samples.")
     if new_pop_cells is not None and len(new_pop_cells) > 0:
-        new_pop_cells = utils.check_np_castable(new_pop_cells, 'new_pop_cells')
+        new_pop_cells = utils.check_np_castable(new_pop_cells, "new_pop_cells")
         pop_sizes = np.hstack([pop_sizes, new_pop_cells])
         samples += sum(new_pop_cells)
     # determine which genes to perturb
     if gene_targets is not None:
         if not set(gene_targets).issubset(adata.var.index):
-            raise ValueError("Unrecognized gene targets: {}".format(
-                          set(gene_targets).difference(adata.var.index)))
-        gene_targets = utils.check_np_castable(gene_targets, 'gene_targets')
+            raise ValueError(
+                "Unrecognized gene targets: {}".format(
+                    set(gene_targets).difference(adata.var.index)
+                )
+            )
+        gene_targets = utils.check_np_castable(gene_targets, "gene_targets")
     n_genes = int(percent_perturb * adata.shape[1])
     # perturb remaining genes not specified by `gene_targets`.
     if len(gene_targets) < n_genes:
@@ -657,9 +710,9 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
         gene_targets = np.hstack((targets, gene_targets))
 
     all_markers = set(np.hstack(list(markers.values())))
-    disp_ = adata.var['Base.Dispersion'].values.reshape((-1, 1))
+    disp_ = adata.var["Base.Dispersion"].values.reshape((-1, 1))
     var_ = adata.var.copy()
-    var_['Perturbation.Shift'] = np.ones((adata.shape[1], 1))
+    var_["Perturbation.Shift"] = np.ones((adata.shape[1], 1))
     # shifting the preturbation by a large degree makes marker genes more
     # likely to dropout in perturbation dataset, pass dropout
     # setting alpha = 1, beta = 1 puts mean at (1 * 1) -- meaning on average
@@ -667,72 +720,82 @@ def perturb(adata, samples=200, pop_targets=None, gene_targets=None,
     # dataset, alpha=2, beta=2 shifts on average by 4, so multiply markers by
     # average to maintain signal
     a, b = 2, 2
-    var_.loc[gene_targets, 'Perturbation.Shift'] = stats.gamma(a=a, scale=b).\
-                                                   rvs(size=gene_targets.size)
+    var_.loc[gene_targets, "Perturbation.Shift"] = stats.gamma(a=a, scale=b).rvs(
+        size=gene_targets.size
+    )
     # var_.loc[all_markers, 'Perturbation.Shift'] *= a * b
 
     populations = []
-    sim_pops = adata.obs['Population'].unique()
+    sim_pops = adata.obs["Population"].unique()
     if len(new_pop_ids) > 0:
         sim_pops = np.hstack([sim_pops, new_pop_ids])
-                         
+
     n_pops = len(sim_pops)
     pop_columns = []
     pop_dropout = []
     possible_new_markers = set(adata.var.index) - all_markers - set(gene_targets)
     for i, each in enumerate(sim_pops):
         if each in new_pop_ids:
-            print(f'Adding new population {each}...')
+            print(f"Adding new population {each}...")
             name = str(each)
             n_markers = stats.binom(adata.shape[1], new_pop_pmarker).rvs(1)
-            new_pop_markers = np.random.choice(list(possible_new_markers),
-                                               n_markers)
+            new_pop_markers = np.random.choice(list(possible_new_markers), n_markers)
             shifts = stats.gamma(3, 3).rvs(n_markers)
-            var_[f'Pop.{name}.Mu'] = adata.var['Base.Mu']
-            # multiply MU values by (a * b) to maintain signal 
-            var_.loc[new_pop_markers, f'Pop.{name}.Mu'] *= shifts * (a * b)
-            var_[f'Pop.{name}.Marker'] = False 
-            var_.loc[new_pop_markers, f'Pop.{name}.Marker'] = True
+            var_[f"Pop.{name}.Mu"] = adata.var["Base.Mu"]
+            # multiply MU values by (a * b) to maintain signal
+            var_.loc[new_pop_markers, f"Pop.{name}.Mu"] *= shifts * (a * b)
+            var_[f"Pop.{name}.Marker"] = False
+            var_.loc[new_pop_markers, f"Pop.{name}.Marker"] = True
             possible_new_markers -= set(new_pop_markers)
-            # asymmetrical population, 
+            # asymmetrical population,
             pop_dropout.append(None)
         else:
             markers_i = markers[each]
             # log population identity in perturbed data
             # if marker gene is modified, populations is considered perturbed
             if len(set(markers_i).intersection(gene_targets)) != 0:
-                name = 'Perturbed-{}'.format(each)
+                name = "Perturbed-{}".format(each)
                 var_[f"Pop.{name}.Marker"] = var_[f"Pop.{each}.Marker"]
             else:
                 name = str(each)
             markers_idx = np.array([var_.index.get_loc(x) for x in markers_i])
             marker_dropout = var_.loc[markers_i, f"Pop.{each}.Dropout"].values
-            pop_dropout.append(np.hstack([markers_idx.reshape(-1, 1),
-                                          marker_dropout.reshape(-1, 1)]))
-            
-        pop_columns.append(f'Pop.{each}.Mu')
+            pop_dropout.append(
+                np.hstack([markers_idx.reshape(-1, 1), marker_dropout.reshape(-1, 1)])
+            )
+
+        pop_columns.append(f"Pop.{each}.Mu")
         # pop_dropout.append(f'Pop.{each}.Dropout')
         populations += [name] * pop_sizes[i]
-    obs_ = pd.DataFrame(populations, columns=['Population'],
-                        index=["cell-{}".format(i + 1) for i in\
-                               range(samples)])
+    obs_ = pd.DataFrame(
+        populations,
+        columns=["Population"],
+        index=["cell-{}".format(i + 1) for i in range(samples)],
+    )
     # # calculate average expression values for each gene in each population
     # in perturbed dataset
-    mus = var_[pop_columns].values \
-        * np.ones((adata.shape[1], n_pops)) \
-        * var_['Perturbation.Shift'].values.reshape(-1, 1)
-    X_, dropout, __ = simulate_counts(samples, mus, disp_,
-                                      n_pops, pop_sizes,
-                                      percentile=percentile,
-                                      dropout=pop_dropout)
-                                    #   n_pops, pop_sizes)
+    mus = (
+        var_[pop_columns].values
+        * np.ones((adata.shape[1], n_pops))
+        * var_["Perturbation.Shift"].values.reshape(-1, 1)
+    )
+    X_, dropout, __ = simulate_counts(
+        samples,
+        mus,
+        disp_,
+        n_pops,
+        pop_sizes,
+        percentile=percentile,
+        dropout=pop_dropout,
+    )
+    #   n_pops, pop_sizes)
     # perturb dropout
     for i, each in enumerate(sim_pops):
-        var_[f'Pop.{each}.Dropout-Prtb'] = dropout[:, i]
+        var_[f"Pop.{each}.Dropout-Prtb"] = dropout[:, i]
 
-    obs_['Treatment'] = perturbation_key
+    obs_["Treatment"] = perturbation_key
     adata = sc.AnnData(X=X_, obs=obs_, var=var_)
-    adata.obs['Population'] = adata.obs['Population'].astype(str)
+    adata.obs["Population"] = adata.obs["Population"].astype(str)
     return adata
 
 
@@ -747,20 +810,20 @@ def average_exp(scale_factor, n=1):
         \mu_i \sim Beta(a, b) \cdot c
 
     Where :math:`a = 2`, :math:`b = 5`, and :math:`c` is a user provided scale
-    factor. 
-    
+    factor.
+
     Parameters
     ----------
     scale_factor : float
         Scalar to multiply beta-distributed random variable to calculate
-        expression averages. 
+        expression averages.
     n : int, optional
-        Number of genes to model, by default 1. 
-    
+        Number of genes to model, by default 1.
+
     Returns
     -------
     np.ndarray
-        Average gene expression values. 
+        Average gene expression values.
     """
     return stats.beta(a=2, b=5).rvs(n) * scale_factor
 
@@ -768,16 +831,16 @@ def average_exp(scale_factor, n=1):
 def sigmoid(x):
     """
     Sigmoid function used to estimate probability of dropout.
-    
+
     Parameters
     ----------
     x : float
         Value to pass to sigmoid function.
-    
+
     Returns
     -------
     float
-        Value of `x` passed through sigmoid function.        
+        Value of `x` passed through sigmoid function.
     """
     return 1 / (1 + np.e ** -x)
 
@@ -814,18 +877,26 @@ def dropout_probability(mu, median_avg, beta_0=-1.5):
     return 1 - sigmoid(x)
 
 
-def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes,
-                    percentile=50, method='conditional', dropout=0.66):
+def simulate_counts(
+    n_samples,
+    mus,
+    dispersion,
+    populations,
+    pop_sizes,
+    percentile=50,
+    method="conditional",
+    dropout=0.66,
+):
     r"""
     Simulate counts across genes for a set number of samples.
-    
+
     Parameters
     ----------
     n_samples : int
         Number of samples to simulate.
     mus : np.ndarray
         A gene by population matrix, where each element represents the average
-        expression value in the given population. 
+        expression value in the given population.
     dispersion : numpy.ndarray
         A gene length vector with dispersion paramtersfor modelling counts
         using a negative binomial distribution for each gene.
@@ -844,7 +915,7 @@ def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes,
     dropout : float, optional
         Value between 0 and 1 denoting the average chance of a dropout event for
         a given gene. Only used if `method=='uniform'`. Default is 0.66
-    
+
     Returns
     -------
     (numpy.ndarray, numpy.ndarray)
@@ -858,38 +929,40 @@ def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes,
     # sample by gene expression matrix
     X_ = np.zeros((n_samples, mus.shape[0]))
     # vector labelling which population each sample belongs to
-    labels_ = np.hstack([np.array([i + 1] * pop_sizes[i])\
-                    for i in range(populations)])
+    labels_ = np.hstack([np.array([i + 1] * pop_sizes[i]) for i in range(populations)])
     # ensure proper shape of dispersion vector
     if len(dispersion.shape) == 1:
         dispersion = dispersion.reshape((-1, 1))
-    elif len(dispersion.shape) != 2\
-    and dispersion.shape[0] < dispersion.shape[1]:
-        raise ValueError("Expected column vector for dispersion. Received "
-                         "vector with shape {}.".format(dispersion.shape))
+    elif len(dispersion.shape) != 2 and dispersion.shape[0] < dispersion.shape[1]:
+        raise ValueError(
+            "Expected column vector for dispersion. Received "
+            "vector with shape {}.".format(dispersion.shape)
+        )
     if len(mus.shape) == 1:
         mus = mus.reshape((-1, 1))
     # calculate theoretical expression averages across populations
     # |gene| x |populations| matrix
-    means_ = mus \
-           * np.ones((dispersion.shape[0], populations))\
-           * dispersion
+    means_ = mus * np.ones((dispersion.shape[0], populations)) * dispersion
 
     # calculate dropout probabilites for each gene in each population
     # a |gene| x |populations| size matrix
-    if method == 'conditional':
+    if method == "conditional":
         if isinstance(dropout, np.ndarray):
-            if not dropout.shape[0] != means_.shape[0]\
-            and dropout.shape[1] != means_.shape[1]:
-                raise ValueError("When passing a numpy array for `dropout`, "
-                                 "assume a (|gene| x |population|) size array. "
-                               f"expected {means_.shape}, got {dropout.shape}.")
+            if (
+                not dropout.shape[0] != means_.shape[0]
+                and dropout.shape[1] != means_.shape[1]
+            ):
+                raise ValueError(
+                    "When passing a numpy array for `dropout`, "
+                    "assume a (|gene| x |population|) size array. "
+                    f"expected {means_.shape}, got {dropout.shape}."
+                )
             else:
                 p_dropout = dropout
         else:
             percentile_ = np.percentile(means_, percentile)
             p_dropout = dropout_probability(means_, percentile_)
-    elif method == 'uniform':
+    elif method == "uniform":
         p_dropout = np.ones_like(means_) * dropout
     # marker gene dropouts were passed, conserve dropout probability between
     # controls + treated
@@ -906,28 +979,30 @@ def simulate_counts(n_samples, mus, dispersion, populations, pop_sizes,
             start = pop_sizes[:i].sum()
         # simulate gene counts for each cell in population i
         for j in range(mus.shape[0]):
-            dist = stats.nbinom(dispersion[j, 0],
-                                1 - mus[j, i] / (mus[j, i] + dispersion[j, 0]))
+            dist = stats.nbinom(
+                dispersion[j, 0], 1 - mus[j, i] / (mus[j, i] + dispersion[j, 0])
+            )
             # calculate probability of reads not dropping out with bernoulli
             # 1 = keep count, 0 = dropeed, multiplying by dropout vector
-            # moves dropped counts to 0. 
+            # moves dropped counts to 0.
             dropped = stats.bernoulli(p=1 - p_dropout[j, i]).rvs(pop_sizes[i])
-            X_[start:start + pop_sizes[i], j] = dist.rvs(pop_sizes[i]) * dropped
+            X_[start : start + pop_sizes[i], j] = dist.rvs(pop_sizes[i]) * dropped
     return X_, p_dropout, labels_
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     ctrls = SingleCellDataset().simulate()
     prtbs = perturb(ctrls)
     sc.pp.pca(prtbs)
-    sc.pl.pca_scatter(prtbs, color='Population')
+    sc.pl.pca_scatter(prtbs, color="Population")
     comb = ctrls.concatenate(prtbs)
     sc.pp.neighbors(comb)
     sc.tl.umap(comb)
-    sc.pl.umap(comb, color='Treatment', palette=['black', 'red'])
-    sc.pl.umap(comb, color='Population')
+    sc.pl.umap(comb, color="Treatment", palette=["black", "red"])
+    sc.pl.umap(comb, color="Population")
     import icat
-    model = icat.icat('Control', ncfs_kws={'sigma': 3, 'reg': 3})
-    clustered = model.cluster(comb, comb.obs['Treatment'])
+
+    model = icat.icat("Control", ncfs_kws={"sigma": 3, "reg": 3})
+    clustered = model.cluster(comb, comb.obs["Treatment"])
     sc.tl.umap(clustered)
-    sc.pl.umap(clustered, color='Population')
+    sc.pl.umap(clustered, color="Population")
