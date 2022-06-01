@@ -11,10 +11,15 @@ if mo:
 else:
     raise RuntimeError("Unable to find version string in %s." % (VERSIONFILE,))
 
+with open("README.md", "r") as f:
+    long_description = f.read()
+
 setup(
     name="icat-sc",
     version=verstr,
-    description="Identify cell-types across treatments in single-cell RNA sequencing data",
+    description="Identify cell states across treatments in single-cell RNA sequencing experiments",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
     url="https://github.com/BradhamLab/icat",
     author="Dakota Y. Hawkins",
     author_email="dyh0110@bu.edu",
