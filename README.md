@@ -7,9 +7,16 @@ The method works by first identifying a set of conrol-defined cell states by per
 
 ## Installation
 
-ICAT is available on `pip` and can be installed using the following command:
+ICAT will shortly be available on `pip` and can be installed using the following command:
 
 `pip install icat`
+
+For immediate installation, ICAT can be installed locally by first cloning this repo and issueing the following command in the corresponding directory:
+
+```bash
+python setup.py build
+python setup.py install
+```
 
 ## How to use
 
