@@ -8,16 +8,20 @@ Example:
 
 .. code-block::python
     from icat import simulate
+    from icat import models
     data_model = simulate.SingleCellDataset()
     controls = data_model.simulate()
     controls.obs['treatment'] = 'control'
     perturbed = simulate.perturb(controls)
     perturbed.obs['treatment'] = 'perturbed'
-    model = icat(ncfs_kws={'reg': 0.5, 'sigma': 3},
-                 weight_threshold=1,
-                 neighbor_kws={'n_neighbors': 100},
-                 sslouvain_kws={'resolution_parameter': 1})
-    out = model.cluster(controls, perturbed)
+    adata = sc.concat([controls, perturbed])
+    model = models.icat(
+        ctrl_value="control"
+        ncfs_kws={'reg': 0.5, 'sigma': 3},
+        weight_threshold=1,
+        neighbor_kws={'n_neighbors': 15, 'resolution_parameter': 0.75},
+    )
+    out = model.cluster(adata, adata.obs['treatment'])
     print(out.obs['sslouvain'])
 """
 
@@ -47,6 +51,9 @@ class icat():
 
     Parameters
     ----------
+    ctrl_value : str
+        Status label corresponding to control group in treatment observation
+        data. 
     clustering : str, optional
         Method to use for initial clustering of control cells, by default
         'louvain'. Options are 'louvain' or 'leiden'.
@@ -88,8 +95,12 @@ class icat():
         parameters will be used. See `sslouvain.find_partition` for more
         information.
     pca_kws : dict, optional
-        Keyword arguments for performing principle component analysis. B default
+        Keyword arguments for performing principle component analysis. By default
         None, and default parameters will be used. See `sslouvain.tl.pca` for
+        more information.
+    subsample_kws : dict, optional
+        Keyword arguments for performing submodular optimization. By default
+        None, and default parameters will be used. See `icat.select_cells` for
         more information.
     """
 
