@@ -12,7 +12,7 @@ else:
     raise RuntimeError("Unable to find version string in %s." % (VERSIONFILE,))
 
 setup(
-    name="icat",
+    name="icat-sc",
     version=verstr,
     description="Identify cell-types across treatments in single-cell RNA sequencing data",
     url="https://github.com/dakota-hawkins/icat",

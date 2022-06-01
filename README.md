@@ -9,7 +9,7 @@ The method works by first identifying a set of conrol-defined cell states by per
 
 ICAT can be installed using `pip` and can be installed using the following command:
 
-`pip install icat`
+`pip install icat-sc`
 
 
 ## How to use
