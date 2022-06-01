@@ -38,7 +38,7 @@ object.
     sc.pp.log1p(adata)
 ```
 **visualizing dataset**
-[raw data](docs/images/raw_input.png)
+![](docs/images/raw_input.png)
 ```python
     # specify model parameters -- see documentation for more information
     model = models.icat(
@@ -52,5 +52,5 @@ object.
     print(out.obs['sslouvain'].unique())
 ```
 **visualizing results**
-[icat labels](docs/images/icat_output.png)
+![](docs/images/icat_output.png)
 
