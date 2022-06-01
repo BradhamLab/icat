@@ -7,36 +7,50 @@ The method works by first identifying a set of conrol-defined cell states by per
 
 ## Installation
 
-ICAT will shortly be available on `pip` and can be installed using the following command:
+ICAT can be installed using `pip` and can be installed using the following command:
 
 `pip install icat`
 
-For immediate installation, ICAT can be installed locally by first cloning this repo and issueing the following command in the corresponding directory:
-
-```bash
-python setup.py build
-python setup.py install
-```
 
 ## How to use
 
-ICAT makes heavy use of the excellent `scanpy` library along with the associated `anndata` structure.
+ICAT makes heavy use of the excellent `scanpy` library along with the associated `AnnData` data structure.
 
-Assuming an `sc.AnnData` object, `adata`, ICAT can be run with following code:
-
+An example code block walks through running `icat` on a simulated dataset. The 
+final clustering is stored in the `sslouvain` column of the returned `AnnData`
+object.
 
 ```python
-from icat import models
-hvgs = adata[:, adata.var.highly_variable].copy()
-# create `icat` object, set "control" as label defining control cells
-icat_model = models.icat(ctrl_value="control", reference="control")
-# pass expression data, as well as a vector containing treatment status for each cell in your dataset
-out = icat_model.cluster(hvgs, adata.obs["treatment"], verbose=True)
-# final cluster labels in newly added "sslouvain" column
-print(out.obs.sslouvain)
-# highly weighted genes used to cluster cells (NCFS weight > 1)
-out.obs.query("informative')
-
+    from icat import simulate
+    from icat import models
+    import scanpy as sc
+    import numpy as np
+    data_model = simulate.SingleCellDataset(
+        populations=2,
+        genes=1000,
+        dispersion=np.random.choice([1, 2, 3], 1000)
+    )
+    controls = data_model.simulate()
+    controls.obs['treatment'] = 'control'
+    perturbed = simulate.perturb(controls)
+    perturbed.obs['treatment'] = 'perturbed'
+    adata = controls.concatenate([perturbed])
+    sc.pp.log1p(adata)
 ```
-
+**visualizing dataset**
+[raw data](docs/images/raw_input.png)
+```python
+    # specify model parameters -- see documentation for more information
+    model = models.icat(
+        ctrl_value="control",
+        ncfs_kws={'reg': 1, 'sigma': 3},
+        neighbor_kws={'n_neighbors': 15}, 
+        cluster_kws={'resolution': 0.75},
+    )
+    # cluster cells by providing treatment information
+    out = model.cluster(adata, adata.obs['treatment'])
+    print(out.obs['sslouvain'].unique())
+```
+**visualizing results**
+[icat labels](docs/images/icat_output.png)
 
