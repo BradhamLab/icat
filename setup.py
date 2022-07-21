@@ -32,6 +32,7 @@ setup(
         "scanpy",
         "scikit-learn",
         "scipy",
+        "louvain",
         "sslouvain",
     ],
     license="BSD",
