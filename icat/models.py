@@ -63,9 +63,6 @@ class icat:
     clustering : str, optional
         Method to use for initial clustering of control cells, by default
         'louvain'. Options are 'louvain' or 'leiden'.
-    treatment_col : str, optional
-        Column name in oberservation data annotating treatment type between
-        datasets, by default 'treatment'.
     reference : str, optional
         Which data partitions to use for when learning gene weights. Default is
         'all' and all partions by treatment type will be used (as defined by
@@ -341,7 +338,7 @@ class icat:
         ----------
         adata : sc.AnnData
             Annotated dataframe of cells.
-        perturbed : pd.Series, numpy.ndarray, list-like
+        treatment : pd.Series, numpy.ndarray, list-like
             Treatment labels for each cell in `adata`.
         verbose : boolean, optional
             Whether to print progress through clustering step.
@@ -349,7 +346,7 @@ class icat:
         Returns
         -------
         sc.AnnData
-            Annotated dataframe of out cells in NCFS space.
+            Annotated dataframe of clustered cells in NCFS space.
         """
         self.log_ = False
         if self.log_:
@@ -385,31 +382,17 @@ class icat:
             utils.log_system_usage("Starting NCFS transformation.")
         self.__learn_weights(adata, treatment)
 
-        # n_clusters = len(controls.obs[self.cluster_col].unique())
         adata.var["informative"] = adata.var["ncfs_weights"].apply(lambda x: x > 1)
         informative = adata.var["informative"].sum()
         if self.verbose_:
             print(f"Found {informative} informative features.")
 
-        # return adata
-        # if informative < n_clusters:
-        #     warnings.warn("Number of informative genes less "
-        #                   "than the number of identified control clusters: "
-        #                   f"informative genes: {informative}, "
-        #                   f"number of clusters: {n_clusters}. Consider "
-        #                   "increasing `sigma` or decreasing `reg` for better "
-        #                   "performance.")
         # scikit-learn 0.22, umap==0.4.4
         self.neighbor_kws["use_rep"] = "X_icat"
         if self.log_:
             utils.log_system_usage("Before NCFS neighbors.")
-        # A = KNeighborsTransformer(mode='connectivity',
-        #                           n_neighbors=self.neighbor_kws['n_neighbors'])\
-        #                          .fit_transform(adata.obsm['X_icat'])
 
         sc.pp.neighbors(adata, **self.neighbor_kws)
-        # sc.pp.neighbors(adata, n_neighbors=self.neighbor_kws['n_neighbors'])
-        # sc.pp.neighbors(adata)
         if self.log_:
             utils.log_system_usage("After NCFS neighbors.")
         # grab connectivities of cells
@@ -564,6 +547,9 @@ class icat:
         selector : apricot.Function, optional
             Sub-optimal optimizer function from `apricot`. Default is
             `apricot.MaxCoverageSelection`.
+        use_rep : str, optional
+            Data representation to use for cell selection. Default is "X", and
+            the base data matrix will be used. 
         by_cluster : bool, optional
             Whether to perform submodular optimization on a per cluster basis.
             Otherwise perform on the whole dataset with labels provided. By
