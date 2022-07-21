@@ -13,8 +13,11 @@ import warnings
 import logging
 import time
 from pkg_resources import parse_version
-
-import psutil
+PSUTIL_INSTALLED = True
+try:
+    import psutil
+except ImportError:
+    PSUTIL_INSTALLED = False
 import numpy as np
 import pandas as pd
 import scanpy as sc
@@ -31,26 +34,19 @@ def ftime(seconds):
 
 
 def set_log():
-    # logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
     logging.basicConfig(filename="icat.log", level=logging.DEBUG, filemode="w")
-    # root = logging.getLogger()
-    # root.setLevel(logging.DEBUG)
-    # handler = logging.StreamHandler(sys.stdout)
-    # handler.setLevel(logging.DEBUG)
-    # formatter = logging.Formatter('%(asctime)s\t%(name)s\t%(levelname)s\t%(message)s')
-    # handler.setFormatter(formatter)
-    # root.addHandler(handler)
     logging.info("System Usage upon startup")
     log_system_usage()
 
 
 def log_system_usage(msg=None):
-    pid = os.getpid()
-    py = psutil.Process(pid)
-    memory_use = py.memory_info().rss / 2 ** 30
-    if msg is not None:
-        logging.info(msg)
-    logging.info("Memory usage: {:0.03} GB".format(memory_use))
+    if PSUTIL_INSTALLED:
+        pid = os.getpid()
+        py = psutil.Process(pid)
+        memory_use = py.memory_info().rss / 2 ** 30
+        if msg is not None:
+            logging.info(msg)
+        logging.info("Memory usage: {:0.03} GB".format(memory_use))
 
 
 def close_log():  # this doesn't work
