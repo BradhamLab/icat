@@ -7,10 +7,12 @@ The method works by first identifying a set of conrol-defined cell states by per
 
 ## Installation
 
-ICAT can be installed using `pip` and can be installed using the following command:
+ICAT can be installed on linux machines using `pip` with the following command:
 
 `pip install icat-sc`
 
+## Pre-print
+To learn more about the algorithm, and how it compares to other methods, see our pre-print on [BioArxiv](https://www.biorxiv.org/content/10.1101/2022.05.26.493603v2)
 
 ## How to use
 
@@ -54,3 +56,7 @@ object.
 **visualizing results**
 ![](docs/images/icat_output.png)
 
+## Hyper Parameter Optimization
+For working with your own data, we recommend finding appropriate Louvain and NCFS hyper
+parameters **prior** to running the complete ICAT workflow. All hyper parameters used in the
+original pre-print can be found as supplemental tables.
