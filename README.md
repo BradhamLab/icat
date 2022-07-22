@@ -3,7 +3,7 @@ Identifying Cell-states Across Treatments
 
 ICAT is a tool developed to better identify cell states in scRNAseq experiments where perturbations or some other biologic heterogeneity is present, such as gene knock-outs.
 
-The method works by first identifying a set of conrol-defined cell states by performing unsupervised clustering. These identified cell states are then fed into a sparse gene weighting algorithm, Neighborhood Component Feature Selection (NCFS), to highly weight the most predictive genes, while also removing variance from non-explanatory genes. We then transform the data matrix using this weight vector, and perform semi-supervised clustering such that the originally identified control labels remain constant, but cells from experimental conditions
+The method works by first identifying a set of conrol-defined cell states by performing unsupervised clustering. These identified cell states are then fed into a sparse gene weighting algorithm, Neighborhood Component Feature Selection (NCFS), to highly weight the most predictive genes, while also removing variance from non-explanatory genes. We then transform the data matrix using this weight vector, and perform semi-supervised clustering such that the originally identified control labels remain constant, but cells from experimental conditions are free to cluster with any other cells regardless of treatment status.
 
 ## Installation
 
