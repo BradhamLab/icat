@@ -549,7 +549,7 @@ class icat:
             `apricot.MaxCoverageSelection`.
         use_rep : str, optional
             Data representation to use for cell selection. Default is "X", and
-            the base data matrix will be used. 
+            the base data matrix will be used.
         by_cluster : bool, optional
             Whether to perform submodular optimization on a per cluster basis.
             Otherwise perform on the whole dataset with labels provided. By
