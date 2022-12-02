@@ -273,7 +273,11 @@ class icat:
 
     @sslouvain_kws.setter
     def sslouvain_kws(self, value):
-        default_kws = utils.get_default_kwargs(sslouvain.find_partition, "")
+        default_kws = {
+            'resolution': self.cluster_kws['resolution'],
+            'n_neighbors': self.cluster_kws['n_neighbors'],
+            'partition_type': sslouvain.RBConfigurationVertexPartition
+        }
         if value is not None:
             value = utils.check_kws(default_kws, value, "sslouvain_kws")
         else:
@@ -391,26 +395,14 @@ class icat:
         self.neighbor_kws["use_rep"] = "X_icat"
         if self.log_:
             utils.log_system_usage("Before NCFS neighbors.")
-
-        sc.pp.neighbors(adata, **self.neighbor_kws)
+        ncfs_neighbor_kws = self.neighbor_kws.copy()
+        ncfs_neighbor_kws['n_neighbors'] = self.sslouvain_kws['n_neighbors']
+        sc.pp.neighbors(adata, **ncfs_neighbor_kws)
         if self.log_:
             utils.log_system_usage("After NCFS neighbors.")
         # grab connectivities of cells
         A = utils.get_neighbors(adata, "connectivities")
         g = utils.igraph_from_adjacency(A)
-        # instantiate semi-supervised Louvain model
-        try:
-            resolution = self.cluster_kws["resolution"]
-            if resolution is None:
-                resolution = 1
-        except KeyError:
-            resolution = 1.0
-        try:
-            vertex = self.sslouvain_kws["partition_type"]
-        except KeyError:
-            vertex = sslouvain.RBConfigurationVertexPartition
-        if not isinstance(vertex, utils.ig.VertexClustering):
-            vertex = sslouvain.RBConfigurationVertexPartition
         adata.obs.loc[
             [x != self.ctrl_value for x in treatment], self.cluster_col_
         ] = None
@@ -420,10 +412,10 @@ class icat:
         # logging.info("Runing sslouvain")
         part = sslouvain.find_partition(
             g,
-            vertex,
+            self.sslouvain_kws['partition_type'],
             initial_membership=y_,
             mutable_nodes=mutables,
-            resolution_parameter=resolution,
+            resolution_parameter=self.sslouvain_kws['resolution'],
         )
         # store new cluster labels in cell metadata
         adata.obs["sslouvain"] = part.membership
