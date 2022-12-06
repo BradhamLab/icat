@@ -90,9 +90,9 @@ class icat:
         default parameters are used. See `scanpy.pp.neighbors` for more
         information.
     sslouvain_kws : dict, optional
-        Keyword arguments for `sslouvain`. By default None, and default
-        parameters will be used. See `sslouvain.find_partition` for more
-        information.
+        Keyword arguments for `sslouvain`. Keywords are `n_neighbors`,
+        `resolution`, and `partition`. By default None, and default
+        parameters will be borrowed from control clustering.
     pca_kws : dict, optional
         Keyword arguments for performing principle component analysis. By default
         None, and default parameters will be used. See `sslouvain.tl.pca` for
@@ -274,9 +274,9 @@ class icat:
     @sslouvain_kws.setter
     def sslouvain_kws(self, value):
         default_kws = {
-            'resolution': self.cluster_kws['resolution'],
-            'n_neighbors': self.cluster_kws['n_neighbors'],
-            'partition_type': sslouvain.RBConfigurationVertexPartition
+            "resolution": self.cluster_kws["resolution"],
+            "n_neighbors": self.neighbor_kws["n_neighbors"],
+            "partition_type": sslouvain.RBConfigurationVertexPartition,
         }
         if value is not None:
             value = utils.check_kws(default_kws, value, "sslouvain_kws")
@@ -396,7 +396,7 @@ class icat:
         if self.log_:
             utils.log_system_usage("Before NCFS neighbors.")
         ncfs_neighbor_kws = self.neighbor_kws.copy()
-        ncfs_neighbor_kws['n_neighbors'] = self.sslouvain_kws['n_neighbors']
+        ncfs_neighbor_kws["n_neighbors"] = self.sslouvain_kws["n_neighbors"]
         sc.pp.neighbors(adata, **ncfs_neighbor_kws)
         if self.log_:
             utils.log_system_usage("After NCFS neighbors.")
@@ -412,10 +412,10 @@ class icat:
         # logging.info("Runing sslouvain")
         part = sslouvain.find_partition(
             g,
-            self.sslouvain_kws['partition_type'],
+            self.sslouvain_kws["partition_type"],
             initial_membership=y_,
             mutable_nodes=mutables,
-            resolution_parameter=self.sslouvain_kws['resolution'],
+            resolution_parameter=self.sslouvain_kws["resolution"],
         )
         # store new cluster labels in cell metadata
         adata.obs["sslouvain"] = part.membership
