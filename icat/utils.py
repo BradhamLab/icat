@@ -44,7 +44,7 @@ def log_system_usage(msg=None):
     if PSUTIL_INSTALLED:
         pid = os.getpid()
         py = psutil.Process(pid)
-        memory_use = py.memory_info().rss / 2 ** 30
+        memory_use = py.memory_info().rss / 2**30
         if msg is not None:
             logging.info(msg)
         logging.info("Memory usage: {:0.03} GB".format(memory_use))
@@ -444,7 +444,7 @@ def format_labels(clusters):
         clusters = clusters.values
     elif isinstance(clusters, list):
         clusters = np.array(clusters)
-    elif not isinstance(clusters, np.ndarray):
+    elif not isinstance(clusters, (np.ndarray, pd.Categorical)):
         warnings.warn(f"Unsupport type {type(clusters)} for `clusters`")
     mutables = [True] * len(clusters)
     labels = [None] * len(clusters)
