@@ -60,3 +60,63 @@ object.
 For working with your own data, we recommend finding appropriate Louvain and NCFS hyper
 parameters **prior** to running the complete ICAT workflow. All hyper parameters used in the
 original pre-print can be found as supplemental tables.
+
+We have also provided grid search functions to find the "best" `n_neighbor` and `resolution`
+parameters for Louvain and Semi-supervised Louvain clustering steps, as well as a function
+to find the "best" kernel width (`sigma`) and regularization parameters (`reg)`. 
+
+```python
+from icat import optimize
+sc.pp.pca(controls)
+
+# Find the "best" `n_neighbor` and `resolution` parameter for clustering control cells by
+# optimizing the Calinski-Harabasz Index over a grid of `n` and `r` values
+louvain_n, louvain_r = optimize.optimize_louvain(
+    controls,
+    min_neighbors=3,
+    max_neighbors=50,
+    neighbor_step=2,
+    min_res=0.3,
+    max_res=1.2,
+    res_step=0.02,
+)
+
+# cluster control cells with "best" values
+sc.pp.neighbors(controls, n_neighbors=louvain_n)
+sc.tl.louvain(controls, resolution=louvain_r)
+
+# find "best" `sigma` and `reg` NCFS values by measuring the MCC in a
+# weighted KNN over k-fold cross validation
+sigma, reg =  optimize.optimize_ncfs(
+    controls,
+    controls.obs.louvain,
+    n_neighbors=5,
+    n_splits=3,
+    sigma_vals=[0.5, 1, 1.5, 2, 2.5, 3],
+    reg_vals=[0.25, 0.5, 1, 1.5, 2, 2.5, 3],
+)
+```
+
+By default, ICAT uses the same `n_neighbors` and `resolution` parameters during
+semi-supervised clustering as it does during control clustering. In practice,
+this leads to good results (see paper). However, if users _would_ like to
+optimize these parameters separately, we've include the below function:
+
+```python
+# optimize louvain parameters for semi-supervised clustering in NCFS
+# space -- include complete dataset now 
+adata.obs.loc[controls.obs.index, "control_clusters"] = controls.obs.louvain
+sslouvain_n, sslouvain_r = optimize_sslouvain(
+    adata,
+    adata.obs.control_clusters,
+    reg,
+    sigma,
+    max_cells=750,
+    min_neighbors=3,
+    max_neighbors=50,
+    neighbor_step=2,
+    min_res=0.3,
+    max_res=1.2,
+    res_step=0.02,
+)
+```
