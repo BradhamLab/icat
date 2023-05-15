@@ -61,9 +61,9 @@ visualizations during clustering, it is possible to pass the upweighted count ma
 returned `adata` object already has neighbors defined in this upweighted space, so 
 calculating a new UMAP is simple:
 
-```
+```python
 sc.tl.umap(out)
-sc.pl.umap(out, colors=['sslouvain', 'Population'])
+sc.pl.umap(out, color=['sslouvain', 'Population'])
 ```
 
 ![](docs/images/icat_output.png)
