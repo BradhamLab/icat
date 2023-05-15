@@ -54,6 +54,18 @@ object.
     print(out.obs['sslouvain'].unique())
 ```
 **visualizing results**
+
+While ICAT does not automatically compute UMAP, tsne, or other reduced dimension
+visualizations during clustering, it is possible to pass the upweighted count matrix
+(found in `adata.obsm["X_icat"]`) to these algorithms. In the case of UMAP, the
+returned `adata` object already has neighbors defined in this upweighted space, so 
+calculating a new UMAP is simple:
+
+```
+sc.tl.umap(out)
+sc.pl.umap(out, colors=['sslouvain', 'Population'])
+```
+
 ![](docs/images/icat_output.png)
 
 ## Hyper Parameter Optimization
