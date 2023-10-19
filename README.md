@@ -11,8 +11,8 @@ ICAT can be installed on linux machines using `pip` with the following command:
 
 `pip install icat-sc`
 
-## Pre-print
-To learn more about the algorithm, and how it compares to other methods, see our pre-print on [BioArxiv](https://www.biorxiv.org/content/10.1101/2022.05.26.493603v2)
+## Paper
+To learn more about the algorithm, and how it compares to other methods, see the original paper at [Bioinformatics](https://doi.org/10.1093/bioinformatics/btad278)
 
 ## How to use
 
